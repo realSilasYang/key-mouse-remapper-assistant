@@ -1,0 +1,9 @@
+.tools/
+.build/
+dist/
+*.log
+*.tmp
+*.codex-*.ahk
+.syntax-check-*.ahk
+Thumbs.db
+.DS_Store

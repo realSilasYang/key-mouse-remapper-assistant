@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "fonts": [
+    {
+      "name": "Noto Sans",
+      "version": "2.015",
+      "path": "assets/fonts/NotoSans-Variable.ttf",
+      "families": ["Noto Sans"],
+      "axes": {
+        "weight": "100-900",
+        "width": "62.5-100"
+      },
+      "source": "https://github.com/notofonts/latin-greek-cyrillic",
+      "sourceCollection": "Google NoTofu",
+      "sourceFile": "NotoSans[wdth,wght].ttf",
+      "sha256": "AE80A5E79E4AFBF493E9F4684EC4988E6A861B3598102EE48950B4B7A754CDFF",
+      "license": "OFL-1.1",
+      "copyright": "Copyright 2022 The Noto Project Authors"
+    },
+    {
+      "name": "Noto Sans CJK Regular",
+      "version": "2.004",
+      "path": "assets/fonts/NotoSansCJK.ttc",
+      "families": [
+        "Noto Sans CJK SC",
+        "Noto Sans CJK HK",
+        "Noto Sans CJK TC",
+        "Noto Sans CJK JP",
+        "Noto Sans CJK KR"
+      ],
+      "source": "https://github.com/notofonts/noto-cjk/releases/tag/Sans2.004",
+      "sourceCollection": "00_NotoSansCJK.ttc.zip",
+      "sourceFile": "NotoSansCJK.ttc",
+      "sourceSha256": "063CDB343DC88ECB20D4B3DFA047327441AF7F7F327DCD5BE56812521C83F554",
+      "faceCount": 5,
+      "transformation": {
+        "tool": "fontTools 4.59.2",
+        "sourceFaceIndices": [25, 26, 27, 28, 29],
+        "shareTables": true,
+        "glyphSubsetting": false
+      },
+      "sha256": "E867E765AB7E45EE617A3A9C45699690B4BD72A43C0D2AEC906ABB048CC5BE3C",
+      "license": "OFL-1.1",
+      "copyright": "Copyright 2014-2021 Adobe"
+    }
+  ]
+}

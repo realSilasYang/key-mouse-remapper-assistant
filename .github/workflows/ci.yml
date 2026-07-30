@@ -1,0 +1,77 @@
+name: CI
+
+on:
+  push:
+    branches: [main, "codex/**"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: windows-2022
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          lfs: true
+
+      - name: Resolve locked toolchain
+        id: toolchain
+        shell: pwsh
+        run: |
+          $tools = ./tools/bootstrap-toolchain.ps1
+          "ahk=$($tools.AutoHotkeyPath)" >> $env:GITHUB_OUTPUT
+          "compiler=$($tools.CompilerPath)" >> $env:GITHUB_OUTPUT
+          "ahk_source=$($tools.AutoHotkeySourcePath)" >> $env:GITHUB_OUTPUT
+
+      - name: Verify source and GUI interaction
+        shell: pwsh
+        run: >-
+          ./tests/verify.ps1 -AllowDesktopInput
+          -AutoHotkeyPath '${{ steps.toolchain.outputs.ahk }}'
+
+      - name: Verify reproducible release
+        shell: pwsh
+        run: >-
+          ./tests/reproducible-build.ps1
+          -AutoHotkeyPath '${{ steps.toolchain.outputs.ahk }}'
+          -CompilerPath '${{ steps.toolchain.outputs.compiler }}'
+          -AutoHotkeySourcePath '${{ steps.toolchain.outputs.ahk_source }}'
+
+      - name: Verify release serialization
+        shell: pwsh
+        run: >-
+          ./tests/release-transaction-tests.ps1
+          -AutoHotkeyPath '${{ steps.toolchain.outputs.ahk }}'
+          -CompilerPath '${{ steps.toolchain.outputs.compiler }}'
+          -AutoHotkeySourcePath '${{ steps.toolchain.outputs.ahk_source }}'
+
+      - name: Build artifact
+        shell: pwsh
+        run: >-
+          ./tools/build-release.ps1
+          -AutoHotkeyPath '${{ steps.toolchain.outputs.ahk }}'
+          -CompilerPath '${{ steps.toolchain.outputs.compiler }}'
+          -AutoHotkeySourcePath '${{ steps.toolchain.outputs.ahk_source }}'
+
+      - name: Validate artifact
+        shell: pwsh
+        run: ./tests/release-artifact-tests.ps1 -OutputRoot ./dist
+
+      - name: Upload portable package
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: key-mouse-remapper-assistant-windows-x64
+          path: |
+            dist/*.zip
+            dist/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 14
