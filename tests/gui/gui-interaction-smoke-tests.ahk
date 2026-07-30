@@ -1888,8 +1888,8 @@ try {
             InStr(editorText, "普通说明注释") - 1)
         quotedSemicolonFormat := ReadCharacterFormat(fontEditor.CodeEdit.Hwnd,
             InStr(editorText, "a;b"))
-        AssertEqual("JetBrains Mono", latinFormat.Face,
-            "英文代码没有使用 JetBrains Mono")
+        AssertEqual(fontEditor.CodeFontName, latinFormat.Face,
+            "英文代码没有使用首个可用的首选等宽字体")
         AssertEqual("SimSun", cjkFormat.Face, "中文没有使用宋体")
         AssertEqual(260, latinFormat.Height, "英文代码字号错误")
         AssertEqual(260, cjkFormat.Height, "中文代码字号错误")
