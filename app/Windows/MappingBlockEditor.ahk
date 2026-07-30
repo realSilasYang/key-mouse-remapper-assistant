@@ -1,8 +1,12 @@
 class MappingBlockEditor {
     static NewEditorWidth := 1040
     static NewEditorHeight := 600
+    static NewEditorMinimumWidth := 880
+    static NewEditorMinimumHeight := 500
     static EditEditorWidth := 780
     static EditEditorHeight := 560
+    static EditEditorMinimumWidth := 640
+    static EditEditorMinimumHeight := 440
     static MetadataPanelWidth := 326
     static MetadataPanelGap := 20
     static GutterSeparatorWidth := 1
@@ -47,7 +51,14 @@ class MappingBlockEditor {
             throw Error("无法加载代码编辑控件。")
         try {
             windowTitle := isNew ? Tr("新增映射代码") : Tr("编辑映射代码")
-            minimumSize := isNew ? " +MinSize880x500" : " +MinSize640x440"
+            if isNew
+                minimumSize := " +MinSize"
+                    . MappingBlockEditor.NewEditorMinimumWidth "x"
+                    . MappingBlockEditor.NewEditorMinimumHeight
+            else
+                minimumSize := " +MinSize"
+                    . MappingBlockEditor.EditEditorMinimumWidth "x"
+                    . MappingBlockEditor.EditEditorMinimumHeight
             this.Gui := Gui("+Owner" ownerWindow.Gui.Hwnd
                 " +Resize" minimumSize " +OwnDialogs", windowTitle)
             this.EditorHwnd := this.Gui.Hwnd

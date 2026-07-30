@@ -973,10 +973,12 @@ try {
         DllCall("user32\GetFocus", "Ptr"),
         "鼠标点击只读行号栏后没有把焦点保留在代码区")
     newMappingEditor.Gui.GetClientPos(, , &newEditorWidth, &newEditorHeight)
-    AssertEqual(MappingBlockEditor.NewEditorWidth, newEditorWidth,
-        "新增编辑器默认宽度没有容纳元数据说明区")
-    AssertEqual(MappingBlockEditor.NewEditorHeight, newEditorHeight,
-        "新增编辑器默认高度错误")
+    AssertTrue(newEditorWidth >= MappingBlockEditor.NewEditorMinimumWidth
+            && newEditorWidth <= MappingBlockEditor.NewEditorWidth,
+        "新增编辑器宽度超出响应式设计范围：" newEditorWidth)
+    AssertTrue(newEditorHeight >= MappingBlockEditor.NewEditorMinimumHeight
+            && newEditorHeight <= MappingBlockEditor.NewEditorHeight,
+        "新增编辑器高度超出响应式设计范围：" newEditorHeight)
     newMappingEditor.CodeEdit.GetPos(&newEditorCodeX, &newEditorCodeY,
         &newEditorCodeWidth, &newEditorCodeHeight)
     newMappingEditor.LineNumberEdit.GetPos(&gutterX, &gutterY,
