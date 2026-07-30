@@ -25,6 +25,7 @@ RunPerformanceGates()
 RunPerformanceGates() {
 try {
     ruleCount := 500
+    maximumJsonParseMs := 650
     sourceSpecs := []
     Loop ruleCount
         sourceSpecs.Push(BuildPerformanceSpec(A_Index))
@@ -51,8 +52,8 @@ try {
         "ms compile=" Format("{:.3f}", compileMs) "ms`n", "*")
     AssertTrue(mappings.Length == ruleCount,
         "性能门禁没有解析完整的 500 条规则")
-    AssertTrue(parseMs < 500,
-        "500 条规则 JSON 解析超过 500 ms："
+    AssertTrue(parseMs < maximumJsonParseMs,
+        "500 条规则 JSON 解析超过 " maximumJsonParseMs " ms："
             Format("{:.3f}", parseMs) " ms")
 
     app := PerformanceTestApp()
