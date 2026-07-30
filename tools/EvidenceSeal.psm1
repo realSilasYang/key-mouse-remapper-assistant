@@ -249,7 +249,7 @@ function Add-EvidenceSeal {
         machine_id = Get-EvidenceMachineId
         user_sid = Get-EvidenceUserSid
         collector_process_id = $CollectorProcessId
-        sealed_utc = [DateTime]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ')
+        sealed_utc = [DateTime]::UtcNow.ToString("yyyyMMdd'T'HHmmss'Z'")
         evidence_sha256 = Get-EvidenceDocumentSha256 $Evidence
     }
     $payloadJson = $payload | ConvertTo-Json -Compress
@@ -288,7 +288,7 @@ function Assert-EvidenceSeal {
     $protection = Get-EvidenceExactMember $seal 'protection' 'Evidence seal'
     $protectedPayload = Get-EvidenceExactMember $seal 'protected_payload' `
         'Evidence seal'
-    if ($sealSchema -isnot [int] -or [int]$sealSchema -ne 1 -or
+    if (-not (Test-EvidenceIntegerEqual $sealSchema 1) -or
             $protection -isnot [string] -or
             [string]$protection -cne 'dpapi-current-user' -or
             $protectedPayload -isnot [string] -or
@@ -339,7 +339,7 @@ function Assert-EvidenceSeal {
     }
     $sealedUtc = [DateTimeOffset]::MinValue
     if (-not [DateTimeOffset]::TryParseExact([string]$payloadTime,
-            'yyyy-MM-ddTHH:mm:ssZ', [Globalization.CultureInfo]::InvariantCulture,
+            "yyyyMMdd'T'HHmmss'Z'", [Globalization.CultureInfo]::InvariantCulture,
             [Globalization.DateTimeStyles]::AssumeUniversal, [ref]$sealedUtc) -or
             $sealedUtc -gt [DateTimeOffset]::UtcNow.AddMinutes(5)) {
         throw 'Evidence seal timestamp is invalid or in the future.'

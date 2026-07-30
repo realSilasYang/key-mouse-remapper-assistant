@@ -40,7 +40,8 @@ for argument in A_Args {
 }
 
 if !WorkerBootstrap.ApplyFromArguments(A_Args) {
-    FileAppend("输入工作进程必须通过一次性启动信封启动。`n", "**")
+    FileAppend("KMR_WORKER_BOOTSTRAP_REQUIRED: "
+        . "输入工作进程必须通过一次性启动信封启动。`n", "**")
     ExitApp(1)
 }
 global Worker := InputEngineWorker.RunFromEnvironment()

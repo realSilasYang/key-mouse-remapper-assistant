@@ -300,7 +300,7 @@ class PhysicalDeviceEvidenceSession {
             "status", status,
             "passed", JsonBoolean(passed),
             "acceptance_eligible", JsonBoolean(passed),
-            "created_utc", FormatTime(A_NowUTC, "yyyy-MM-ddTHH:mm:ssZ"),
+            "created_utc", FormatTime(A_NowUTC, "yyyyMMddTHHmmssZ"),
             "runtime", Map("autohotkey", A_AhkVersion,
                 "architecture", A_PtrSize == 8 ? "x64" : "x86",
                 "executable_sha256", this.Options.RuntimeSha256),

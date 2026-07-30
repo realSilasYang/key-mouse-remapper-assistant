@@ -19,6 +19,7 @@ $stdoutPath = Join-Path $testRoot 'parallel-build.stdout.log'
 $stderrPath = Join-Path $testRoot 'parallel-build.stderr.log'
 $parallelSuccessMarker = '__KMR_RELEASE_TRANSACTION_CHILD_SUCCESS__'
 $parallelProcess = $null
+$powerShellPath = (Get-Process -Id $PID).Path
 $obsoletePackageName =
     'key-mouse-remapper-assistant-99.98.97-windows-x64'
 $obsoletePackageDirectory = Join-Path $outputRoot $obsoletePackageName
@@ -159,7 +160,7 @@ try {
             '-ExecutionPolicy', 'Bypass', '-EncodedCommand', $encodedCommand)
         $scratchBeforeParallel = @(Get-ReleaseScratchNames)
         $parallelProcess = Start-Process `
-            -FilePath (Join-Path $PSHOME 'powershell.exe') `
+            -FilePath $powerShellPath `
             -ArgumentList ($arguments -join ' ') -PassThru `
             -WindowStyle Hidden -RedirectStandardOutput $stdoutPath `
             -RedirectStandardError $stderrPath

@@ -66,7 +66,7 @@ function Assert-UtcTimestamp {
     param([string]$Value, [string]$Field)
     $parsed = [DateTimeOffset]::MinValue
     $valid = [DateTimeOffset]::TryParseExact($Value,
-        'yyyy-MM-ddTHH:mm:ssZ', [Globalization.CultureInfo]::InvariantCulture,
+        "yyyyMMdd'T'HHmmss'Z'", [Globalization.CultureInfo]::InvariantCulture,
         [Globalization.DateTimeStyles]::AssumeUniversal, [ref]$parsed)
     Assert-EvidenceCondition $valid `
         "Desktop-context evidence timestamp is invalid: $Field"

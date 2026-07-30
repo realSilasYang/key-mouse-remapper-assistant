@@ -488,7 +488,7 @@ class DesktopContextEvidenceSession {
     }
 
     UtcNow() {
-        return FormatTime(A_NowUTC, "yyyy-MM-ddTHH:mm:ssZ")
+        return FormatTime(A_NowUTC, "yyyyMMddTHHmmssZ")
     }
 
     Cancel(*) {

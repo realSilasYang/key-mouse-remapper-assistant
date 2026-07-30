@@ -56,7 +56,7 @@ function New-Evidence {
         status = 'passed'
         passed = $true
         acceptance_eligible = $true
-        created_utc = '2026-07-29T10:00:00Z'
+        created_utc = '20260729T100000Z'
         runtime = [ordered]@{ autohotkey = '2.0.26'; architecture = 'x64';
             executable_sha256 = [string]$lock.tools.autoHotkey.executableSha256 }
         collector = [ordered]@{ script_sha256 = $collectorHash;

@@ -56,7 +56,7 @@ function New-Sample {
     return [ordered]@{
         sequence = $Sequence
         tick_ms = $Tick
-        utc = '2026-07-29T10:00:00Z'
+        utc = '20260729T100000Z'
         reason = 'test'
         session = $Session
         input_source = [ordered]@{
@@ -92,17 +92,17 @@ function New-Evidence {
     )
     $events = @(
         [ordered]@{ type = 'power'; phase = 'suspend'; name = 'suspend';
-            code = 4; tick_ms = 35000; utc = '2026-07-29T10:00:00Z' },
+            code = 4; tick_ms = 35000; utc = '20260729T100000Z' },
         [ordered]@{ type = 'power'; phase = 'resume';
             name = 'resume_automatic'; code = 18; tick_ms = 45000;
-            utc = '2026-07-29T10:00:00Z' }
+            utc = '20260729T100000Z' }
     )
     return [ordered]@{
         schema = 1
         status = 'passed'
         passed = $true
         acceptance_eligible = $true
-        created_utc = '2026-07-29T10:00:00Z'
+        created_utc = '20260729T100000Z'
         runtime = [ordered]@{
             autohotkey = '2.0.26'
             architecture = 'x64'

@@ -87,7 +87,7 @@ Assert-EvidenceSeal $evidence 'physical-device' $collectorProcessId | Out-Null
 $createdUtc = [DateTimeOffset]::MinValue
 Assert-EvidenceCondition `
     ([DateTimeOffset]::TryParseExact([string]$evidence.created_utc,
-        'yyyy-MM-ddTHH:mm:ssZ', [Globalization.CultureInfo]::InvariantCulture,
+        "yyyyMMdd'T'HHmmss'Z'", [Globalization.CultureInfo]::InvariantCulture,
         [Globalization.DateTimeStyles]::AssumeUniversal, [ref]$createdUtc)) `
     'Physical-device evidence created_utc is invalid.'
 $duration = Get-NonNegativeInteger $evidence.duration_ms 'duration_ms'

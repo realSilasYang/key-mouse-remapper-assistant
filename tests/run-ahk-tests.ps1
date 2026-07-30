@@ -140,7 +140,7 @@ foreach ($entryPath in $entryPaths) {
     }
 }
 Assert-AhkFileFails (Join-Path $projectRoot `
-    'workers\input-engine-worker.ahk') @() '一次性启动信封'
+    'workers\input-engine-worker.ahk') @() 'KMR_WORKER_BOOTSTRAP_REQUIRED'
 foreach ($testFile in Get-ChildItem -LiteralPath (Join-Path $PSScriptRoot 'core') `
         -Filter '*-tests.ahk' -File | Sort-Object Name) {
     $testArguments = @()
