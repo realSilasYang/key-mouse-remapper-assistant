@@ -12,6 +12,64 @@ $secondRoot = Join-Path $projectRoot '.build\repro-second'
 $alternateRoot = Join-Path $projectRoot '.build\repro-alternate-drive'
 $occupiedTarget = Join-Path $projectRoot '.build\repro-occupied-drive'
 $occupiedDrive = $null
+
+function Get-ReproducibilityDifference {
+    param([string]$FirstDirectory, [string]$SecondDirectory)
+
+    $firstFiles = @{}
+    foreach ($file in Get-ChildItem -LiteralPath $FirstDirectory -Recurse -File) {
+        $relative = $file.FullName.Substring($FirstDirectory.Length + 1)
+        $firstFiles[$relative] = $file.FullName
+    }
+    $secondFiles = @{}
+    foreach ($file in Get-ChildItem -LiteralPath $SecondDirectory -Recurse -File) {
+        $relative = $file.FullName.Substring($SecondDirectory.Length + 1)
+        $secondFiles[$relative] = $file.FullName
+    }
+    $details = [Collections.Generic.List[string]]::new()
+    $relativePaths = @(@($firstFiles.Keys) + @($secondFiles.Keys) |
+        Sort-Object -Unique)
+    foreach ($relative in $relativePaths) {
+        if (-not $firstFiles.ContainsKey($relative)) {
+            $details.Add("Only in second package: $relative")
+            continue
+        }
+        if (-not $secondFiles.ContainsKey($relative)) {
+            $details.Add("Only in first package: $relative")
+            continue
+        }
+        $firstFileHash = (Get-FileHash -Algorithm SHA256 `
+            -LiteralPath $firstFiles[$relative]).Hash
+        $secondFileHash = (Get-FileHash -Algorithm SHA256 `
+            -LiteralPath $secondFiles[$relative]).Hash
+        if ($firstFileHash -eq $secondFileHash) { continue }
+        $details.Add("Different file: $relative $firstFileHash != $secondFileHash")
+        if ([IO.Path]::GetExtension($relative) -cne '.exe') { continue }
+        $firstBytes = [IO.File]::ReadAllBytes($firstFiles[$relative])
+        $secondBytes = [IO.File]::ReadAllBytes($secondFiles[$relative])
+        if ($firstBytes.Length -ne $secondBytes.Length) {
+            $details.Add("Executable lengths differ: $($firstBytes.Length) != $($secondBytes.Length)")
+            continue
+        }
+        $differenceCount = 0
+        $samples = [Collections.Generic.List[string]]::new()
+        for ($offset = 0; $offset -lt $firstBytes.Length; $offset++) {
+            if ($firstBytes[$offset] -eq $secondBytes[$offset]) { continue }
+            $differenceCount++
+            if ($samples.Count -lt 32) {
+                $samples.Add(('{0:X8}:{1:X2}/{2:X2}' -f $offset,
+                    $firstBytes[$offset], $secondBytes[$offset]))
+            }
+        }
+        $details.Add("Executable byte differences: $differenceCount; samples: " +
+            ($samples -join ', '))
+    }
+    if (-not $details.Count) {
+        return 'Package files are identical; ZIP container bytes differ.'
+    }
+    return $details -join "`n"
+}
+
 try {
     $first = & (Join-Path $projectRoot 'tools\build-release.ps1') `
         -AutoHotkeyPath $AutoHotkeyPath -CompilerPath $CompilerPath `
@@ -24,7 +82,9 @@ try {
     $firstHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $first.ZipPath).Hash
     $secondHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $second.ZipPath).Hash
     if ($firstHash -ne $secondHash) {
-        throw "Release ZIP is not reproducible: $firstHash != $secondHash"
+        $difference = Get-ReproducibilityDifference `
+            $first.PackageDirectory $second.PackageDirectory
+        throw "Release ZIP is not reproducible: $firstHash != $secondHash`n$difference"
     }
     foreach ($build in @($first, $second)) {
         $buildManifest = Get-Content -LiteralPath (Join-Path `
