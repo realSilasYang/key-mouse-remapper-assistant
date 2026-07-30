@@ -24,11 +24,27 @@ class BoundedFileReader {
         input := FileOpen(filePath, "r")
         if !IsObject(input)
             throw Error("无法打开" String(label) "。")
-        readBuffer := Buffer(maximumBytes + 1, 0)
-        try bytesRead := input.RawRead(readBuffer)
-        finally input.Close()
+        try {
+            if DllCall("kernel32\GetFileType", "Ptr", input.Handle,
+                    "UInt") != 1
+                throw BoundedFileFormatError(
+                    String(label) "不是普通磁盘文件。")
+            expectedBytes := input.Length
+            if Type(expectedBytes) != "Integer" || expectedBytes < 0
+                throw BoundedFileFormatError(
+                    String(label) "长度无效。")
+            if expectedBytes > maximumBytes
+                throw BoundedFileLimitError(
+                    String(label) "超过读取大小上限。")
+            readBuffer := Buffer(maximumBytes + 1, 0)
+            input.Pos := 0
+            bytesRead := input.RawRead(readBuffer)
+        } finally input.Close()
         if bytesRead > maximumBytes
             throw BoundedFileLimitError(String(label) "超过读取大小上限。")
+        if bytesRead != expectedBytes
+            throw BoundedFileFormatError(
+                String(label) "在读取期间发生变化或未被完整读取。")
         result := Buffer(bytesRead, 0)
         if bytesRead
             DllCall("kernel32\RtlMoveMemory", "Ptr", result.Ptr,
@@ -47,11 +63,10 @@ class BoundedFileReader {
         byteCount := bytes.Size - offset
         if byteCount <= 0
             return ""
-        Loop byteCount {
-            if NumGet(bytes, offset + A_Index - 1, "UChar") == 0
-                throw BoundedFileFormatError(
-                    String(label) "包含不支持的 NUL 字符。")
-        }
+        if DllCall("msvcrt\memchr", "Ptr", bytes.Ptr + offset,
+                "Int", 0, "UPtr", byteCount, "Ptr")
+            throw BoundedFileFormatError(
+                String(label) "包含不支持的 NUL 字符。")
         characterCount := DllCall("kernel32\MultiByteToWideChar",
             "UInt", 65001, "UInt", 0x8, "Ptr", bytes.Ptr + offset,
             "Int", byteCount, "Ptr", 0, "Int", 0, "Int")

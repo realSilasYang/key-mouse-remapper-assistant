@@ -40,6 +40,8 @@ try {
     AssertEqual(8, exactBytes.Size, "二进制读取返回了错误长度")
     AssertReadFails(ObjBindMethod(BoundedFileReader, "ReadBytes"),
         [oversizedPath, 8], "超限二进制文件未被拒绝")
+    AssertReadFails(ObjBindMethod(BoundedFileReader, "ReadBytes"),
+        ["NUL", 8], "Windows 设备路径被当作普通磁盘文件读取")
 
     AssertReadFails(ObjBindMethod(BoundedFileReader, "ReadUtf8"),
         [exactPath, "8", 8], "字符串字节上限被接受")
