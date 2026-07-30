@@ -2190,7 +2190,10 @@ class TestKeyMouseRemapperAssistantApp extends KeyMouseRemapperAssistantApp {
         this.TestRoot := A_Temp "\key-mouse-remapper-assistant-gui-" A_TickCount "-"
             . Format("{:08X}", Random(0, 0xFFFFFFFF))
         DirCreate(this.TestRoot)
-        super.__New(this.TestRoot "\settings.ini",
+        settingsPath := this.TestRoot "\settings.ini"
+        FileAppend("[Appearance]`r`nUiLanguage=zh-CN`r`n",
+            settingsPath, "UTF-8-RAW")
+        super.__New(settingsPath,
             this.TestRoot "\history.dat", this.TestRoot "\notification.txt")
         this.Capture.Stop(false)
         this.Capture := DeterministicGuiKeyCaptureSession(this)
