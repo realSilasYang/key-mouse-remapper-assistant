@@ -1,6 +1,7 @@
 #Requires AutoHotkey v2.0.26 64-bit
 #SingleInstance Off
 #Warn All, StdOut
+FileEncoding "UTF-8-RAW"
 
 #Include src\Core\CommandLine.ahk
 #Include src\Core\BoundedFileReader.ahk

@@ -6,7 +6,6 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $utf8 = [System.Text.UTF8Encoding]::new($false)
-$nativeEncoding = [System.Text.Encoding]::Default
 [Console]::InputEncoding = $utf8
 [Console]::OutputEncoding = $utf8
 $OutputEncoding = $utf8
@@ -60,8 +59,8 @@ $startInfo.FileName = $runtime
 $startInfo.UseShellExecute = $false
 $startInfo.RedirectStandardOutput = $true
 $startInfo.RedirectStandardError = $true
-$startInfo.StandardOutputEncoding = $nativeEncoding
-$startInfo.StandardErrorEncoding = $nativeEncoding
+$startInfo.StandardOutputEncoding = $utf8
+$startInfo.StandardErrorEncoding = $utf8
 $startInfo.Arguments = (@('/ErrorStdOut',
     (Join-Path $projectRoot 'key-mouse-remapper-assistant-cli.ahk')) + $CliArguments |
     ForEach-Object { '"' + ([string]$_).Replace('"', '\"') + '"' }) -join ' '
