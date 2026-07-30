@@ -47,7 +47,8 @@ try {
         [targetPath, scriptPath], A_Now)
     AssertTrue(!FileExist(staleTemporary)
             && !FileExist(staleScriptTemporary),
-        "过期事务残留没有被清理")
+        "过期事务残留没有被清理：" DescribeCleanupReport(report,
+            [staleTemporary, staleScriptTemporary]))
     AssertTrue(FileExist(recentTemporary) && FileExist(unrelatedPath),
         "事务清理误删了近期文件或无关文件")
     AssertEqual(2, report.Removed.Length, "事务清理移除计数错误")
@@ -135,4 +136,18 @@ FindMatchingFile(pattern) {
         result := A_LoopFileFullPath
     }
     return result
+}
+
+DescribeCleanupReport(report, paths) {
+    description := "removed=" report.Removed.Length
+        . ", recent=" report.SkippedRecent.Length
+        . ", failures=" report.Failures.Length
+    for failure in report.Failures
+        description .= "; failure=" failure["file_path"] ": " failure["error"]
+    for path in paths {
+        description .= "; candidate=" path ":"
+        description .= FileExist(path)
+            ? "exists,modified=" FileGetTime(path, "M") : "missing"
+    }
+    return description
 }
