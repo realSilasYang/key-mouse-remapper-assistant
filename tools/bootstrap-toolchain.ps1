@@ -156,8 +156,13 @@ function Resolve-LockedTool {
             throw "$Name archive must contain exactly one $($definition.executable)."
         }
         $sourceDirectory = $matches[0].Directory.FullName
-        Assert-SafeBuildChild $stagingDirectory $sourceDirectory `
-            "$Name extracted source directory" | Out-Null
+        if (Test-BuildPathEqual $stagingDirectory $sourceDirectory) {
+            Assert-SafeBuildRoot $sourceDirectory `
+                "$Name extracted source directory" | Out-Null
+        } else {
+            Assert-SafeBuildChild $stagingDirectory $sourceDirectory `
+                "$Name extracted source directory" | Out-Null
+        }
         New-Item -ItemType Directory -Path $installDirectory | Out-Null
         foreach ($sourceItem in @(Get-ChildItem -LiteralPath $sourceDirectory `
                 -Force)) {
