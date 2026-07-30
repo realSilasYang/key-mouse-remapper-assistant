@@ -448,67 +448,225 @@ Copy-Item -LiteralPath $AutoHotkeySourcePath `
     -Destination (Join-Path $runtimeSourceDirectory `
         $lock.tools.autoHotkey.sourceArchive)
 
-$manifest = [ordered]@{
-    schemaVersion = 1
-    packageKind = 'portable-source-runtime'
-    version = $version
-    platform = 'windows-x64'
-    entry = '键鼠重映射小助手.exe'
-    editableSource = '键鼠重映射小助手.ahk'
-    cli = '键鼠重映射小助手-CLI.ps1'
-    autoHotkey = $lock.tools.autoHotkey.version
-    autoHotkeySha256 = $lock.tools.autoHotkey.executableSha256
-    autoHotkeySourceCommit = $lock.tools.autoHotkey.sourceCommit
-    autoHotkeySourceSha256 = $lock.tools.autoHotkey.sourceSha256
-    ahk2Exe = $lock.tools.ahk2Exe.version
-    ahk2ExeSha256 = $lock.tools.ahk2Exe.executableSha256
-    inputBackend = 'raw-input'
-    requiresDriver = $false
-    suppressesOriginalInput = $false
+function ConvertTo-StableJsonString {
+    param([AllowEmptyString()][string]$Value)
+
+    $builder = [Text.StringBuilder]::new()
+    [void]$builder.Append('"')
+    foreach ($character in $Value.ToCharArray()) {
+        $code = [int]$character
+        switch ($code) {
+            8 { [void]$builder.Append('\b'); continue }
+            9 { [void]$builder.Append('\t'); continue }
+            10 { [void]$builder.Append('\n'); continue }
+            12 { [void]$builder.Append('\f'); continue }
+            13 { [void]$builder.Append('\r'); continue }
+            34 { [void]$builder.Append('\"'); continue }
+            92 { [void]$builder.Append('\\'); continue }
+        }
+        if ($code -lt 0x20) {
+            [void]$builder.Append(('\u{0:x4}' -f $code))
+        } else {
+            [void]$builder.Append($character)
+        }
+    }
+    [void]$builder.Append('"')
+    return $builder.ToString()
 }
-$manifestJson = ($manifest | ConvertTo-Json -Depth 4) + "`n"
+$manifestJson = (@(
+    '{'
+    '  "schemaVersion": 1,'
+    '  "packageKind": "portable-source-runtime",'
+    ('  "version": ' + (ConvertTo-StableJsonString $version) + ',')
+    '  "platform": "windows-x64",'
+    '  "entry": "键鼠重映射小助手.exe",'
+    '  "editableSource": "键鼠重映射小助手.ahk",'
+    '  "cli": "键鼠重映射小助手-CLI.ps1",'
+    ('  "autoHotkey": ' +
+        (ConvertTo-StableJsonString $lock.tools.autoHotkey.version) + ',')
+    ('  "autoHotkeySha256": ' +
+        (ConvertTo-StableJsonString `
+            $lock.tools.autoHotkey.executableSha256) + ',')
+    ('  "autoHotkeySourceCommit": ' +
+        (ConvertTo-StableJsonString `
+            $lock.tools.autoHotkey.sourceCommit) + ',')
+    ('  "autoHotkeySourceSha256": ' +
+        (ConvertTo-StableJsonString `
+            $lock.tools.autoHotkey.sourceSha256) + ',')
+    ('  "ahk2Exe": ' +
+        (ConvertTo-StableJsonString $lock.tools.ahk2Exe.version) + ',')
+    ('  "ahk2ExeSha256": ' +
+        (ConvertTo-StableJsonString $lock.tools.ahk2Exe.executableSha256) + ',')
+    '  "inputBackend": "raw-input",'
+    '  "requiresDriver": false,'
+    '  "suppressesOriginalInput": false'
+    '}'
+) -join "`n") + "`n"
 [System.IO.File]::WriteAllText(
     (Join-Path $packageDirectory 'build-manifest.json'), $manifestJson,
     [System.Text.UTF8Encoding]::new($false))
 
-Add-Type -AssemblyName System.IO.Compression
+if (-not ('KeyMouseRemapperAssistant.Build.Crc32' -as [type])) {
+    Add-Type -TypeDefinition @'
+using System;
+using System.IO;
+
+namespace KeyMouseRemapperAssistant.Build
+{
+    public static class Crc32
+    {
+        private static readonly uint[] Table = CreateTable();
+
+        private static uint[] CreateTable()
+        {
+            uint[] table = new uint[256];
+            for (int index = 0; index < table.Length; index++)
+            {
+                uint value = (uint)index;
+                for (int bit = 0; bit < 8; bit++)
+                    value = (value & 1U) != 0U
+                        ? 0xEDB88320U ^ (value >> 1)
+                        : value >> 1;
+                table[index] = value;
+            }
+            return table;
+        }
+
+        public static uint ComputeFile(string path)
+        {
+            uint crc = 0xFFFFFFFFU;
+            byte[] buffer = new byte[1024 * 1024];
+            using (FileStream stream = File.OpenRead(path))
+            {
+                int count;
+                while ((count = stream.Read(buffer, 0, buffer.Length)) > 0)
+                    for (int index = 0; index < count; index++)
+                        crc = Table[(int)((crc ^ buffer[index]) & 0xFFU)] ^
+                            (crc >> 8);
+            }
+            return ~crc;
+        }
+    }
+}
+'@
+}
 function New-DeterministicArchive {
     param([string]$SourceDirectory, [string]$ArchivePath)
+
+    $utf8 = [Text.UTF8Encoding]::new($false, $true)
+    $files = [Collections.Generic.List[object]]::new()
+    foreach ($file in @(Get-ChildItem -LiteralPath $SourceDirectory `
+            -Recurse -File)) {
+        $files.Add([pscustomobject]@{
+            File = $file
+            RelativePath = $file.FullName.Substring(
+                $SourceDirectory.Length + 1).Replace('\', '/')
+        })
+    }
+    $files.Sort([Comparison[object]]{
+        param($left, $right)
+        return [StringComparer]::Ordinal.Compare(
+            [string]$left.RelativePath, [string]$right.RelativePath)
+    })
+    if ($files.Count -gt [uint16]::MaxValue) {
+        throw 'Release package has too many files for a ZIP32 archive.'
+    }
+
     $stream = [System.IO.File]::Open($ArchivePath,
         [System.IO.FileMode]::CreateNew)
+    $writer = [IO.BinaryWriter]::new($stream, $utf8, $true)
     try {
-        $archive = [System.IO.Compression.ZipArchive]::new($stream,
-            [System.IO.Compression.ZipArchiveMode]::Create, $false,
-            [System.Text.Encoding]::UTF8)
-        try {
-            $files = [Collections.Generic.List[object]]::new()
-            foreach ($file in @(Get-ChildItem -LiteralPath $SourceDirectory `
-                    -Recurse -File)) {
-                $files.Add([pscustomobject]@{
-                    File = $file
-                    RelativePath = $file.FullName.Substring(
-                        $SourceDirectory.Length + 1).Replace('\', '/')
-                })
+        $entries = [Collections.Generic.List[object]]::new()
+        foreach ($fileEntry in $files) {
+            $file = $fileEntry.File
+            if ($file.Length -gt [uint32]::MaxValue -or
+                    $stream.Position -gt [uint32]::MaxValue) {
+                throw 'Release package is too large for a ZIP32 archive.'
             }
-            $files.Sort([Comparison[object]]{
-                param($left, $right)
-                return [StringComparer]::Ordinal.Compare(
-                    [string]$left.RelativePath, [string]$right.RelativePath)
-            })
-            foreach ($fileEntry in $files) {
-                $file = $fileEntry.File
-                $relativePath = $fileEntry.RelativePath
-                $entry = $archive.CreateEntry($relativePath,
-                    [System.IO.Compression.CompressionLevel]::Optimal)
-                $entry.LastWriteTime = [DateTimeOffset]::new(1980, 1, 1,
-                    0, 0, 0, [TimeSpan]::Zero)
-                $input = [System.IO.File]::OpenRead($file.FullName)
-                $output = $entry.Open()
-                try { $input.CopyTo($output) }
-                finally { $output.Dispose(); $input.Dispose() }
+            $nameBytes = $utf8.GetBytes([string]$fileEntry.RelativePath)
+            if (-not $nameBytes.Length -or
+                    $nameBytes.Length -gt [uint16]::MaxValue) {
+                throw "Invalid ZIP entry name: $($fileEntry.RelativePath)"
             }
-        } finally { $archive.Dispose() }
-    } finally { $stream.Dispose() }
+            $entry = [pscustomobject]@{
+                NameBytes = $nameBytes
+                Crc32 = [KeyMouseRemapperAssistant.Build.Crc32]::ComputeFile(
+                    $file.FullName)
+                Size = [uint32]$file.Length
+                Offset = [uint32]$stream.Position
+            }
+            $entries.Add($entry)
+
+            $writer.Write([uint32]0x04034B50)
+            $writer.Write([uint16]20)
+            $writer.Write([uint16]0x0800)
+            $writer.Write([uint16]0)
+            $writer.Write([uint16]0)
+            $writer.Write([uint16]0x0021)
+            $writer.Write([uint32]$entry.Crc32)
+            $writer.Write([uint32]$entry.Size)
+            $writer.Write([uint32]$entry.Size)
+            $writer.Write([uint16]$nameBytes.Length)
+            $writer.Write([uint16]0)
+            $writer.Write($nameBytes)
+
+            $input = [IO.File]::OpenRead($file.FullName)
+            try {
+                $buffer = [byte[]]::new(1024 * 1024)
+                $written = [long]0
+                while (($count = $input.Read($buffer, 0, $buffer.Length)) `
+                        -gt 0) {
+                    $writer.Write($buffer, 0, $count)
+                    $written += $count
+                }
+                if ($written -ne $entry.Size) {
+                    throw "ZIP source changed during build: $($file.FullName)"
+                }
+            } finally { $input.Dispose() }
+        }
+
+        if ($stream.Position -gt [uint32]::MaxValue) {
+            throw 'Release package is too large for a ZIP32 archive.'
+        }
+        $centralDirectoryOffset = [uint32]$stream.Position
+        foreach ($entry in $entries) {
+            $writer.Write([uint32]0x02014B50)
+            $writer.Write([uint16]20)
+            $writer.Write([uint16]20)
+            $writer.Write([uint16]0x0800)
+            $writer.Write([uint16]0)
+            $writer.Write([uint16]0)
+            $writer.Write([uint16]0x0021)
+            $writer.Write([uint32]$entry.Crc32)
+            $writer.Write([uint32]$entry.Size)
+            $writer.Write([uint32]$entry.Size)
+            $writer.Write([uint16]$entry.NameBytes.Length)
+            $writer.Write([uint16]0)
+            $writer.Write([uint16]0)
+            $writer.Write([uint16]0)
+            $writer.Write([uint16]0)
+            $writer.Write([uint32]0)
+            $writer.Write([uint32]$entry.Offset)
+            $writer.Write($entry.NameBytes)
+        }
+        $centralDirectorySize = $stream.Position - $centralDirectoryOffset
+        if ($centralDirectorySize -gt [uint32]::MaxValue -or
+                $stream.Position -gt [uint32]::MaxValue) {
+            throw 'Release package is too large for a ZIP32 archive.'
+        }
+        $writer.Write([uint32]0x06054B50)
+        $writer.Write([uint16]0)
+        $writer.Write([uint16]0)
+        $writer.Write([uint16]$entries.Count)
+        $writer.Write([uint16]$entries.Count)
+        $writer.Write([uint32]$centralDirectorySize)
+        $writer.Write([uint32]$centralDirectoryOffset)
+        $writer.Write([uint16]0)
+        $writer.Flush()
+    } finally {
+        $writer.Dispose()
+        $stream.Dispose()
+    }
 }
 
 Assert-NoReparsePointTree $packageDirectory `

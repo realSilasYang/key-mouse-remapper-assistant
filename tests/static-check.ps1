@@ -711,8 +711,9 @@ if ($buildScript -match
         'IncludeNativeDriver|MicrosoftSignedDriverDirectory|nativeDriver|KmrInput' -or
         $releaseWorkflow -match
         'Windows Driver Kit|MicrosoftSignedDriverDirectory|KmrInput' -or
-        $buildScript -notmatch "inputBackend\s*=\s*'raw-input'" -or
-        $buildScript -notmatch 'requiresDriver\s*=\s*\$false' -or
+        $buildScript -notmatch '"inputBackend":\s*"raw-input"' -or
+        $buildScript -notmatch '"requiresDriver":\s*false' -or
+        $buildScript -notmatch '"suppressesOriginalInput":\s*false' -or
         $releaseArtifactTests -notmatch "backend -ne 'raw-input'") {
     $failures.Add('Release paths must package Raw Input only and reject obsolete driver infrastructure.')
 }

@@ -104,6 +104,14 @@ foreach ($font in $fontMetadata.fonts) {
 
 $manifest = Get-Content -LiteralPath (Join-Path $packageDirectory `
     'build-manifest.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+$manifestBytes = [IO.File]::ReadAllBytes((Join-Path $packageDirectory `
+    'build-manifest.json'))
+if ($manifestBytes.Length -lt 2 -or
+        $manifestBytes[0] -eq 0xEF -or
+        [Array]::IndexOf($manifestBytes, [byte]0x0D) -ge 0 -or
+        $manifestBytes[$manifestBytes.Length - 1] -ne 0x0A) {
+    throw 'build-manifest.json is not canonical UTF-8 with LF endings.'
+}
 if ($manifest.schemaVersion -ne 1 -or $manifest.version -ne $version -or
     $manifest.entry -ne $guiExecutable -or
     $manifest.editableSource -ne $editableSource -or
@@ -163,6 +171,33 @@ if ($LASTEXITCODE -ne 0 -or $capabilities.backend -ne 'raw-input' -or
 $extractRoot = Join-Path $projectRoot ('.build\artifact-check-' +
     [guid]::NewGuid().ToString('N'))
 try {
+    Add-Type -AssemblyName System.IO.Compression
+    $zipStream = [IO.File]::OpenRead($zipPath)
+    try {
+        $archive = [IO.Compression.ZipArchive]::new($zipStream,
+            [IO.Compression.ZipArchiveMode]::Read, $false,
+            [Text.Encoding]::UTF8)
+        try {
+            $entryNames = [Collections.Generic.List[string]]::new()
+            foreach ($entry in $archive.Entries) {
+                $entryNames.Add($entry.FullName)
+            }
+            $sortedNames = [Collections.Generic.List[string]]::new(
+                [Collections.Generic.IEnumerable[string]]$entryNames)
+            $sortedNames.Sort([StringComparer]::Ordinal)
+            if (($entryNames -join "`n") -cne ($sortedNames -join "`n")) {
+                throw 'ZIP entries are not in ordinal path order.'
+            }
+            foreach ($entry in $archive.Entries) {
+                if ($entry.CompressedLength -ne $entry.Length -or
+                        $entry.LastWriteTime.DateTime -ne
+                            [datetime]::new(1980, 1, 1)) {
+                    throw "ZIP entry is not stored canonically: $($entry.FullName)"
+                }
+            }
+        } finally { $archive.Dispose() }
+    } finally { $zipStream.Dispose() }
+
     Expand-Archive -LiteralPath $zipPath -DestinationPath $extractRoot
     $sourceFiles = @(Get-ChildItem -LiteralPath $packageDirectory `
         -Recurse -File | Sort-Object FullName)
