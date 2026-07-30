@@ -212,6 +212,13 @@ function Get-EvidenceExactMember {
     return $matches[0].Value
 }
 
+function Test-EvidenceIntegerEqual {
+    param($Value, [int]$Expected)
+
+    if ($Value -isnot [int] -and $Value -isnot [long]) { return $false }
+    return [long]$Value -eq [long]$Expected
+}
+
 function Add-EvidenceSeal {
     [CmdletBinding()]
     param(
@@ -316,11 +323,10 @@ function Assert-EvidenceSeal {
         'Protected payload'
     $payloadHash = Get-EvidenceExactMember $payload 'evidence_sha256' `
         'Protected payload'
-    if ($payloadSchema -isnot [int] -or [int]$payloadSchema -ne 1 -or
+    if (-not (Test-EvidenceIntegerEqual $payloadSchema 1) -or
             $payloadScope -isnot [string] -or
             [string]$payloadScope -cne $Scope -or
-            $payloadPid -isnot [int] -or
-            [int]$payloadPid -ne $CollectorProcessId -or
+            -not (Test-EvidenceIntegerEqual $payloadPid $CollectorProcessId) -or
             $payloadMachine -isnot [string] -or
             [string]$payloadMachine -notmatch '^[A-F0-9]{64}$' -or
             [string]$payloadMachine -cne (Get-EvidenceMachineId) -or
