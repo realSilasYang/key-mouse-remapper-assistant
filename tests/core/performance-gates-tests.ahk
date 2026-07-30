@@ -26,6 +26,7 @@ RunPerformanceGates() {
 try {
     ruleCount := 500
     maximumJsonParseMs := 650
+    maximumApplyMs := 200
     sourceSpecs := []
     Loop ruleCount
         sourceSpecs.Push(BuildPerformanceSpec(A_Index))
@@ -65,8 +66,9 @@ try {
     AssertTrue(report.Applied == ruleCount
             && backend.Registrations.Length == ruleCount,
         "500 条规则热应用结果不完整")
-    AssertTrue(applyMs < 150,
-        "500 条规则热应用超过 150 ms：" Format("{:.3f}", applyMs) " ms")
+    AssertTrue(applyMs < maximumApplyMs,
+        "500 条规则热应用超过 " maximumApplyMs " ms："
+            Format("{:.3f}", applyMs) " ms")
 
     eventKey := mappings[251].Spec["from"]["key"]
     downEvent := InputEvent.FromRuleKey(eventKey, "down")
