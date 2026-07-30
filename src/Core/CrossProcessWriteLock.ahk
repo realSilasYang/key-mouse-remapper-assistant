@@ -79,7 +79,34 @@ class CrossProcessWriteLock {
             "UInt", required, "Ptr", pathBuffer, "Ptr", 0, "UInt")
         if !result || result >= required
             throw OSError(A_LastError, "无法规范化写锁路径。")
-        return StrGet(pathBuffer, result, "UTF-16")
+        return this.ExpandShortPathComponents(
+            StrGet(pathBuffer, result, "UTF-16"))
+    }
+
+    static ExpandShortPathComponents(path) {
+        existingPath := path
+        missingSuffix := ""
+        while !FileExist(existingPath) {
+            name := ""
+            directory := ""
+            SplitPath(existingPath, &name, &directory)
+            if name == "" || directory == "" || directory == existingPath
+                return path
+            missingSuffix := "\" name missingSuffix
+            existingPath := directory
+        }
+        required := DllCall("kernel32\GetLongPathNameW",
+            "WStr", existingPath, "Ptr", 0, "UInt", 0, "UInt")
+        if !required
+            throw OSError(A_LastError, "无法展开写锁路径中的短名称。")
+        longPathBuffer := Buffer(required * 2, 0)
+        result := DllCall("kernel32\GetLongPathNameW",
+            "WStr", existingPath, "Ptr", longPathBuffer,
+            "UInt", required, "UInt")
+        if !result || result >= required
+            throw OSError(A_LastError, "无法展开写锁路径中的短名称。")
+        longExistingPath := StrGet(longPathBuffer, result, "UTF-16")
+        return RTrim(longExistingPath, "\") missingSuffix
     }
 
     static GetMutexName(path) {

@@ -20,6 +20,16 @@ observerHandle := 0
 DirCreate(testRoot)
 
 try {
+    shortTestRoot := GetShortPath(testRoot)
+    if shortTestRoot != "" && StrCompare(shortTestRoot, testRoot, false) != 0 {
+        shortTargetPath := shortTestRoot "\state.json"
+        AssertEqual(CrossProcessWriteLock.NormalizePath(targetPath),
+            CrossProcessWriteLock.NormalizePath(shortTargetPath),
+            "写锁没有把 8.3 短路径与长路径规范化为同一文件")
+        AssertEqual(CrossProcessWriteLock.GetMutexName(targetPath),
+            CrossProcessWriteLock.GetMutexName(shortTargetPath),
+            "8.3 短路径与长路径生成了不同的写锁互斥量")
+    }
     AssertTrue(InStr(CrossProcessWriteLock.GetMutexName(targetPath),
             "Global\") == 1,
         "写锁互斥量没有覆盖同一用户的不同 Windows 会话")
@@ -123,4 +133,16 @@ WaitForTestFile(path, timeoutMs, errorMessage) {
     while !FileExist(path) && A_TickCount < deadline
         Sleep(10)
     AssertTrue(FileExist(path), errorMessage)
+}
+
+GetShortPath(path) {
+    required := DllCall("kernel32\GetShortPathNameW",
+        "WStr", path, "Ptr", 0, "UInt", 0, "UInt")
+    if !required
+        return ""
+    pathBuffer := Buffer(required * 2, 0)
+    result := DllCall("kernel32\GetShortPathNameW",
+        "WStr", path, "Ptr", pathBuffer, "UInt", required, "UInt")
+    return !result || result >= required
+        ? "" : StrGet(pathBuffer, result, "UTF-16")
 }
