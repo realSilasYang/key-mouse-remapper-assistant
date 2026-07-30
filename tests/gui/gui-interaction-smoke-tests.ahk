@@ -2139,8 +2139,11 @@ try {
         safeModeApp.ApplyManagedRulesHot()
         AssertEqual(0, safeModeApp.Runtime.ApplyCount,
             "安全模式下热应用重新激活了映射")
-        AssertTrue(InStr(safeModeApp.Window.Status.Text, Tr("安全模式")) > 0,
-            "安全模式主窗口没有显示明确状态")
+        expectedSafeModeStatus := Tr(
+            "安全模式：已停用所有映射和输入观察。连续启动失败 {1} 次。",
+            safeModeApp.StartupState.ConsecutiveFailures)
+        AssertEqual(expectedSafeModeStatus, safeModeApp.Window.Status.Text,
+            "安全模式主窗口没有显示完整本地化状态")
         recoveryMenuPresent := true
         try A_TrayMenu.Disable(Tr("恢复最后正常配置"))
         catch
