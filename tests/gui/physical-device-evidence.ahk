@@ -48,15 +48,17 @@ class PhysicalDeviceEvidenceSession {
     Run() {
         exitCode := 1
         try {
-            this.Observer.Start()
-            this.InitializeDevices(this.Observer.GetDevices())
-            this.ResetObservationCounters()
             if this.Options.ListOnly {
+                this.InitializeDevices(this.Observer.RefreshDevices())
+                this.ResetObservationCounters()
                 this.StartTick := A_TickCount
                 this.EndTick := this.StartTick
                 this.WriteEvidence("listed")
                 exitCode := 0
             } else {
+                this.Observer.Start()
+                this.InitializeDevices(this.Observer.GetDevices())
+                this.ResetObservationCounters()
                 this.Window.Show("w880 h460")
                 this.StartTick := A_TickCount
                 deadline := this.StartTick + this.Options.DurationSeconds * 1000
