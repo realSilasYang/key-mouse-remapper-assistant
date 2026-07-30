@@ -82,35 +82,113 @@ function Normalize-Ahk2ExeVersionPadding {
     $bytes = [IO.File]::ReadAllBytes($ExecutablePath)
     $singleByteEncoding = [Text.Encoding]::GetEncoding(28591)
     $binaryText = $singleByteEncoding.GetString($bytes)
-    foreach ($key in @('VarFileInfo', 'Translation')) {
-        $patternBytes = [Text.Encoding]::Unicode.GetBytes($key + [char]0)
-        $pattern = $singleByteEncoding.GetString($patternBytes)
-        $keyOffset = $binaryText.IndexOf($pattern,
-            [StringComparison]::Ordinal)
-        if ($keyOffset -lt 6 -or $binaryText.IndexOf($pattern,
-                $keyOffset + 1, [StringComparison]::Ordinal) -ge 0) {
-            throw "Compiled executable must contain exactly one $key version-resource key."
+    $rootKey = 'VS_VERSION_INFO'
+    $rootPatternBytes = [Text.Encoding]::Unicode.GetBytes(
+        $rootKey + [char]0)
+    $rootPattern = $singleByteEncoding.GetString($rootPatternBytes)
+    $rootKeyOffset = $binaryText.IndexOf($rootPattern,
+        [StringComparison]::Ordinal)
+    if ($rootKeyOffset -lt 6 -or $binaryText.IndexOf($rootPattern,
+            $rootKeyOffset + 1, [StringComparison]::Ordinal) -ge 0) {
+        throw 'Compiled executable must contain exactly one VS_VERSION_INFO resource.'
+    }
+    $keyCounts = @{}
+    $normalizeBlock = $null
+    $normalizeBlock = {
+        param([int]$StructureOffset, [int]$ContainingEnd)
+
+        if ($StructureOffset -lt 0 -or $StructureOffset + 6 -gt $ContainingEnd) {
+            throw 'Compiled executable contains a truncated version-resource structure.'
         }
-        $structureOffset = $keyOffset - 6
-        $structureLength = [BitConverter]::ToUInt16($bytes, $structureOffset)
-        $valueLength = [BitConverter]::ToUInt16($bytes,
-            $structureOffset + 2)
-        $valueType = [BitConverter]::ToUInt16($bytes, $structureOffset + 4)
-        if ($structureLength -lt 6 + $patternBytes.Length -or
-                $structureOffset + $structureLength -gt $bytes.Length -or
-                ($key -ceq 'VarFileInfo' -and
-                    ($valueLength -ne 0 -or $valueType -ne 1)) -or
-                ($key -ceq 'Translation' -and
-                    ($valueLength -ne 4 -or $valueType -ne 0))) {
+        $structureLength = [BitConverter]::ToUInt16($bytes, $StructureOffset)
+        $valueLength = [BitConverter]::ToUInt16($bytes, $StructureOffset + 2)
+        $valueType = [BitConverter]::ToUInt16($bytes, $StructureOffset + 4)
+        $structureEnd = $StructureOffset + $structureLength
+        if ($structureLength -lt 8 -or $structureEnd -gt $ContainingEnd) {
+            throw 'Compiled executable contains an invalid version-resource length.'
+        }
+        $keyCharacters = [Collections.Generic.List[char]]::new()
+        $cursor = $StructureOffset + 6
+        $keyTerminated = $false
+        while ($cursor + 1 -lt $structureEnd) {
+            $codeUnit = [BitConverter]::ToUInt16($bytes, $cursor)
+            $cursor += 2
+            if ($codeUnit -eq 0) {
+                $keyTerminated = $true
+                break
+            }
+            $keyCharacters.Add([char]$codeUnit)
+        }
+        if (-not $keyTerminated) {
+            throw 'Compiled executable contains an unterminated version-resource key.'
+        }
+        $key = $keyCharacters -join ''
+        if ($keyCounts.ContainsKey($key)) {
+            $keyCounts[$key]++
+        } else {
+            $keyCounts[$key] = 1
+        }
+        if (($key -ceq 'VarFileInfo' -and
+                ($valueLength -ne 0 -or $valueType -ne 1)) -or
+            ($key -ceq 'Translation' -and
+                ($valueLength -ne 4 -or $valueType -ne 0))) {
             throw "Compiled executable has an invalid $key version-resource structure."
         }
-        $paddingStart = $keyOffset + $patternBytes.Length
-        $alignedOffset = [int]([Math]::Ceiling($paddingStart / 4.0) * 4)
-        if ($alignedOffset -gt $structureOffset + $structureLength) {
-            throw "Compiled executable has invalid $key version-resource alignment."
+        $valueOffset = ($cursor + 3) -band (-bnot 3)
+        if ($valueOffset -gt $structureEnd) {
+            throw "Compiled executable has invalid padding after version key $key."
         }
-        for ($offset = $paddingStart; $offset -lt $alignedOffset; $offset++) {
-            $bytes[$offset] = 0
+        for ($paddingOffset = $cursor; $paddingOffset -lt $valueOffset;
+                $paddingOffset++) {
+            $bytes[$paddingOffset] = 0
+        }
+        $valueBytes = if ($valueType -eq 1) { $valueLength * 2 } else {
+            $valueLength
+        }
+        $valueEnd = $valueOffset + $valueBytes
+        if ($valueEnd -gt $structureEnd) {
+            throw "Compiled executable has invalid value length for version key $key."
+        }
+        $childrenOffset = ($valueEnd + 3) -band (-bnot 3)
+        if ($childrenOffset -gt $structureEnd) {
+            throw "Compiled executable has invalid value alignment for version key $key."
+        }
+        for ($paddingOffset = $valueEnd; $paddingOffset -lt $childrenOffset;
+                $paddingOffset++) {
+            $bytes[$paddingOffset] = 0
+        }
+        $cursor = $childrenOffset
+        while ($cursor + 6 -le $structureEnd) {
+            $childLength = [BitConverter]::ToUInt16($bytes, $cursor)
+            if ($childLength -eq 0) { break }
+            $childEnd = & $normalizeBlock $cursor $structureEnd
+            $nextChild = ($childEnd + 3) -band (-bnot 3)
+            if ($nextChild -gt $structureEnd) {
+                throw "Compiled executable has invalid child alignment for version key $key."
+            }
+            for ($paddingOffset = $childEnd; $paddingOffset -lt $nextChild;
+                    $paddingOffset++) {
+                $bytes[$paddingOffset] = 0
+            }
+            $cursor = $nextChild
+        }
+        for ($paddingOffset = $cursor; $paddingOffset -lt $structureEnd;
+                $paddingOffset++) {
+            $bytes[$paddingOffset] = 0
+        }
+        return $structureEnd
+    }
+    $rootOffset = $rootKeyOffset - 6
+    $parsedRootEnd = & $normalizeBlock $rootOffset $bytes.Length
+    if ($parsedRootEnd -le $rootOffset -or
+            -not $keyCounts.ContainsKey($rootKey) -or
+            $keyCounts[$rootKey] -ne 1) {
+        throw 'Compiled executable contains an invalid VS_VERSION_INFO root.'
+    }
+    foreach ($requiredKey in @('VarFileInfo', 'Translation')) {
+        if (-not $keyCounts.ContainsKey($requiredKey) -or
+                $keyCounts[$requiredKey] -ne 1) {
+            throw "Compiled executable must contain exactly one $requiredKey version-resource key."
         }
     }
     [IO.File]::WriteAllBytes($ExecutablePath, $bytes)
