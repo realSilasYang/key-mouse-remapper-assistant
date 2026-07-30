@@ -34,7 +34,6 @@ class JsonParser {
     }
 
     ParseDocument() {
-        this.SkipWhitespace()
         value := this.ParseValue(0)
         this.SkipWhitespace()
         if this.Position <= this.Length
@@ -48,10 +47,18 @@ class JsonParser {
         this.ValueCount++
         if this.ValueCount > JsonParser.MaximumValues
             this.Fail("JSON 值数量超过上限。")
-        this.SkipWhitespace()
-        if this.Position > this.Length
+        position := this.Position
+        pointer := this.Pointer
+        while position <= this.Length {
+            characterCode := NumGet(pointer + (position - 1) * 2, "UShort")
+            if characterCode != 0x20 && characterCode != 0x09
+                    && characterCode != 0x0D && characterCode != 0x0A
+                break
+            position++
+        }
+        this.Position := position
+        if position > this.Length
             this.Fail("JSON 值意外结束。")
-        characterCode := this.CodeAt(this.Position)
         switch characterCode {
             case 0x7B: return this.ParseObject(depth) ; {
             case 0x5B: return this.ParseArray(depth) ; [
@@ -69,30 +76,24 @@ class JsonParser {
     ParseObject(depth) {
         result := Map()
         this.Position++ ; ParseValue already identified {
-        this.SkipWhitespace()
-        if this.PeekCode() == 0x7D {
+        if this.SkipWhitespace() == 0x7D {
             this.Position++
             return result
         }
         loop {
-            this.SkipWhitespace()
-            if this.PeekCode() != 0x22
+            if this.SkipWhitespace() != 0x22
                 this.Fail("JSON 对象键必须是字符串。")
             key := this.ParseString()
-            if this.PeekCode() != 0x3A
-                this.SkipWhitespace()
-            if this.PeekCode() != 0x3A
+            colonCode := this.PeekCode()
+            if colonCode != 0x3A
+                colonCode := this.SkipWhitespace()
+            if colonCode != 0x3A
                 this.Fail("JSON 对象字段缺少冒号。")
             this.Position++
             if result.Has(key)
                 this.Fail("JSON 对象包含重复字段：" key)
             result[key] := this.ParseValue(depth + 1)
-            delimiterCode := this.PeekCode()
-            if delimiterCode == 0x20 || delimiterCode == 0x09
-                    || delimiterCode == 0x0D || delimiterCode == 0x0A {
-                this.SkipWhitespace()
-                delimiterCode := this.PeekCode()
-            }
+            delimiterCode := this.SkipWhitespace()
             if delimiterCode == 0x7D {
                 this.Position++
                 break
@@ -107,19 +108,13 @@ class JsonParser {
     ParseArray(depth) {
         result := []
         this.Position++ ; ParseValue already identified [
-        this.SkipWhitespace()
-        if this.PeekCode() == 0x5D {
+        if this.SkipWhitespace() == 0x5D {
             this.Position++
             return result
         }
         loop {
             result.Push(this.ParseValue(depth + 1))
-            delimiterCode := this.PeekCode()
-            if delimiterCode == 0x20 || delimiterCode == 0x09
-                    || delimiterCode == 0x0D || delimiterCode == 0x0A {
-                this.SkipWhitespace()
-                delimiterCode := this.PeekCode()
-            }
+            delimiterCode := this.SkipWhitespace()
             if delimiterCode == 0x5D {
                 this.Position++
                 break
@@ -138,7 +133,14 @@ class JsonParser {
         result := ""
         segmentStart := this.Position
         pointer := this.Pointer
+        specialCharacters := this.StringSpecialCharacters()
         while this.Position <= this.Length {
+            span := DllCall("msvcrt\wcscspn",
+                "Ptr", pointer + (this.Position - 1) * 2,
+                "Ptr", specialCharacters.Ptr, "UPtr")
+            this.Position += span
+            if this.Position > this.Length
+                break
             characterCode := NumGet(pointer + (this.Position - 1) * 2,
                 "UShort")
             if characterCode == 0x22 {
@@ -147,12 +149,8 @@ class JsonParser {
                 this.Position++
                 return result
             }
-            if characterCode != 0x5C {
-                if characterCode < 0x20
-                    this.Fail("JSON 字符串包含未转义控制字符。")
-                this.Position++
-                continue
-            }
+            if characterCode < 0x20
+                this.Fail("JSON 字符串包含未转义控制字符。")
             result .= SubStr(this.Text, segmentStart,
                 this.Position - segmentStart)
             this.Position++
@@ -174,6 +172,18 @@ class JsonParser {
             segmentStart := this.Position
         }
         this.Fail("JSON 字符串缺少结束引号。")
+    }
+
+    StringSpecialCharacters() {
+        static characters := 0
+        if !IsObject(characters) {
+            characters := Buffer(34 * 2, 0)
+            Loop 31
+                NumPut("UShort", A_Index, characters, (A_Index - 1) * 2)
+            NumPut("UShort", 0x22, characters, 31 * 2)
+            NumPut("UShort", 0x5C, characters, 32 * 2)
+        }
+        return characters
     }
 
     ParseUnicodeEscape() {
@@ -302,9 +312,10 @@ class JsonParser {
         while this.Position <= this.Length {
             code := NumGet(pointer + (this.Position - 1) * 2, "UShort")
             if code != 0x20 && code != 0x09 && code != 0x0D && code != 0x0A
-                break
+                return code
             this.Position++
         }
+        return 0
     }
 
     Peek() {

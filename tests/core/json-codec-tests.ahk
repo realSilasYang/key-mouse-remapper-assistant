@@ -7,6 +7,16 @@
 
 testFailure := ""
 try {
+    decodedEscapes := JsonCodec.Parse(
+        '"\"\\\/\b\f\n\r\t\u0041\uD83D\uDE00"')
+    AssertEqual('"\/' Chr(8) Chr(12) "`n`r`tA" Chr(0x1F600),
+        decodedEscapes, "JSON 字符串转义或代理项解析错误")
+    rawControlRejected := false
+    try JsonCodec.Parse('"unsafe' Chr(1) 'value"')
+    catch
+        rawControlRejected := true
+    AssertTrue(rawControlRejected, "JSON 解析器接受了未转义控制字符")
+
     unsorted := Map()
     Loop 2048 {
         index := 2049 - A_Index
