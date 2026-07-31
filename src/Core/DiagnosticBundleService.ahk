@@ -97,7 +97,10 @@ class DiagnosticBundleService {
             state.Active[pointer] := true
             try {
                 result := Map()
+                hasInvalidActionType := value.Has("type")
+                    && IsObject(value["type"])
                 actionType := value.Has("type")
+                        && !IsObject(value["type"])
                     ? StrLower(String(value["type"])) : ""
                 for key, item in value {
                     normalizedKey := StrLower(String(key))
@@ -117,12 +120,15 @@ class DiagnosticBundleService {
                     } else if normalizedKey == "value"
                             && actionType == "text" {
                         counts["text_actions"]++
-                        result[key] := "<redacted:text length="
-                            StrLen(String(item)) ">"
+                        result[key] := this.RedactText(item)
                     } else if normalizedKey == "value"
                             && actionType == "run" {
                         counts["run_commands"]++
                         result[key] := "<redacted:command>"
+                    } else if normalizedKey == "value"
+                            && hasInvalidActionType {
+                        counts["text_actions"]++
+                        result[key] := "<redacted:value>"
                     } else if InStr(itemPath, ".variables.") {
                         counts["variable_values"]++
                         result[key] := "<redacted:variable>"
@@ -176,16 +182,22 @@ class DiagnosticBundleService {
     }
 
     RedactTitle(value) {
+        if IsObject(value)
+            return "<redacted:title>"
         text := String(value)
         return text == "" ? "" : "<redacted:title length=" StrLen(text) ">"
     }
 
     RedactText(value) {
+        if IsObject(value)
+            return "<redacted:text>"
         text := String(value)
         return text == "" ? "" : "<redacted:text length=" StrLen(text) ">"
     }
 
     RedactPath(value) {
+        if IsObject(value)
+            return "<redacted:path>"
         text := String(value)
         if text == ""
             return ""

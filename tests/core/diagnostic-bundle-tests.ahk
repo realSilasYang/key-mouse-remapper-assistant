@@ -51,6 +51,15 @@ try {
     cyclicPreview := service.CreatePreview(cyclicContext, [])
     AssertTrue(InStr(cyclicPreview.Serialized, "redacted:cycle") > 0,
         "诊断包脱敏没有安全终止循环引用")
+    structuredSensitivePreview := service.CreatePreview(Map(
+        "title", Map("secret", "private-title"),
+        "process_path", ["C:\\private", "secret.exe"]), [
+        Map("action", Map("type", Map("invalid", true),
+            "value", "private-action-value"))])
+    AssertTrue(!InStr(structuredSensitivePreview.Serialized, "private-title")
+            && !InStr(structuredSensitivePreview.Serialized, "private-action-value")
+            && !InStr(structuredSensitivePreview.Serialized, "secret.exe"),
+        "结构化敏感字段导致诊断脱敏失败或泄漏")
     deepValue := Map()
     deepCursor := deepValue
     Loop DiagnosticBundleService.MaximumValueDepth + 2 {

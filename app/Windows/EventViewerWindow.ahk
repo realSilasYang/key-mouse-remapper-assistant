@@ -39,7 +39,7 @@ class EventViewerWindow {
             "history", "system", "ui"]
         try this.Build()
         catch as buildError {
-            this.Dispose()
+            try this.Dispose()
             throw buildError
         }
     }
@@ -274,7 +274,7 @@ class EventViewerWindow {
 
     CancelPendingSnapshotRefresh() {
         if IsObject(this.SnapshotRefreshTimer)
-            try SetTimer(this.SnapshotRefreshTimer, 0)
+            SetTimer(this.SnapshotRefreshTimer, 0)
         this.SnapshotRefreshPending := false
         return true
     }
@@ -347,7 +347,8 @@ class EventViewerWindow {
             if entry.RuleId != ""
                 sourceAndRule .= (sourceAndRule == "" ? "" : " · ")
                     . entry.RuleId
-            row := this.List.Add("", SubStr(entry.Timestamp, 12, 12),
+            row := this.List.Add("",
+                EventViewerWindow.FormatLocalTimestamp(entry.Timestamp),
                 this.GetCategoryLabel(entry.Category), entry.Event,
                 sourceAndRule, entry.Outcome, entry.Detail)
             itemId := SendMessage(0x10B4, row - 1, 0, ,
@@ -393,7 +394,7 @@ class EventViewerWindow {
 
     CancelPendingSort() {
         if IsObject(this.SortRefreshTimer)
-            try SetTimer(this.SortRefreshTimer, 0)
+            SetTimer(this.SortRefreshTimer, 0)
         this.SortRefreshPending := false
         return true
     }
@@ -513,6 +514,39 @@ class EventViewerWindow {
             return false
         this.List.Modify(row, "Vis")
         return true
+    }
+
+    static FormatLocalTimestamp(timestamp) {
+        timestamp := String(timestamp)
+        if !RegExMatch(timestamp,
+                "^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})\.(\d{3})Z$",
+                &parts)
+            return SubStr(timestamp, 12, 12)
+        utcTime := Buffer(16, 0)
+        localTime := Buffer(16, 0)
+        NumPut("UShort", Integer(parts[1]), utcTime, 0)
+        NumPut("UShort", Integer(parts[2]), utcTime, 2)
+        NumPut("UShort", Integer(parts[3]), utcTime, 6)
+        NumPut("UShort", Integer(parts[4]), utcTime, 8)
+        NumPut("UShort", Integer(parts[5]), utcTime, 10)
+        NumPut("UShort", Integer(parts[6]), utcTime, 12)
+        NumPut("UShort", Integer(parts[7]), utcTime, 14)
+        converted := false
+        try converted := DllCall(
+            "kernel32\SystemTimeToTzSpecificLocalTimeEx",
+            "Ptr", 0, "Ptr", utcTime, "Ptr", localTime, "Int")
+        if !converted {
+            try converted := DllCall(
+                "kernel32\SystemTimeToTzSpecificLocalTime",
+                "Ptr", 0, "Ptr", utcTime, "Ptr", localTime, "Int")
+        }
+        if !converted
+            return SubStr(timestamp, 12, 12)
+        return Format("{:02}:{:02}:{:02}.{:03}",
+            NumGet(localTime, 8, "UShort"),
+            NumGet(localTime, 10, "UShort"),
+            NumGet(localTime, 12, "UShort"),
+            NumGet(localTime, 14, "UShort"))
     }
 
     ApplyBehaviorSettings() {
@@ -760,36 +794,52 @@ class EventViewerWindow {
         if this.Disposed
             return
         this.Disposed := true
-        this.CancelPendingSort()
-        this.CancelPendingSnapshotRefresh()
+        cleanup := CleanupCollector("事件查看器")
+        cleanup.Run("停止排序计时器",
+            () => this.CancelPendingSort())
+        cleanup.Run("停止刷新计时器",
+            () => this.CancelPendingSnapshotRefresh())
         if this.RawObservationActive {
-            try this.App.EndRawObservation()
-            this.RawObservationActive := false
+            if cleanup.Run("停止原始输入观察",
+                    () => this.App.EndRawObservation())
+                this.RawObservationActive := false
         }
         if this.SubscriptionId
-            try this.Trace.Unsubscribe(this.SubscriptionId)
-        this.SubscriptionId := 0
+            if cleanup.Run("取消事件订阅",
+                    () => this.Trace.Unsubscribe(this.SubscriptionId))
+                this.SubscriptionId := 0
         if IsObject(this.CellTooltip)
-            try this.CellTooltip.Dispose()
+                && cleanup.Run("释放单元格提示",
+                    () => this.CellTooltip.Dispose())
+            this.CellTooltip := ""
         if IsObject(this.ListSelection)
-            try this.ListSelection.Dispose()
-        this.ListSelection := ""
+                && cleanup.Run("释放列表选择器",
+                    () => this.ListSelection.Dispose())
+            this.ListSelection := ""
         if this.HasOwnProp("ListHeader") && IsObject(this.ListHeader)
-            try this.ListHeader.Dispose()
-        this.ListHeader := ""
+                && cleanup.Run("释放列表表头",
+                    () => this.ListHeader.Dispose())
+            this.ListHeader := ""
         if IsObject(this.Interactions)
-            try this.Interactions.Dispose()
-        this.Interactions := ""
+                && cleanup.Run("释放交互服务",
+                    () => this.Interactions.Dispose())
+            this.Interactions := ""
         if this.HasOwnProp("FilterDropDown")
-            try UnregisterDarkComboBoxTheme(this.FilterDropDown.Hwnd)
+            cleanup.Run("注销筛选框主题", () =>
+                UnregisterDarkComboBoxTheme(this.FilterDropDown.Hwnd))
         if IsObject(this.Gui)
-            try this.Gui.Destroy()
-        ReleaseApplicationWindowIcons(this.IconHandles)
-        this.IconHandles := []
-        this.Gui := ""
-        this.CellTooltip := ""
-        this.SnapshotRefreshTimer := ""
-        this.SortRefreshTimer := ""
-        this.OwnerWindow.OnEventViewerClosed(this)
+                && cleanup.Run("销毁窗口", () => this.Gui.Destroy())
+            this.Gui := ""
+        if cleanup.Run("释放窗口图标",
+                () => ReleaseApplicationWindowIcons(this.IconHandles))
+            this.IconHandles := []
+        if !this.SnapshotRefreshPending
+            this.SnapshotRefreshTimer := ""
+        if !this.SortRefreshPending
+            this.SortRefreshTimer := ""
+        cleanup.Run("通知父窗口",
+            () => this.OwnerWindow.OnEventViewerClosed(this))
+        cleanup.Complete()
+        return true
     }
 }

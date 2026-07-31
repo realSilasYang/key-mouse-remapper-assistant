@@ -18,12 +18,14 @@ jobs:
           lfs: true
 
       - name: Validate tag
+        id: release_meta
         shell: pwsh
         run: |
           $version = (Get-Content ./VERSION -Raw).Trim()
           if ($env:GITHUB_REF_NAME -cne "v$version") {
             throw "Tag $env:GITHUB_REF_NAME does not match VERSION $version."
           }
+          "version=$version" >> $env:GITHUB_OUTPUT
 
       - name: Resolve locked toolchain
         id: toolchain
@@ -63,8 +65,8 @@ jobs:
       - name: Publish release
         uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3
         with:
-          generate_release_notes: true
+          body_path: docs/release-notes/v${{ steps.release_meta.outputs.version }}.md
           fail_on_unmatched_files: true
           files: |
-            dist/*.zip
-            dist/SHA256SUMS.txt
+            dist/key-mouse-remapper-assistant-${{ steps.release_meta.outputs.version }}-windows-x64.zip
+            dist/key-mouse-remapper-assistant-${{ steps.release_meta.outputs.version }}-source.zip

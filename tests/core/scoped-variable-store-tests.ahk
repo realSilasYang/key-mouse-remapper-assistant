@@ -60,6 +60,14 @@ try {
     catch
         removedScopeRejected := true
     AssertTrue(removedScopeRejected, "已移除的档案变量作用域仍可清理")
+    unconfiguredStore := ScopedVariableStore()
+    unconfiguredPersistenceRejected := false
+    try unconfiguredStore.Set("x", 1, "persistent")
+    catch as unconfiguredError
+        unconfiguredPersistenceRejected := InStr(unconfiguredError.Message,
+            "未配置持久变量文件") > 0
+    AssertTrue(unconfiguredPersistenceRejected,
+        "未配置文件的变量存储没有明确拒绝 persistent 写入")
     corruptVariablePath := testRoot "\corrupt-variables.json"
     corruptVariableText := "{broken persistent variables"
     FileAppend(corruptVariableText, corruptVariablePath, "UTF-8-RAW")

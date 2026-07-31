@@ -119,32 +119,53 @@ class RuleScheduler {
 
     Disarm() {
         if !this.Armed
-            return
-        this.Armed := false
+            return false
         if IsObject(this.ArmCallback)
             this.ArmCallback.Call(0)
         else
-            try SetTimer(this.WakeCallback, 0)
+            SetTimer(this.WakeCallback, 0)
+        this.Armed := false
+        return true
     }
 
     SortEntries(entries) {
         if entries.Length < 2
             return entries
-        Loop entries.Length - 1 {
-            leftIndex := A_Index
-            Loop entries.Length - leftIndex {
-                rightIndex := leftIndex + A_Index
-                left := entries[leftIndex]
-                right := entries[rightIndex]
-                if left.Deadline < right.Deadline
-                        || (left.Deadline == right.Deadline
-                            && StrCompare(left.Id, right.Id, true) <= 0)
-                    continue
-                entries[leftIndex] := right
-                entries[rightIndex] := left
+        source := entries.Clone()
+        width := 1
+        while width < source.Length {
+            merged := []
+            blockStart := 1
+            while blockStart <= source.Length {
+                left := blockStart
+                leftEnd := Min(blockStart + width - 1, source.Length)
+                right := leftEnd + 1
+                rightEnd := Min(blockStart + width * 2 - 1, source.Length)
+                while left <= leftEnd || right <= rightEnd {
+                    if right > rightEnd || (left <= leftEnd
+                            && this.EntryComesFirst(source[left],
+                                source[right])) {
+                        merged.Push(source[left])
+                        left++
+                    } else {
+                        merged.Push(source[right])
+                        right++
+                    }
+                }
+                blockStart += width * 2
             }
+            source := merged
+            width *= 2
         }
+        for index, entry in source
+            entries[index] := entry
         return entries
+    }
+
+    EntryComesFirst(left, right) {
+        return left.Deadline < right.Deadline
+            || (left.Deadline == right.Deadline
+                && StrCompare(left.Id, right.Id, true) <= 0)
     }
 
     ReadClock(rawValue := "") {

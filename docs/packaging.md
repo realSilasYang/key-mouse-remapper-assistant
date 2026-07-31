@@ -14,11 +14,14 @@
 ```text
 key-mouse-remapper-assistant-<version>-windows-x64/
 key-mouse-remapper-assistant-<version>-windows-x64.zip
-SHA256SUMS.txt
+key-mouse-remapper-assistant-<version>-source/
+key-mouse-remapper-assistant-<version>-source.zip
 ```
 
-便携目录包含启动 EXE、可编辑入口源码、CLI、锁定解释器、`app/`、`src/`、唯一
-`workers/input-engine-worker.ahk`、资源、文档和第三方许可。
+正式发布只上传两个 ZIP，不生成或上传 `SHA256SUMS.txt`。便携版包含启动 EXE、
+AutoHotkey 最新稳定版 `2.0.26` x64 运行时、CLI、运行所需源码模块、资源、文档和
+第三方许可，无需另外安装 AutoHotkey。源码版包含仓库的完整可运行源码、测试、工具、
+工作流和文档，不夹带编译 EXE、本机工具缓存或便携运行时。
 
 ## Manifest
 
@@ -41,8 +44,8 @@ SHA256SUMS.txt
 .\tests\reproducible-build.ps1
 ```
 
-测试用多个隔离输出目录重复构建，比较 ZIP 和关键产物哈希。ZIP 使用固定文件顺序、时间、
-压缩方式和 UTF-8 路径。
+测试用多个隔离输出目录重复构建，分别比较便携版和源码版 ZIP 及关键产物哈希。ZIP 使用
+固定文件顺序、时间、压缩方式和 UTF-8 路径。
 
 ## 发行验证
 
@@ -50,8 +53,8 @@ SHA256SUMS.txt
 .\tests\release-artifact-tests.ps1 -OutputRoot .\dist
 ```
 
-验证内容包括文件清单、manifest、运行时摘要、CLI Raw Input 能力、启动自检、ZIP 内容一致、
-篡改运行时拒绝以及旧输入基础设施不存在。
+验证内容包括两个 ZIP 的唯一性和文件清单、manifest、运行时摘要、CLI Raw Input 能力、
+启动自检、归档内容一致、源码包不夹带运行时、篡改运行时拒绝以及旧输入基础设施不存在。
 
 项目没有需要签名的内核组件。对 GUI EXE 或 ZIP 做 Authenticode/制品签名属于发布渠道策略，
 不改变 Raw Input 的能力边界。

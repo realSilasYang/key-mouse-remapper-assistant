@@ -112,15 +112,6 @@ class ItalianStrings {
             "重新加载",
                 "Ricarica")
         catalog.Set(
-            "以管理员身份重新启动",
-                "Riavvia come amministratore")
-        catalog.Set(
-            "管理员模式（当前）",
-                "Modalità amministratore (attiva)")
-        catalog.Set(
-            "无法以管理员身份重新启动（错误代码 {1}）。",
-                "Impossibile riavviare come amministratore (errore {1}).")
-        catalog.Set(
             "事件查看器",
                 "Eventi")
         catalog.Set("事件详情", "Dettagli evento")
@@ -532,14 +523,12 @@ class ItalianStrings {
                 "{1} mappature attive · ordine script personalizzato")
         catalog.Set("键鼠重映射小助手设置",
             "Impostazioni dell'assistente di rimappatura tastiera e mouse")
-        catalog.Set("通用",
-            "Generale")
+        catalog.Set("外观",
+            "Aspetto")
+        catalog.Set("规则包",
+            "Pacchetti di regole")
         catalog.Set("关于",
             "Informazioni")
-        catalog.Set("启动时显示主窗口",
-            "Mostra la finestra principale all’avvio")
-        catalog.Set("单独按 Esc 时取消录制",
-            "Premi solo Esc per annullare la registrazione")
         catalog.Set("事件缓冲区容量（条）：",
             "Capacità del buffer eventi:")
         catalog.Set("事件查看器自动跟随最新事件",
@@ -574,11 +563,16 @@ class ItalianStrings {
             "Esc annulla la registrazione")
         catalog.Set("事件自动跟随",
             "Segui gli eventi più recenti")
-        catalog.Set("录制", "Registrazione")
         catalog.Set("事件", "Eventi")
         catalog.Set("{1}（便携版）", "{1} (versione portatile)")
         catalog.Set("帮助信息", "Guida")
         catalog.Set("捐赠", "Dona")
+        catalog.Set("配置外观、规则包、事件`n以及关于选项",
+            "Configura Aspetto, Pacchetti di regole, Eventi`ne Informazioni")
+        catalog.Set("打开帮助信息`n可选择查看使用说明、运行日志或提交反馈",
+            "Apri Aiuto`nScegli la guida utente, il registro di esecuzione o l’invio di feedback")
+        catalog.Set("快揭不开锅了（≥Д≤）",
+            "La cassa è quasi vuota（≥Д≤）")
         catalog.Set("使用说明", "Guida all'uso")
         catalog.Set("提交反馈", "Invia feedback")
         catalog.Set("支持开源项目", "Sostieni il progetto open source")
@@ -604,13 +598,8 @@ class ItalianStrings {
         catalog.Set("• 事件查看器记录输入、规则匹配、条件拒绝、执行结果、仓储和系统事件，支持筛选、暂停、清空及 JSONL 导出。", "• Il Visualizzatore eventi registra input, corrispondenze di regole, rifiuti delle condizioni, risultati di esecuzione, attività dell'archivio ed eventi di sistema. Supporta filtri, pausa, cancellazione ed esportazione JSONL.")
         catalog.Set("五、后台运行与问题排查", "5. Esecuzione in background e risoluzione dei problemi")
         catalog.Set("• 主窗口关闭后程序仍驻留托盘。托盘可以重新显示主界面、手动重新加载或彻底退出；修改映射规则后通常不需要手动重新加载。", "• L'app resta nell'area di notifica dopo la chiusura della finestra principale. Da lì puoi mostrare la finestra, ricaricare manualmente o uscire del tutto; le modifiche alle regole normalmente non richiedono un ricaricamento manuale.")
-        catalog.Set("• 映射对管理员程序无效时，请从托盘选择以管理员身份重新启动。遇到规则冲突或按键未按预期执行时，先在事件查看器中核对输入和规则结果。", "• Se una rimappatura non agisce su un'app con privilegi elevati, riavvia questa app come amministratore dall'area di notifica. In caso di conflitti o input inattesi, controlla prima gli input e i risultati delle regole nel Visualizzatore eventi.")
         catalog.Set("• “帮助信息”还可打开项目反馈页面。提交问题时请说明系统版本、复现步骤、相关 @mapping 代码和事件导出，并在公开前移除敏感路径或应用信息。", "• La Guida apre anche la pagina dei feedback del progetto. Quando segnali un problema, includi la versione di Windows, i passaggi per riprodurlo, il codice @mapping pertinente e un'esportazione degli eventi, rimuovendo prima della pubblicazione percorsi o dati sensibili delle app.")
         catalog.Set("安全模式：已停用所有映射和输入观察。连续启动失败 {1} 次。", "Modalità provvisoria: tutte le rimappature e l'osservazione dell'input sono disattivate dopo {1} avvii non riusciti consecutivi.")
-        catalog.Set("恢复最后正常配置", "Ripristina l'ultima configurazione valida")
-        catalog.Set("没有可恢复的最后正常配置。", "Non è disponibile alcuna ultima configurazione valida.")
-        catalog.Set("最后正常配置恢复失败：{1}", "Impossibile ripristinare l'ultima configurazione valida: {1}")
-        catalog.Set("最后正常配置已恢复，正在自动应用。", "L'ultima configurazione valida è stata ripristinata e viene applicata automaticamente.")
         catalog.Set("仅勾选的规则会被导入。", "Verranno importate solo le regole selezionate.")
         catalog.Set("三、规则与生效范围", "3. Regole e ambito")
         catalog.Set("• 所有规则属于同一全局规则集；生效范围和条件可在 @mapping 编辑器中精确调整，保存后会立即重新选择生效规则。", "• Tutte le regole appartengono a un unico insieme globale. Ambito e condizioni possono essere regolati con precisione nell'editor @mapping. Il salvataggio riseleziona subito le regole attive.")

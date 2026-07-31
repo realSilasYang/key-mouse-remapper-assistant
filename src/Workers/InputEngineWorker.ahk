@@ -4,16 +4,11 @@ class InputEngineWorker {
     static MaximumObservationEvents := 2048
     static ObservationEventsPerPoll := 16
 
-    static StartFromEnvironment() {
-        workerInstance := InputEngineWorker()
-        workerInstance.Start()
-        return workerInstance
-    }
-
     static RunFromEnvironment() {
         workerInstance := ""
         try {
             workerInstance := InputEngineWorker()
+            WorkerBootstrap.ClearAppliedEnvironment()
             workerInstance.Start()
             return workerInstance
         }
@@ -25,13 +20,15 @@ class InputEngineWorker {
             if cleanupDetail != ""
                 startupError := Error(startupError.Message
                     . "；启动失败清理不完整：" cleanupDetail)
-            this.WriteStartupFailure(startupError)
+            this.WriteStartupFailure(startupError,
+                IsObject(workerInstance) ? workerInstance.StartupErrorPath : "")
             ExitApp(1)
         }
     }
 
-    static WriteStartupFailure(startupError) {
-        errorPath := EnvGet("KMR_WORKER_ERROR_PATH")
+    static WriteStartupFailure(startupError, errorPath := "") {
+        if errorPath == ""
+            errorPath := EnvGet("KMR_WORKER_ERROR_PATH")
         if errorPath == ""
             return false
         try {
@@ -46,20 +43,27 @@ class InputEngineWorker {
 
     __New() {
         this.Role := "input-worker"
-        this.RuntimeStandby := EnvGet("KMR_RUNTIME_STANDBY") == "1"
+        standbyValue := EnvGet("KMR_RUNTIME_STANDBY")
+        if standbyValue != "0" && standbyValue != "1"
+            throw Error("输入工作进程的待机标志无效。")
+        this.RuntimeStandby := standbyValue == "1"
         this.PipeId := this.RequireEnvironment("KMR_IPC_PIPE_ID")
         this.SessionId := this.RequireEnvironment("KMR_IPC_SESSION_ID")
         this.Secret := this.RequireEnvironment("KMR_IPC_SECRET")
         this.ParentProcessId := Integer(this.RequireEnvironment(
             "KMR_PARENT_PROCESS_ID"))
-        this.ParentProcessHandle := this.OpenParentProcessHandle()
+        this.StartupErrorPath := this.RequireEnvironment(
+            "KMR_WORKER_ERROR_PATH")
         this.ScriptPath := this.RequireEnvironment("KMR_MAPPING_SCRIPT_PATH")
         this.VariablePath := this.RequireEnvironment("KMR_VARIABLE_PATH")
         this.OutputRecoveryPath := this.RequireEnvironment(
             "KMR_OUTPUT_RECOVERY_PATH")
+        this.ParentProcessHandle := 0
+        this.ParentProcessHandle := this.OpenParentProcessHandle()
         this.Channel := ""
         this.Protocol := AuthenticatedIpcProtocol(this.SessionId,
             this.Role, "gui", this.Secret)
+        this.Secret := ""
         this.LastParentHeartbeat := this.TickCount64()
         this.LastHeartbeatSent := 0
         this.LastHeartbeatAttempt := 0
@@ -78,6 +82,7 @@ class InputEngineWorker {
         this.ExitCallbackRegistered := false
         this.ObservationEvents := WorkerEventBuffer(
             InputEngineWorker.MaximumObservationEvents)
+        this.FullRawInputObservation := false
         this.ReportedDroppedObservationEvents := 0
         this.ObservationBackpressureCount := 0
         this.HostGui := Gui("+ToolWindow -Caption")
@@ -248,6 +253,8 @@ class InputEngineWorker {
                 case "resume": result := this.ResumeRuntime()
                 case "reset": result := this.ResetRuntime(data)
                 case "devices": result := Map("devices", this.GetDevices())
+                case "raw_observation":
+                    result := this.SetRawObservation(data)
                 case "power_recover": result := this.RecoverAfterResume(data)
                 case "health": result := this.GetHealth()
                 case "shutdown":
@@ -276,6 +283,10 @@ class InputEngineWorker {
                         && (Type(data["reason"]) != "String"
                             || StrLen(data["reason"]) > 128)
                     throw Error("reset 命令 reason 必须是短字符串。")
+            case "raw_observation":
+                if data.Count != 1 || !data.Has("enabled")
+                        || !(data["enabled"] is JsonBoolean)
+                    throw Error("raw_observation 命令需要布尔 enabled 字段。")
             case "power_recover":
                 if data.Count > 1 || (data.Count == 1
                         && !data.Has("desired_suspended"))
@@ -341,6 +352,14 @@ class InputEngineWorker {
         reason := data.Has("reason") ? data["reason"] : "remote_reset"
         released := this.Runtime.ResetActiveState(reason)
         return Map("released", released)
+    }
+
+    SetRawObservation(data) {
+        enabled := data["enabled"].Value
+        changed := this.FullRawInputObservation != enabled
+        this.FullRawInputObservation := enabled
+        return Map("changed", JsonBoolean(changed),
+            "enabled", JsonBoolean(enabled))
     }
 
     OnPowerEvent(wParam, *) {
@@ -432,10 +451,15 @@ class InputEngineWorker {
             "backend_error", this.BackendStartupError,
             "observation_transport", Map(
                 "buffer", this.ObservationEvents.GetHealth(),
-                "backpressure", this.ObservationBackpressureCount))
+                "backpressure", this.ObservationBackpressureCount,
+                "full_raw_input",
+                    JsonBoolean(this.FullRawInputObservation)))
     }
 
     OnRawInput(unifiedEvent) {
+        if !RawInputObservationPolicy.ShouldForwardToGui(unifiedEvent,
+                this.FullRawInputObservation)
+            return false
         return this.QueueObservationEvent("raw_input", unifiedEvent)
     }
 
@@ -534,9 +558,9 @@ class InputEngineWorker {
         this.ShuttingDown := true
         failures := []
         if this.ExitCallbackRegistered {
-            this.CollectFailure(failures, "注销退出回调",
-                () => OnExit(this.ExitCallback, 0))
-            this.ExitCallbackRegistered := false
+            if this.CollectFailure(failures, "注销退出回调",
+                    () => OnExit(this.ExitCallback, 0))
+                this.ExitCallbackRegistered := false
         }
         this.CollectFailure(failures, "停止轮询计时器",
             () => SetTimer(this.PollTimer, 0))
@@ -557,7 +581,7 @@ class InputEngineWorker {
         this.LastShutdownError := this.JoinMessages(failures, "；")
         if this.LastShutdownError != ""
             this.WriteStartupFailure(Error("输入工作进程关闭不完整："
-                this.LastShutdownError))
+                this.LastShutdownError), this.StartupErrorPath)
         if exitProcess
             ExitApp(failures.Length ? 1 : 0)
         return failures.Length == 0
@@ -568,9 +592,13 @@ class InputEngineWorker {
     }
 
     CollectFailure(failures, label, callback) {
-        try callback.Call()
-        catch as cleanupError
+        try {
+            callback.Call()
+            return true
+        } catch as cleanupError {
             failures.Push(label "：" cleanupError.Message)
+            return false
+        }
     }
 
     JoinMessages(values, separator) {

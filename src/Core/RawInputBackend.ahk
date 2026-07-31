@@ -78,11 +78,10 @@ class RawInputBackend extends IInputBackend {
     }
 
     IndexRegistration(index, key, registration) {
-        for signature in RawInputKeyMatcher.GetRuleSignatures(key) {
-            if !index.Has(signature)
-                index[signature] := []
-            index[signature].Push(registration)
-        }
+        signature := RawInputKeyMatcher.GetRuleSignature(key)
+        if !index.Has(signature)
+            index[signature] := []
+        index[signature].Push(registration)
     }
 
     StartObservation(callback) {
@@ -338,13 +337,21 @@ class RawInputBackend extends IInputBackend {
     }
 
     HealthCheck() {
+        callbackError := this.RawInput.HasOwnProp("LastCallbackError")
+            ? this.RawInput.LastCallbackError : ""
         return Map("backend", this.GetBackendId(),
-            "healthy", JsonBoolean(this.RawInput.Started),
+            "healthy", JsonBoolean(this.RawInput.Started
+                && callbackError == ""),
             "started", JsonBoolean(this.RawInput.Started),
             "suspended", JsonBoolean(this.Suspended),
             "registrations", this.Registrations.Length,
             "devices", this.RawInput.GetDevices().Length,
-            "detail", this.RawInput.Started ? "" : "Raw Input 尚未启动。")
+            "callback_failures",
+                this.RawInput.HasOwnProp("CallbackFailureCount")
+                    ? this.RawInput.CallbackFailureCount : 0,
+            "detail", callbackError != ""
+                ? "Raw Input 事件分发失败：" callbackError
+                : (this.RawInput.Started ? "" : "Raw Input 尚未启动。"))
     }
 
     Shutdown() {
@@ -379,20 +386,29 @@ class RawInputKeyMatcher {
             : Integer(value)
     }
 
-    static GetRuleSignatures(key) {
-        result := []
+    static GetRuleSignature(key) {
         kind := key.Has("kind") ? StrLower(String(key["kind"])) : "keyboard"
         sc := this.ReadRuleNumber(key, "sc")
         vk := this.ReadRuleNumber(key, "vk")
+        if sc < 0 || sc > 0x1FF
+            throw ValueError("Raw Input 规则扫描码超出 0x000 到 0x1FF。")
+        if vk < 0 || vk > 0xFF
+            throw ValueError("Raw Input 规则虚拟键码超出 0x00 到 0xFF。")
         extended := key.Has("extended") && this.ReadBoolean(key["extended"])
         if sc
-            result.Push(kind ":sc:" Format("{:03x}", sc & 0x1FF)
-                ":" ((sc & 0x100) || extended ? "1" : "0"))
+            return kind ":sc:" Format("{:03x}", sc)
+                . ":" ((sc & 0x100) || extended ? "1" : "0")
         if vk
-            result.Push(kind ":vk:" Format("{:02x}", vk))
+            return kind ":vk:" Format("{:02x}", vk)
+        if key.Has("command")
+            return kind ":command:" Integer(key["command"])
         if key.Has("name")
-            result.Push(kind ":name:" StrLower(String(key["name"])))
-        return result
+            return kind ":name:" StrLower(String(key["name"]))
+        throw Error("Raw Input 规则按键缺少可匹配身份。")
+    }
+
+    static GetRuleSignatures(key) {
+        return [this.GetRuleSignature(key)]
     }
 
     static GetIdentitySignatures(identity) {
@@ -403,16 +419,16 @@ class RawInputKeyMatcher {
                 ":" (identity["extended"].Value ? "1" : "0"))
         if identity["vk"]
             result.Push(kind ":vk:" StrLower(identity["vk_hex"]))
+        if identity.Has("app_command") && identity["app_command"]
+            result.Push(kind ":command:" identity["app_command"])
         result.Push(kind ":name:" StrLower(identity["name"]))
         return result
     }
 
     static RuleMatchesIdentity(key, identity) {
-        expected := Map()
-        for signature in this.GetRuleSignatures(key)
-            expected[signature] := true
+        expected := this.GetRuleSignature(key)
         for signature in this.GetIdentitySignatures(identity) {
-            if expected.Has(signature)
+            if expected == signature
                 return true
         }
         return false

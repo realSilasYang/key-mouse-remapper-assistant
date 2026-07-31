@@ -86,6 +86,16 @@ try {
             $first.PackageDirectory $second.PackageDirectory
         throw "Release ZIP is not reproducible: $firstHash != $secondHash`n$difference"
     }
+    $firstSourceHash = (Get-FileHash -Algorithm SHA256 `
+        -LiteralPath $first.SourceZipPath).Hash
+    $secondSourceHash = (Get-FileHash -Algorithm SHA256 `
+        -LiteralPath $second.SourceZipPath).Hash
+    if ($firstSourceHash -ne $secondSourceHash) {
+        $difference = Get-ReproducibilityDifference `
+            $first.SourcePackageDirectory $second.SourcePackageDirectory
+        throw "Source ZIP is not reproducible: $firstSourceHash != " +
+            "$secondSourceHash`n$difference"
+    }
     foreach ($build in @($first, $second)) {
         $buildManifest = Get-Content -LiteralPath (Join-Path `
             $build.PackageDirectory 'build-manifest.json') -Raw `
@@ -124,6 +134,12 @@ try {
     if ($firstHash -ne $alternateHash) {
         throw "Release ZIP depends on build drive: $firstHash != $alternateHash"
     }
+    $alternateSourceHash = (Get-FileHash -Algorithm SHA256 `
+        -LiteralPath $alternate.SourceZipPath).Hash
+    if ($firstSourceHash -ne $alternateSourceHash) {
+        throw "Source ZIP depends on build drive: $firstSourceHash != " +
+            $alternateSourceHash
+    }
     $alternateManifest = Get-Content -LiteralPath (Join-Path `
         $alternate.PackageDirectory 'build-manifest.json') -Raw `
         -Encoding UTF8 | ConvertFrom-Json
@@ -132,7 +148,7 @@ try {
             $null -ne $alternateManifest.nativeDriver) {
         throw 'Alternate-drive build changed input metadata.'
     }
-    Write-Host "Reproducible build passed: $firstHash"
+    Write-Host "Reproducible builds passed: $firstHash / $firstSourceHash"
 } finally {
     if ($occupiedDrive) {
         $process = Start-Process -FilePath 'subst.exe' `

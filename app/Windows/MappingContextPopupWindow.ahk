@@ -16,7 +16,7 @@ class MappingContextPopupWindow {
         this.PointerDownCallback := ObjBindMethod(this, "OnPointerDown")
         try this.Build()
         catch as buildError {
-            this.Dispose()
+            try this.Dispose()
             throw buildError
         }
     }
@@ -204,17 +204,25 @@ class MappingContextPopupWindow {
         if this.Disposed
             return
         this.Disposed := true
-        try SetTimer(this.VisibilityTimer, 0)
-        try OnMessage(Win32.WM_LBUTTONDOWN, this.PointerDownCallback, 0)
-        try OnMessage(Win32.WM_RBUTTONDOWN, this.PointerDownCallback, 0)
+        cleanup := CleanupCollector("映射右键菜单")
+        if cleanup.Run("停止可见性计时器",
+                () => SetTimer(this.VisibilityTimer, 0))
+            this.VisibilityTimer := ""
+        leftReleased := cleanup.Run("注销左键消息", () =>
+            OnMessage(Win32.WM_LBUTTONDOWN, this.PointerDownCallback, 0))
+        rightReleased := cleanup.Run("注销右键消息", () =>
+            OnMessage(Win32.WM_RBUTTONDOWN, this.PointerDownCallback, 0))
         if IsObject(this.Interactions)
-            try this.Interactions.Dispose()
+                && cleanup.Run("释放交互服务",
+                    () => this.Interactions.Dispose())
+            this.Interactions := ""
         if IsObject(this.Gui)
-            try this.Gui.Destroy()
-        this.Interactions := ""
-        this.Gui := ""
+                && cleanup.Run("销毁窗口", () => this.Gui.Destroy())
+            this.Gui := ""
         this.MappingId := ""
-        this.VisibilityTimer := ""
-        this.PointerDownCallback := ""
+        if leftReleased && rightReleased
+            this.PointerDownCallback := ""
+        cleanup.Complete()
+        return true
     }
 }

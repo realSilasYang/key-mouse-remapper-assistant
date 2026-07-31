@@ -10,6 +10,8 @@ $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
 Import-Module (Join-Path $projectRoot 'tools\EvidenceSeal.psm1') -Force
 Import-Module (Join-Path $projectRoot 'tools\BuildPathSafety.psm1') -Force
+Import-Module (Join-Path $projectRoot 'tools\WindowsProcessArguments.psm1') `
+    -Force
 $lockPath = Join-Path $projectRoot 'tools\toolchain.lock.json'
 $lock = Get-Content -LiteralPath $lockPath -Raw -Encoding UTF8 |
     ConvertFrom-Json
@@ -64,9 +66,7 @@ $startInfo.UseShellExecute = $false
 $startInfo.CreateNoWindow = $true
 $startInfo.RedirectStandardOutput = $true
 $startInfo.RedirectStandardError = $true
-$startInfo.Arguments = ($arguments | ForEach-Object {
-    '"' + ([string]$_).Replace('"', '\"') + '"'
-}) -join ' '
+$startInfo.Arguments = Join-WindowsProcessArguments $arguments
 $process = [System.Diagnostics.Process]::Start($startInfo)
 $stdoutTask = $process.StandardOutput.ReadToEndAsync()
 $stderrTask = $process.StandardError.ReadToEndAsync()

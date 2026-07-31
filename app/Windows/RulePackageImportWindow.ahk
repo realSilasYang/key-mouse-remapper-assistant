@@ -17,7 +17,7 @@ class RulePackageImportWindow {
         this.Disposed := false
         try this.Build()
         catch as buildError {
-            this.Dispose(false)
+            try this.Dispose(false)
             throw buildError
         }
     }
@@ -190,26 +190,39 @@ class RulePackageImportWindow {
         if this.Disposed
             return
         this.Disposed := true
+        cleanup := CleanupCollector("规则包导入窗口")
         closeContext := ""
         if this.OwnerLease {
-            closeContext := WindowHierarchy.Release(this.OwnerLease)
-            this.OwnerLease := ""
+            try {
+                closeContext := WindowHierarchy.Release(this.OwnerLease)
+                this.OwnerLease := ""
+            } catch as ownerError {
+                cleanup.Failures.Push("释放父窗口关系：" ownerError.Message)
+            }
         }
         if IsObject(this.Interactions)
-            try this.Interactions.Dispose()
+                && cleanup.Run("释放交互服务",
+                    () => this.Interactions.Dispose())
+            this.Interactions := ""
         if IsObject(this.ListSelection)
-            try this.ListSelection.Dispose()
-        this.ListSelection := ""
+                && cleanup.Run("释放列表选择器",
+                    () => this.ListSelection.Dispose())
+            this.ListSelection := ""
         if this.HasOwnProp("Header") && IsObject(this.Header)
-            try this.Header.Dispose()
-        this.Header := ""
+                && cleanup.Run("释放列表表头", () => this.Header.Dispose())
+            this.Header := ""
         if IsObject(this.Gui)
-            try this.Gui.Destroy()
-        ReleaseApplicationWindowIcons(this.IconHandles)
-        this.IconHandles := []
-        this.Gui := ""
-        this.OwnerWindow.OnRulePackageImportClosed(this)
+                && cleanup.Run("销毁窗口", () => this.Gui.Destroy())
+            this.Gui := ""
+        if cleanup.Run("释放窗口图标",
+                () => ReleaseApplicationWindowIcons(this.IconHandles))
+            this.IconHandles := []
+        cleanup.Run("通知父窗口",
+            () => this.OwnerWindow.OnRulePackageImportClosed(this))
         if activateOwner
-            WindowHierarchy.CompleteClose(closeContext)
+            cleanup.Run("恢复父窗口", () =>
+                WindowHierarchy.CompleteClose(closeContext))
+        cleanup.Complete()
+        return true
     }
 }

@@ -9,6 +9,7 @@
 #Include ..\..\src\Core\DeviceIdentityService.ahk
 #Include ..\..\src\Core\InputEvent.ahk
 #Include ..\..\src\Platform\Win32.ahk
+#Include ..\..\src\Input\RawInputObservationPolicy.ahk
 #Include ..\..\src\Input\RawInputService.ahk
 
 try {
@@ -59,6 +60,17 @@ try {
             && mouseEvents[3]["metadata"]["delta_x"] == 12
             && mouseEvents[3]["metadata"]["delta_y"] == -7,
         "Raw Input 鼠标事件拆分错误")
+    AssertTrue(RawInputObservationPolicy.ShouldForwardToGui(
+            keyboardEvent, false)
+        && RawInputObservationPolicy.ShouldForwardToGui(
+            mouseEvents[1], false)
+        && RawInputObservationPolicy.ShouldForwardToGui(
+            mouseEvents[2], false)
+        && !RawInputObservationPolicy.ShouldForwardToGui(
+            mouseEvents[3], false)
+        && RawInputObservationPolicy.ShouldForwardToGui(
+            mouseEvents[3], true),
+        "GUI 观察策略没有默认过滤鼠标移动或原始观察未恢复完整事件流")
 
     malformedRejected := false
     try RawInputDecoder.Decode(Buffer(8, 0))
@@ -131,6 +143,14 @@ try {
             && observedRawEvents[beforeMalformed + 2] == malformedEvent,
         "状态处理异常没有转为诊断事件并继续分派原事件")
 
+    failingObserver := RawInputService(rawWindow.Hwnd,
+        (*) => ThrowRawInputCallbackFailure())
+    failingObserver.DispatchDecodedEvents([RuleSpec.Clone(firstDeviceDown)])
+    AssertTrue(failingObserver.CallbackFailureCount == 1
+            && InStr(failingObserver.LastCallbackError, "注入的分发失败") > 0
+            && failingObserver.HeldKeys.Count == 0,
+        "Raw Input 分发回调异常被静默吞掉或留下了重复键状态")
+
     AssertTrue(rawObserver.Start(), "Raw Input 观察器无法启动")
     enumeratedDevices := rawObserver.GetDevices()
     AssertTrue(Type(enumeratedDevices) == "Array",
@@ -173,4 +193,8 @@ class RetryableRawInputService extends RawInputService {
         }
         return true
     }
+}
+
+ThrowRawInputCallbackFailure() {
+    throw Error("注入的分发失败")
 }

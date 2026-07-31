@@ -282,17 +282,32 @@ class SvgRenderLibrary {
     }
 
     Shutdown(*) {
-        if this.Options && this.Functions.Has("resvg_options_destroy")
-            try DllCall(this.Functions["resvg_options_destroy"],
-                "Ptr", this.Options)
-        this.Options := 0
-        this.Functions := Map()
-        if this.ModuleHandle
-            try DllCall("kernel32\FreeLibrary", "Ptr", this.ModuleHandle)
-        this.ModuleHandle := 0
+        cleanup := CleanupCollector("SVG 渲染器")
+        if this.Options && this.Functions.Has("resvg_options_destroy") {
+            if cleanup.Run("释放渲染选项", () => DllCall(
+                    this.Functions["resvg_options_destroy"],
+                    "Ptr", this.Options))
+                this.Options := 0
+        } else
+            this.Options := 0
+        if this.ModuleHandle {
+            if cleanup.Run("释放渲染模块", () =>
+                    this.ReleaseModule())
+                this.ModuleHandle := 0
+        }
+        if !this.ModuleHandle
+            this.Functions := Map()
         this.Rendering := false
         this.RenderCache.Clear()
         this.RenderCacheBytes := 0
         this.RenderCacheClock := 0
+        cleanup.Complete()
+        return true
+    }
+
+    ReleaseModule() {
+        if !DllCall("kernel32\FreeLibrary", "Ptr", this.ModuleHandle, "Int")
+            throw OSError(A_LastError, "无法释放 SVG 渲染模块。")
+        return true
     }
 }

@@ -24,6 +24,7 @@
 #Include ..\src\Core\OutputLedger.ahk
 #Include ..\src\Core\InputBackend.ahk
 #Include ..\src\Platform\Win32.ahk
+#Include ..\src\Input\RawInputObservationPolicy.ahk
 #Include ..\src\Input\RawInputService.ahk
 #Include ..\src\Core\RawInputBackend.ahk
 #Include ..\src\Core\ManagedRuleRuntime.ahk

@@ -58,8 +58,20 @@ try {
     controller := InputWorkerController(app, inputWorkerPath)
     app.Controller := controller
     autoStartHealth := controller.SendInputCommand("health")
-    AssertTrue(controller.Started && autoStartHealth.Has("healthy"),
+    AssertTrue(controller.Started && autoStartHealth.Has("healthy")
+            && !autoStartHealth["observation_transport"]
+                ["full_raw_input"].Value,
         "首次工作进程命令没有自动启动进程组")
+    AssertTrue(controller.SetRawObservation(true)
+            && controller.DesiredRawObservation
+            && controller.SendInputCommand("health")
+                ["observation_transport"]["full_raw_input"].Value,
+        "GUI 无法按需开启工作进程完整 Raw Input 转发")
+    AssertTrue(controller.SetRawObservation(false)
+            && !controller.DesiredRawObservation
+            && !controller.SendInputCommand("health")
+                ["observation_transport"]["full_raw_input"].Value,
+        "退出原始观察后工作进程仍转发完整 Raw Input")
     inputStateForLateResponse := controller.States["input-worker"]
     controller.HandleStateMessage(inputStateForLateResponse,
         Map("type", "response", "payload", Map(
@@ -76,6 +88,14 @@ try {
     AssertTrue(invalidCommandDataRejected
             && controller.States["input-worker"].Ready,
         "输入工作进程静默忽略了未知命令 data 或拒绝后退出")
+    invalidObservationDataRejected := false
+    try controller.SendInputCommand("raw_observation",
+        Map("enabled", 1))
+    catch
+        invalidObservationDataRejected := true
+    AssertTrue(invalidObservationDataRejected
+            && controller.States["input-worker"].Ready,
+        "输入工作进程接受了非布尔原始观察开关")
     fractionalTimeoutRejected := false
     try controller.SendCommand(inputStateForLateResponse, "health", Map(),
         100.5)
@@ -154,6 +174,8 @@ try {
         "唤醒恢复没有保留用户主动暂停状态")
     controller.ResumeAll()
 
+    AssertTrue(controller.SetRawObservation(true),
+        "工作进程恢复测试无法预先开启原始观察")
     failedInputProcessId := controller.States["input-worker"].ProcessId
     controller.States["input-worker"].Channel.Close()
     controller.LastHeartbeatSent := 0
@@ -177,8 +199,13 @@ try {
     AssertTrue(controller.Started
             && controller.States["input-worker"].ProcessId
                 != failedInputProcessId
-            && IsObject(inputRecovery),
-        "输入工作进程管道故障被错误归因到其它角色或没有自动恢复")
+            && IsObject(inputRecovery)
+            && controller.DesiredRawObservation
+            && controller.SendInputCommand("health")
+                ["observation_transport"]["full_raw_input"].Value,
+        "输入工作进程故障恢复没有保留原始观察状态或错误归因")
+    AssertTrue(controller.SetRawObservation(false),
+        "工作进程恢复后无法退出原始观察")
 
     inputProcessId := controller.States["input-worker"].ProcessId
     inputStateAtShutdown := controller.States["input-worker"]

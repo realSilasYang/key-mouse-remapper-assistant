@@ -103,8 +103,9 @@ try {
     AssertEqual(1, capture.WheelCount,
         "Raw Input 滚轮没有按瞬时按下事件执行")
 
-    sourceCapture := {RawDisplay: "A", Display: "A",
-        IsSimultaneous: false, SourceSpec: "sc01E", Kind: "keyboard",
+    sourceCapture := {RawDisplay: "LCtrl + A", Display: "左侧 Ctrl + A",
+        KeyName: "A", Modifiers: [{KeyName: "LCtrl"}],
+        IsSimultaneous: false, SourceSpec: "<^sc01E", Kind: "keyboard",
         VKHex: "41", SCHex: "01E", SC: 0x01E,
         DeviceId: "keyboard-a", DeviceDisplayName: "Keyboard A"}
     targetCapture := {RawDisplay: "B", Display: "B", TargetSend: "{B}"}
@@ -115,6 +116,42 @@ try {
             && capturedRule["conditions"][1]["field"] == "stable_id"
             && capturedRule["conditions"][1]["value"] == "keyboard-a",
         "来源录制没有生成稳定实体设备条件")
+
+    capture.SimpleCount := 0
+    capturedFrom := capturedRule["from"]
+    capturedRegistration := {Kind: "simple", Phase: "down",
+        Callback: ObjBindMethod(capture, "MatchSimple"),
+        Triggers: [Map("key", capturedFrom["key"],
+            "modifiers", capturedFrom["modifiers"],
+            "allow_extra_modifiers", JsonBoolean(false))]}
+    backend.Replace([capturedRegistration])
+    backend.OnRawInput(NewBackendKeyEvent("A", 0x41, 0x01E,
+        "down", "keyboard-a"))
+    AssertEqual(0, capture.SimpleCount,
+        "录制的 Ctrl+A 被裸 A 错误触发")
+    backend.OnRawInput(NewBackendKeyEvent("LCtrl", 0xA2, 0x01D,
+        "down", "keyboard-a"))
+    backend.OnRawInput(NewBackendKeyEvent("A", 0x41, 0x01E,
+        "down", "keyboard-a"))
+    AssertEqual(1, capture.SimpleCount,
+        "录制的 Ctrl+A 没有按修饰键语义触发")
+
+    capture.SimpleCount := 0
+    backend.Replace([{Kind: "simple", Phase: "down",
+        Callback: ObjBindMethod(capture, "MatchSimple"),
+        Triggers: [Map("key", keyA, "modifiers", [],
+            "allow_extra_modifiers", JsonBoolean(false))]}])
+    backend.OnRawInput(NewBackendKeyEvent("A", 0x41, 0x030,
+        "down", "keyboard-a"))
+    AssertEqual(0, capture.SimpleCount,
+        "SC 规则被同 VK 或同名称的另一实体键旁路匹配")
+    invalidIdentityRejected := false
+    try RawInputKeyMatcher.GetRuleSignature(Map("kind", "keyboard",
+        "name", "invalid", "sc", "FFFF"))
+    catch
+        invalidIdentityRejected := true
+    AssertTrue(invalidIdentityRejected,
+        "Raw Input 直接注册路径接受了越界扫描码")
 
     backend.Shutdown()
     AssertTrue(service.ShutdownCount == 1,

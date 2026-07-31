@@ -140,7 +140,7 @@ class KeyMouseRemapperAssistantApp {
         this.WindowMoveCallback := ObjBindMethod(this, "OnWindowMove")
         this.SystemThemeTimer := ObjBindMethod(this,
             "ApplySystemThemeChange")
-        this.ExitCallback := ObjBindMethod(this, "Shutdown")
+        this.ExitCallback := ObjBindMethod(this, "HandleExit")
         this.ExitCallbackRegistered := false
         this.ApplicationCallbacksRegistered := false
         this.MessageRegistrations := []
@@ -160,6 +160,10 @@ class KeyMouseRemapperAssistantApp {
     }
 
     Start() {
+        showAfterReload := (EnvGet(
+            "KEY_MOUSE_REMAPPER_SHOW_AFTER_RELOAD") == "1")
+        if showAfterReload
+            try EnvSet("KEY_MOUSE_REMAPPER_SHOW_AFTER_RELOAD", "")
         this.RegisterApplicationCallbacks()
         this.RegisterSessionNotifications()
         this.ConfigureTray()
@@ -249,7 +253,7 @@ class KeyMouseRemapperAssistantApp {
                     : this.GetSummaryText())))
         this.Window.SetStatus(statusText, statusError)
         SetTimer(this.ControlPollTimer, 250)
-        if this.Settings.ShowMainWindowAtStartup
+        if showAfterReload
             this.Window.Show()
     }
 
@@ -260,48 +264,11 @@ class KeyMouseRemapperAssistantApp {
             try TraySetIcon(iconPath)
         A_TrayMenu.Delete()
         A_TrayMenu.Add(Tr("显示主界面"), ObjBindMethod(this.Window, "Show"))
-        A_TrayMenu.Add(Tr("事件查看器"), ObjBindMethod(this,
-            "OpenEventViewer"))
-        if this.Health.HasRecovery()
-            A_TrayMenu.Add(Tr("恢复最后正常配置"), ObjBindMethod(this,
-                "RestoreLastKnownGood"))
-        A_TrayMenu.Add()
-        A_TrayMenu.Add(Tr("导入规则包"), ObjBindMethod(this,
-            "ChooseImportRulePackage"))
-        A_TrayMenu.Add(Tr("导出规则包"), ObjBindMethod(this,
-            "ChooseExportRulePackage"))
-        A_TrayMenu.Add()
-        if A_IsAdmin {
-            administratorLabel := Tr("管理员模式（当前）")
-            A_TrayMenu.Add(administratorLabel, (*) => 0)
-            A_TrayMenu.Disable(administratorLabel)
-        } else {
-            A_TrayMenu.Add(Tr("以管理员身份重新启动"), ObjBindMethod(this,
-                "RestartElevated"))
-        }
-        A_TrayMenu.Add(Tr("重新加载"), ObjBindMethod(this, "ReloadNow"))
+        A_TrayMenu.Add(Tr("重新加载"),
+            ObjBindMethod(this, "ReloadNow", true))
         A_TrayMenu.Add(Tr("退出程序"), (*) => ExitApp())
         A_TrayMenu.Default := Tr("显示主界面")
         A_TrayMenu.ClickCount := 1
-    }
-
-    RestartElevated(*) {
-        if A_IsAdmin
-            return true
-        parameters := QuoteCommandLineArgument(A_ScriptFullPath)
-        if HasCommandLineFlag("--packaged")
-            parameters .= " --packaged"
-        result := DllCall("shell32\ShellExecuteW", "Ptr", 0,
-            "WStr", "runas", "WStr", A_AhkPath, "WStr", parameters,
-            "WStr", A_ScriptDir, "Int", 1, "Ptr")
-        if result > 32 {
-            try this.Health.PrepareRestart()
-            ExitApp()
-            return true
-        }
-        this.Window.SetStatus(Tr("无法以管理员身份重新启动（错误代码 {1}）。",
-            result), true)
-        return false
     }
 
     NormalizeSignature(displayName) {
@@ -505,13 +472,15 @@ class KeyMouseRemapperAssistantApp {
         if this.ShuttingDown || !this.ReloadPending
             return
         this.ReloadPending := false
-        this.ReloadNow()
+        this.ReloadNow(false)
     }
 
-    ReloadNow(*) {
+    ReloadNow(showAfterReload := true, *) {
         if this.ShuttingDown
             return false
         try this.Health.PrepareRestart()
+        if showAfterReload
+            try EnvSet("KEY_MOUSE_REMAPPER_SHOW_AFTER_RELOAD", "1")
         Reload()
         return true
     }
@@ -533,21 +502,6 @@ class KeyMouseRemapperAssistantApp {
                 Outcome: "error", Detail: stableError.Message})
             return false
         }
-    }
-
-    RestoreLastKnownGood(*) {
-        if !this.Health.HasRecovery() {
-            this.Window.SetStatus(Tr("没有可恢复的最后正常配置。"), true)
-            return false
-        }
-        try this.Health.Restore(this.Repository)
-        catch as recoveryError {
-            this.Window.SetStatus(Tr("最后正常配置恢复失败：{1}",
-                recoveryError.Message), true)
-            return false
-        }
-        this.Window.SetStatus(Tr("最后正常配置已恢复，正在自动应用。"))
-        return this.ReloadNow()
     }
 
     PollExternalControlQueue(*) {
@@ -593,40 +547,45 @@ class KeyMouseRemapperAssistantApp {
     }
 
     RunMappingMutation(action, callback, actionBuilder := "") {
-        beforeState := this.Repository.ReadRegionBody()
-        result := callback.Call()
-        afterState := this.Repository.ReadRegionBody()
-        if IsObject(actionBuilder)
-            action := actionBuilder.Call(result)
-        try this.ApplyManagedRulesHot()
-        catch as runtimeError {
+        mappingLease := CrossProcessWriteLock.Acquire(
+            this.Repository.ScriptPath)
+        try {
+            beforeState := this.Repository.ReadRegionBody()
             try {
-                this.Repository.WriteRegionBody(beforeState, afterState)
-                this.ApplyManagedRulesHot()
-            } catch as rollbackError {
-                throw Error("托管规则热应用失败，且映射代码回滚失败："
-                    runtimeError.Message "；" rollbackError.Message)
+                result := callback.Call()
+                afterState := this.Repository.ReadRegionBody()
+                if IsObject(actionBuilder)
+                    action := actionBuilder.Call(result)
+            } catch as mutationError {
+                rollbackFailure := this.RestoreMappingState(beforeState)
+                if rollbackFailure != ""
+                    throw Error("映射修改失败，且状态回滚失败："
+                        mutationError.Message "；" rollbackFailure)
+                throw mutationError
             }
-            throw Error("托管规则热应用失败，本次映射修改已回滚："
-                runtimeError.Message)
-        }
-        try this.History.Commit("mapping", beforeState, afterState, action)
-        catch as historyError {
-            try {
-                this.Repository.WriteRegionBody(beforeState, afterState)
-                this.ApplyManagedRulesHot()
+            try this.ApplyManagedRulesHot()
+            catch as runtimeError {
+                rollbackFailure := this.RestoreMappingState(beforeState)
+                if rollbackFailure != ""
+                    throw Error("托管规则热应用失败，且映射代码回滚失败："
+                        runtimeError.Message "；" rollbackFailure)
+                throw Error("托管规则热应用失败，本次映射修改已回滚："
+                    runtimeError.Message)
             }
-            catch as rollbackError {
-                throw Error("操作历史未保存，且映射代码回滚失败："
-                    historyError.Message "；" rollbackError.Message)
+            try this.History.Commit("mapping", beforeState, afterState, action)
+            catch as historyError {
+                rollbackFailure := this.RestoreMappingState(beforeState)
+                if rollbackFailure != ""
+                    throw Error("操作历史未保存，且映射代码回滚失败："
+                        historyError.Message "；" rollbackFailure)
+                throw Error("操作历史未保存，本次映射修改已回滚："
+                    historyError.Message)
             }
-            throw Error("操作历史未保存，本次映射修改已回滚："
-                historyError.Message)
-        }
-        normalizedAction := this.History.NormalizeAction(action)
-        this.TraceEvent("repository", normalizedAction.Kind, {
-            Source: normalizedAction.Target, Outcome: "committed"})
-        return result
+            normalizedAction := this.History.NormalizeAction(action)
+            this.TraceEvent("repository", normalizedAction.Kind, {
+                Source: normalizedAction.Target, Outcome: "committed"})
+            return result
+        } finally mappingLease.Release()
     }
 
     ApplyManagedRulesHot() {
@@ -664,14 +623,15 @@ class KeyMouseRemapperAssistantApp {
         return result
     }
 
-    ChooseImportRulePackage(*) {
+    ChooseImportRulePackage(ownerWindow := "", *) {
         filePath := FileSelect("1", "", Tr("导入规则包"),
             "Keyboard & Mouse Remapper Assistant package (*.json)")
         return filePath == "" ? false
-            : this.ImportRulePackageFrom(filePath, "rename")
+            : this.ImportRulePackageFrom(filePath, "rename", ownerWindow)
     }
 
-    ImportRulePackageFrom(filePath, collisionPolicy := "rename") {
+    ImportRulePackageFrom(filePath, collisionPolicy := "rename",
+            ownerWindow := "") {
         try package := this.PackageService.Read(filePath)
         catch as packageError {
             this.Window.SetStatus(Tr("规则包导入失败：{1}",
@@ -680,8 +640,9 @@ class KeyMouseRemapperAssistantApp {
         }
         if IsObject(this.PackageImportPreview)
             try this.PackageImportPreview.Dispose(false)
+        previewOwner := IsObject(ownerWindow) ? ownerWindow : this.Window
         try {
-            this.PackageImportPreview := RulePackageImportWindow(this.Window,
+            this.PackageImportPreview := RulePackageImportWindow(previewOwner,
                 filePath, package, collisionPolicy)
             return this.PackageImportPreview.Show()
         } catch as previewError {
@@ -778,6 +739,9 @@ class KeyMouseRemapperAssistantApp {
 
     OnRawInputEvent(unifiedEvent) {
         if Type(unifiedEvent) != "Map" || !unifiedEvent.Has("identity")
+            return false
+        if !RawInputObservationPolicy.ShouldForwardToGui(unifiedEvent,
+                this.RawObservationDepth > 0)
             return false
         try this.Capture.ObserveRawInputEvent(unifiedEvent)
         identity := unifiedEvent["identity"]
@@ -897,7 +861,8 @@ class KeyMouseRemapperAssistantApp {
         try backendWasSuspended := !!this.Runtime.Backend.Suspended
         state := {ScriptWasSuspended: scriptWasSuspended,
             BackendWasSuspended: backendWasSuspended,
-            ScriptChanged: false, BackendChanged: false}
+            ScriptChanged: false, BackendChanged: false,
+            FullObservationChanged: false}
         try {
             if !scriptWasSuspended {
                 Suspend(true)
@@ -907,7 +872,13 @@ class KeyMouseRemapperAssistantApp {
                 this.Runtime.Backend.Suspend()
                 state.BackendChanged := true
             }
+            if this.UseWorkerProcesses {
+                this.ProcessController.SetRawObservation(true)
+                state.FullObservationChanged := true
+            }
         } catch as observationError {
+            if state.FullObservationChanged
+                try this.ProcessController.SetRawObservation(false)
             if state.BackendChanged
                 try this.Runtime.Backend.Resume()
             if state.ScriptChanged
@@ -932,6 +903,11 @@ class KeyMouseRemapperAssistantApp {
         }
         state := this.RawObservationState
         failures := []
+        if IsObject(state) && state.FullObservationChanged {
+            try this.ProcessController.SetRawObservation(false)
+            catch as forwardingStopError
+                failures.Push(forwardingStopError.Message)
+        }
         if IsObject(state) && state.BackendChanged {
             try this.Runtime.Backend.Resume()
             catch as backendResumeError
@@ -1124,7 +1100,6 @@ class KeyMouseRemapperAssistantApp {
             UiLanguage: this.Settings.UiLanguage,
             UiFont: this.Settings.UiFont,
             Theme: this.Settings.Theme,
-            ShowMainWindowAtStartup: this.Settings.ShowMainWindowAtStartup,
             EscapeCancelsRecording: this.Settings.EscapeCancelsRecording,
             EventBufferCapacity: this.Settings.EventBufferCapacity,
             EventViewerAutoScroll: this.Settings.EventViewerAutoScroll
@@ -1132,8 +1107,7 @@ class KeyMouseRemapperAssistantApp {
         if !IsObject(candidate)
             return merged
         for propertyName in ["UiLanguage", "UiFont", "Theme",
-                "ShowMainWindowAtStartup", "EscapeCancelsRecording",
-                "EventBufferCapacity",
+                "EscapeCancelsRecording", "EventBufferCapacity",
                 "EventViewerAutoScroll"] {
             if candidate.HasOwnProp(propertyName)
                 merged.%propertyName% := candidate.%propertyName%
@@ -1217,7 +1191,6 @@ class KeyMouseRemapperAssistantApp {
             {Property: "UiLanguage", Key: "ui-language"},
             {Property: "UiFont", Key: "ui-font"},
             {Property: "Theme", Key: "theme"},
-            {Property: "ShowMainWindowAtStartup", Key: "startup-window"},
             {Property: "EscapeCancelsRecording", Key: "escape-cancel"},
             {Property: "EventBufferCapacity", Key: "event-capacity"},
             {Property: "EventViewerAutoScroll", Key: "event-auto-scroll"}
@@ -1250,8 +1223,6 @@ class KeyMouseRemapperAssistantApp {
                         case "ui-language": fieldLabels.Push(Tr("界面语言"))
                         case "ui-font": fieldLabels.Push(Tr("界面内容字体"))
                         case "theme": fieldLabels.Push(Tr("主题"))
-                        case "startup-window":
-                            fieldLabels.Push(Tr("启动时显示主窗口"))
                         case "escape-cancel":
                             fieldLabels.Push(Tr("Esc 取消录制"))
                         case "event-capacity":
@@ -1745,6 +1716,15 @@ class KeyMouseRemapperAssistantApp {
             try this.Toast.Reposition()
     }
 
+    HandleExit(*) {
+        try this.Shutdown()
+        catch {
+            ; Exit must proceed even if best-effort cleanup itself faults.
+        }
+        ; OnExit callbacks use a non-zero return value to cancel process exit.
+        return 0
+    }
+
     Shutdown(*) {
         if this.ShuttingDown
             return
@@ -1753,11 +1733,16 @@ class KeyMouseRemapperAssistantApp {
         if !this.UnregisterApplicationCallbacks()
             shutdownFailures.Push(Map("component", "application_callbacks",
                 "error", "应用消息或退出回调注销失败。"))
-        try SetTimer(this.ReloadTimer, 0)
-        try SetTimer(this.PowerRecoveryTimer, 0)
-        try SetTimer(this.SystemThemeTimer, 0)
-        try SetTimer(this.ControlPollTimer, 0)
-        try SetTimer(this.StartupStableTimer, 0)
+        this.TryShutdownComponent(shutdownFailures, "reload_timer",
+            () => SetTimer(this.ReloadTimer, 0))
+        this.TryShutdownComponent(shutdownFailures, "power_recovery_timer",
+            () => SetTimer(this.PowerRecoveryTimer, 0))
+        this.TryShutdownComponent(shutdownFailures, "system_theme_timer",
+            () => SetTimer(this.SystemThemeTimer, 0))
+        this.TryShutdownComponent(shutdownFailures, "control_poll_timer",
+            () => SetTimer(this.ControlPollTimer, 0))
+        this.TryShutdownComponent(shutdownFailures, "startup_stable_timer",
+            () => SetTimer(this.StartupStableTimer, 0))
         this.ReloadPending := false
         if this.SessionNotificationsRegistered
                 && !this.UnregisterSessionNotifications()
@@ -1781,30 +1766,56 @@ class KeyMouseRemapperAssistantApp {
                 "error", runtimeShutdownError.Message))
         remainingOutputKeys := 0
         try remainingOutputKeys := this.Runtime.OutputLedger.Keys.Count
+        catch as outputInspectionError
+            shutdownFailures.Push(Map("component", "output_ledger",
+                "error", outputInspectionError.Message))
+        if IsObject(this.SettingsWindow)
+            this.TryShutdownComponent(shutdownFailures, "settings_window",
+                ObjBindMethod(this.SettingsWindow, "Dispose", false))
+        if IsObject(this.EventViewer)
+            this.TryShutdownComponent(shutdownFailures, "event_viewer",
+                ObjBindMethod(this.EventViewer, "Dispose"))
+        if IsObject(this.SupportInfo)
+            this.TryShutdownComponent(shutdownFailures, "support_window",
+                ObjBindMethod(this.SupportInfo, "Dispose", false))
+        if IsObject(this.Help)
+            this.TryShutdownComponent(shutdownFailures, "help_window",
+                ObjBindMethod(this.Help, "Dispose", false))
+        if IsObject(this.Donation)
+            this.TryShutdownComponent(shutdownFailures, "donation_window",
+                ObjBindMethod(this.Donation, "Dispose", false))
+        if IsObject(this.PackageImportPreview)
+            this.TryShutdownComponent(shutdownFailures,
+                "package_import_window",
+                ObjBindMethod(this.PackageImportPreview, "Dispose", false))
+        this.TryShutdownComponent(shutdownFailures, "toast_window",
+            ObjBindMethod(this.Toast, "Dispose"))
+        this.TryShutdownComponent(shutdownFailures, "mapping_window",
+            ObjBindMethod(this.Window, "Dispose"))
+        this.TryShutdownComponent(shutdownFailures, "accessibility",
+            () => ControlAccessibilityService.Shutdown())
+        this.TryShutdownComponent(shutdownFailures, "svg_renderer",
+            () => this.SvgRenderer.Shutdown())
+        this.TryShutdownComponent(shutdownFailures, "ui_fonts",
+            () => LocalizationService.ShutdownUiFonts())
         if shutdownFailures.Length || remainingOutputKeys {
             try this.CrashRecovery.Record("shutdown_incomplete",
                 "退出清理没有完整完成。", Map(
                     "remaining_output_keys", remainingOutputKeys,
                     "failures", shutdownFailures))
-        }
-        if IsObject(this.SettingsWindow)
-            try this.SettingsWindow.Dispose(false)
-        if IsObject(this.EventViewer)
-            try this.EventViewer.Dispose()
-        if IsObject(this.SupportInfo)
-            try this.SupportInfo.Dispose(false)
-        if IsObject(this.Help)
-            try this.Help.Dispose(false)
-        if IsObject(this.Donation)
-            try this.Donation.Dispose(false)
-        if IsObject(this.PackageImportPreview)
-            try this.PackageImportPreview.Dispose(false)
-        try this.Toast.Dispose()
-        try this.Window.Dispose()
-        try ControlAccessibilityService.Shutdown()
-        try this.SvgRenderer.Shutdown()
-        try LocalizationService.ShutdownUiFonts()
-        if this.StartupSucceeded
+        } else if this.StartupSucceeded
             try this.Health.MarkClean()
+        return !shutdownFailures.Length && !remainingOutputKeys
+    }
+
+    TryShutdownComponent(failures, component, callback) {
+        try {
+            callback.Call()
+            return true
+        } catch as shutdownError {
+            failures.Push(Map("component", String(component),
+                "error", shutdownError.Message))
+            return false
+        }
     }
 }

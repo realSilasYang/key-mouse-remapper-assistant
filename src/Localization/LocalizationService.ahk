@@ -444,21 +444,36 @@ class LocalizationService {
 
     static ShutdownUiFonts(*) {
         if !IsObject(this.LoadedPrivateUiFontPaths)
-            return
+            return true
         previousCritical := A_IsCritical
         Critical("On")
         try {
+            failures := []
             Loop this.LoadedPrivateUiFontPaths.Length {
                 pathIndex := this.LoadedPrivateUiFontPaths.Length
                     - A_Index + 1
                 fontPath := this.LoadedPrivateUiFontPaths[pathIndex]
-                try DllCall("gdi32\RemoveFontResourceExW",
-                    "WStr", fontPath, "UInt", 0x10, "Ptr", 0, "Int")
+                try {
+                    if DllCall("gdi32\RemoveFontResourceExW",
+                            "WStr", fontPath, "UInt", 0x10,
+                            "Ptr", 0, "Int")
+                        this.LoadedPrivateUiFontPaths.RemoveAt(pathIndex)
+                    else
+                        failures.Push(fontPath "：Win32 " A_LastError)
+                } catch as fontCleanupError
+                    failures.Push(fontPath "：" fontCleanupError.Message)
+            }
+            if failures.Length {
+                message := ""
+                for failure in failures
+                    message .= (message == "" ? "" : "；") failure
+                throw Error("无法卸载私有界面字体：" message)
             }
             this.LoadedPrivateUiFonts := ""
             this.LoadedPrivateUiFontPaths := ""
             this.FailedPrivateUiFonts := ""
             this.InstalledUiFonts := ""
+            return true
         } finally Critical(previousCritical ? previousCritical : "Off")
     }
 
@@ -471,16 +486,22 @@ class LocalizationService {
         if screenDc {
             logFont := Buffer(92, 0) ; LOGFONTW：名称字段从第 28 字节开始。
             NumPut("UChar", 1, logFont, 23) ; DEFAULT_CHARSET：枚举全部常规字体族。
-            this.FontEnumerationTarget := fontSet
-            enumCallback := CallbackCreate(
-                ObjBindMethod(this, "CollectInstalledUiFont"), "Fast", 4)
-            try DllCall("gdi32\EnumFontFamiliesExW", "Ptr", screenDc,
-                "Ptr", logFont, "Ptr", enumCallback, "Ptr", 0,
-                "UInt", 0, "Int")
+            enumCallback := 0
+            try {
+                this.FontEnumerationTarget := fontSet
+                enumCallback := CallbackCreate(
+                    ObjBindMethod(this, "CollectInstalledUiFont"), "Fast", 4)
+                DllCall("gdi32\EnumFontFamiliesExW", "Ptr", screenDc,
+                    "Ptr", logFont, "Ptr", enumCallback, "Ptr", 0,
+                    "UInt", 0, "Int")
+            }
             finally {
-                CallbackFree(enumCallback)
+                if enumCallback
+                    CallbackFree(enumCallback)
                 this.FontEnumerationTarget := ""
-                DllCall("user32\ReleaseDC", "Ptr", 0, "Ptr", screenDc)
+                if !DllCall("user32\ReleaseDC", "Ptr", 0,
+                        "Ptr", screenDc, "Int")
+                    throw OSError(A_LastError, "无法释放字体枚举设备上下文。")
             }
         }
         namesText := ""

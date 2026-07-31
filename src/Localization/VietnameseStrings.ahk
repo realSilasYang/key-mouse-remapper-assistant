@@ -112,15 +112,6 @@ class VietnameseStrings {
             "重新加载",
                 "Tải lại")
         catalog.Set(
-            "以管理员身份重新启动",
-                "Khởi động lại với tư cách quản trị viên")
-        catalog.Set(
-            "管理员模式（当前）",
-                "Chế độ quản trị viên (hoạt động)")
-        catalog.Set(
-            "无法以管理员身份重新启动（错误代码 {1}）。",
-                "Không thể khởi động lại với tư cách quản trị viên (lỗi {1}).")
-        catalog.Set(
             "事件查看器",
                 "Sự kiện")
         catalog.Set("事件详情", "Chi tiết sự kiện")
@@ -531,14 +522,12 @@ class VietnameseStrings {
                 "{1} ánh xạ đang hoạt động · thứ tự tập lệnh tùy chỉnh")
         catalog.Set("键鼠重映射小助手设置",
             "Cài đặt trợ lý ánh xạ lại bàn phím và chuột")
-        catalog.Set("通用",
-            "Chung")
+        catalog.Set("外观",
+            "Giao diện")
+        catalog.Set("规则包",
+            "Gói quy tắc")
         catalog.Set("关于",
             "Giới thiệu")
-        catalog.Set("启动时显示主窗口",
-            "Hiện cửa sổ chính khi khởi động")
-        catalog.Set("单独按 Esc 时取消录制",
-            "Nhấn riêng Esc để hủy ghi")
         catalog.Set("事件缓冲区容量（条）：",
             "Dung lượng bộ đệm sự kiện:")
         catalog.Set("事件查看器自动跟随最新事件",
@@ -573,11 +562,16 @@ class VietnameseStrings {
             "Esc hủy ghi")
         catalog.Set("事件自动跟随",
             "Theo dõi sự kiện mới nhất")
-        catalog.Set("录制", "Ghi")
         catalog.Set("事件", "Sự kiện")
         catalog.Set("{1}（便携版）", "{1} (bản di động)")
         catalog.Set("帮助信息", "Trợ giúp")
         catalog.Set("捐赠", "Ủng hộ")
+        catalog.Set("配置外观、规则包、事件`n以及关于选项",
+            "Cấu hình Giao diện, Gói quy tắc, Sự kiện`nvà Giới thiệu")
+        catalog.Set("打开帮助信息`n可选择查看使用说明、运行日志或提交反馈",
+            "Mở Trợ giúp`nChọn hướng dẫn sử dụng, nhật ký chạy hoặc gửi phản hồi")
+        catalog.Set("快揭不开锅了（≥Д≤）",
+            "Sắp cạn kinh phí rồi（≥Д≤）")
         catalog.Set("使用说明", "Hướng dẫn sử dụng")
         catalog.Set("提交反馈", "Gửi phản hồi")
         catalog.Set("支持开源项目", "Ủng hộ dự án mã nguồn mở")
@@ -603,13 +597,8 @@ class VietnameseStrings {
         catalog.Set("• 事件查看器记录输入、规则匹配、条件拒绝、执行结果、仓储和系统事件，支持筛选、暂停、清空及 JSONL 导出。", "• Trình xem sự kiện ghi đầu vào, quy tắc khớp, điều kiện từ chối, kết quả thực thi, hoạt động kho và sự kiện hệ thống; hỗ trợ lọc, tạm dừng, xóa và xuất JSONL.")
         catalog.Set("五、后台运行与问题排查", "5. Chạy nền và khắc phục sự cố")
         catalog.Set("• 主窗口关闭后程序仍驻留托盘。托盘可以重新显示主界面、手动重新加载或彻底退出；修改映射规则后通常不需要手动重新加载。", "• Ứng dụng vẫn ở khay sau khi đóng cửa sổ chính. Từ khay, bạn có thể hiện lại cửa sổ, tải lại thủ công hoặc thoát hoàn toàn; thay đổi quy tắc ánh xạ thường không cần tải lại thủ công.")
-        catalog.Set("• 映射对管理员程序无效时，请从托盘选择以管理员身份重新启动。遇到规则冲突或按键未按预期执行时，先在事件查看器中核对输入和规则结果。", "• Nếu ánh xạ không tác dụng với ứng dụng chạy quyền quản trị, hãy chọn khởi động lại với quyền quản trị từ khay. Khi có xung đột hoặc phím hoạt động không như mong đợi, trước tiên hãy kiểm tra đầu vào và kết quả quy tắc trong Trình xem sự kiện.")
         catalog.Set("• “帮助信息”还可打开项目反馈页面。提交问题时请说明系统版本、复现步骤、相关 @mapping 代码和事件导出，并在公开前移除敏感路径或应用信息。", "• Trợ giúp cũng mở trang phản hồi của dự án. Khi báo lỗi, hãy nêu phiên bản Windows, các bước tái hiện, mã @mapping liên quan và tệp xuất sự kiện; xóa đường dẫn hoặc thông tin ứng dụng nhạy cảm trước khi đăng công khai.")
         catalog.Set("安全模式：已停用所有映射和输入观察。连续启动失败 {1} 次。", "Chế độ an toàn: đã tắt mọi ánh xạ và quan sát đầu vào sau {1} lần khởi động thất bại liên tiếp.")
-        catalog.Set("恢复最后正常配置", "Khôi phục cấu hình tốt gần nhất")
-        catalog.Set("没有可恢复的最后正常配置。", "Không có cấu hình tốt gần nhất để khôi phục.")
-        catalog.Set("最后正常配置恢复失败：{1}", "Không thể khôi phục cấu hình tốt gần nhất: {1}")
-        catalog.Set("最后正常配置已恢复，正在自动应用。", "Đã khôi phục cấu hình tốt gần nhất và đang tự động áp dụng.")
         catalog.Set("仅勾选的规则会被导入。", "Chỉ nhập các quy tắc đã chọn.")
         catalog.Set("三、规则与生效范围", "3. Quy tắc và phạm vi áp dụng")
         catalog.Set("• 所有规则属于同一全局规则集；生效范围和条件可在 @mapping 编辑器中精确调整，保存后会立即重新选择生效规则。", "• Tất cả quy tắc thuộc một bộ quy tắc toàn cục duy nhất. Phạm vi và điều kiện có thể được chỉnh chính xác trong trình soạn thảo @mapping; khi lưu, các quy tắc đang hoạt động sẽ được chọn lại ngay.")

@@ -24,6 +24,12 @@ $obsoletePackageName =
     'key-mouse-remapper-assistant-99.98.97-windows-x64'
 $obsoletePackageDirectory = Join-Path $outputRoot $obsoletePackageName
 $obsoleteZipPath = Join-Path $outputRoot "$obsoletePackageName.zip"
+$obsoleteSourcePackageName =
+    'key-mouse-remapper-assistant-99.98.97-source'
+$obsoleteSourcePackageDirectory = Join-Path $outputRoot `
+    $obsoleteSourcePackageName
+$obsoleteSourceZipPath = Join-Path $outputRoot `
+    "$obsoleteSourcePackageName.zip"
 
 function Invoke-TestReleaseBuild {
     $parameters = @{
@@ -98,15 +104,22 @@ try {
     if (Test-Path -LiteralPath $testRoot) {
         Remove-Item -LiteralPath $testRoot -Recurse -Force
     }
-    New-Item -ItemType Directory -Path $obsoletePackageDirectory -Force |
-        Out-Null
-    [IO.File]::WriteAllText(
-        (Join-Path $obsoletePackageDirectory 'obsolete.txt'), 'obsolete',
-        [Text.UTF8Encoding]::new($false))
-    [IO.File]::WriteAllText($obsoleteZipPath, 'obsolete',
-        [Text.UTF8Encoding]::new($false))
+    foreach ($obsoleteDirectory in @($obsoletePackageDirectory,
+            $obsoleteSourcePackageDirectory)) {
+        New-Item -ItemType Directory -Path $obsoleteDirectory -Force |
+            Out-Null
+        [IO.File]::WriteAllText(
+            (Join-Path $obsoleteDirectory 'obsolete.txt'), 'obsolete',
+            [Text.UTF8Encoding]::new($false))
+    }
+    foreach ($obsoleteArchive in @($obsoleteZipPath,
+            $obsoleteSourceZipPath)) {
+        [IO.File]::WriteAllText($obsoleteArchive, 'obsolete',
+            [Text.UTF8Encoding]::new($false))
+    }
     $baselineBuild = Invoke-TestReleaseBuild
-    foreach ($obsoletePath in @($obsoletePackageDirectory, $obsoleteZipPath)) {
+    foreach ($obsoletePath in @($obsoletePackageDirectory, $obsoleteZipPath,
+            $obsoleteSourcePackageDirectory, $obsoleteSourceZipPath)) {
         if (Test-Path -LiteralPath $obsoletePath) {
             throw "Release build retained an obsolete version: $obsoletePath"
         }

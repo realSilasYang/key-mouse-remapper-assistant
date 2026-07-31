@@ -42,7 +42,6 @@ try {
     AssertEqual("auto", defaults.UiLanguage, "语言默认值错误")
     AssertEqual("auto", defaults.UiFont, "字体默认值错误")
     AssertEqual("auto", defaults.Theme, "主题默认值错误")
-    AssertTrue(defaults.ShowMainWindowAtStartup, "启动窗口默认值错误")
     AssertTrue(defaults.EscapeCancelsRecording, "Esc 取消录制默认值错误")
     AssertEqual(1000, defaults.EventBufferCapacity,
         "事件缓冲区默认值错误")
@@ -50,20 +49,21 @@ try {
 
     saved := service.Save({UiLanguage: "en-US", UiFont: "auto",
         Theme: "light",
-        ShowMainWindowAtStartup: false,
         EscapeCancelsRecording: false,
         EventBufferCapacity: 2400, EventViewerAutoScroll: false})
     loaded := service.Load()
     AssertEqual("en-US", loaded.UiLanguage, "界面语言没有保存")
     AssertEqual("light", loaded.Theme, "浅色主题没有保存")
-    AssertTrue(!loaded.ShowMainWindowAtStartup, "启动窗口设置没有保存")
     AssertTrue(!loaded.EscapeCancelsRecording, "Esc 录制设置没有保存")
     AssertEqual(2400, loaded.EventBufferCapacity,
         "事件缓冲区设置没有保存")
     AssertTrue(!loaded.EventViewerAutoScroll, "事件自动跟随设置没有保存")
     settingsSnapshot := service.GetSnapshot()
+    AssertTrue(!InStr(settingsSnapshot, "ShowMainWindowAtStartup")
+            && !InStr(settingsSnapshot, "[General]"),
+        "设置文件仍写出已移除的启动窗口选项")
     service.Save({UiLanguage: "zh-CN", UiFont: "auto", Theme: "dark",
-        ShowMainWindowAtStartup: true, EscapeCancelsRecording: true,
+        EscapeCancelsRecording: true,
         EventBufferCapacity: 1000,
         EventViewerAutoScroll: true})
     service.WriteSnapshot(settingsSnapshot)
@@ -79,17 +79,18 @@ try {
         "超过 UTF-8 字节上限的设置快照仍被写入")
 
     FileDelete(settingsPath)
-    FileAppend("[Appearance]`r`nUiLanguage=zh-CN`r`nUiFont=auto`r`n"
+    FileAppend("[General]`r`nShowMainWindowAtStartup=1`r`n"
+        . "[Appearance]`r`nUiLanguage=zh-CN`r`nUiFont=auto`r`n"
         . "Theme=dark`r`n"
         . "[Events]`r`nEventBufferCapacity=bad`r`n", settingsPath,
         "UTF-8-RAW")
     recoveredSettings := service.Load()
     AssertEqual(1000, recoveredSettings.EventBufferCapacity,
         "无效事件容量没有回退默认值")
-    AssertTrue(recoveredSettings.ShowMainWindowAtStartup
+    AssertTrue(!recoveredSettings.HasOwnProp("ShowMainWindowAtStartup")
             && recoveredSettings.EscapeCancelsRecording
             && recoveredSettings.EventViewerAutoScroll,
-        "旧版设置文件没有补齐布尔默认值")
+        "旧版设置文件没有忽略启动窗口字段或补齐布尔默认值")
 
     LocalizationService.Configure("en-US", "auto")
     AssertEqual("Keyboard & Mouse Remapper Assistant", Tr("键鼠重映射小助手"),

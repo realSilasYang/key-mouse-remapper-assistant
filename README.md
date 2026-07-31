@@ -128,7 +128,16 @@ worker 作为受主程序监督的独立后台进程运行，但不会创建第�
 ```
 
 发行包 manifest 固定声明 `inputBackend: raw-input`、`requiresDriver: false` 和
-`suppressesOriginalInput: false`。打包说明见[发行打包](docs/packaging.md)。
+`suppressesOriginalInput: false`。构建只生成用于发布的两个 ZIP：集成 AutoHotkey
+最新稳定版和 EXE 的便携版，以及完整源码版；不再生成或发布 `SHA256SUMS.txt`。
+打包说明见[发行打包](docs/packaging.md)。
+
+## 版本与发布
+
+- [中文更新日志](CHANGELOG.md)与[英文更新日志](docs/CHANGELOG.en.md)
+- [各版本 Release Notes](docs/release-notes/)
+- [更新日志编写模板](docs/changelog-template.md)
+- [发行打包与制品说明](docs/packaging.md)
 
 ## 许可证
 

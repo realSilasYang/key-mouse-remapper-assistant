@@ -11,7 +11,7 @@ class RuleConflictAnalyzer {
             descriptor.Order := order
             descriptors.Push(descriptor)
             this.AnalyzeSelf(descriptor, issues)
-            groupKey := descriptor.Signature
+            groupKey := descriptor.DispatchSignature
             if !triggerGroups.Has(groupKey)
                 triggerGroups[groupKey] := []
             triggerGroups[groupKey].Push(descriptor)
@@ -47,6 +47,7 @@ class RuleConflictAnalyzer {
             descriptors.Push(descriptor)
             nodes.Push(Map("id", descriptor.Id,
                 "signature", descriptor.Signature,
+                "dispatch_signature", descriptor.DispatchSignature,
                 "priority", descriptor.Priority,
                 "enabled", JsonBoolean(descriptor.Enabled)))
             if !descriptor.Enabled
@@ -124,7 +125,7 @@ class RuleConflictAnalyzer {
     AnalyzePair(left, right, issues) {
         if !left.Enabled || !right.Enabled
             return
-        if left.Signature != right.Signature
+        if left.DispatchSignature != right.DispatchSignature
             return
         if left.Spec["from"]["event"] != right.Spec["from"]["event"]
             return

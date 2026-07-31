@@ -82,6 +82,7 @@ class ScopedVariableStore {
     }
 
     SetPersistent(name, normalizedValue) {
+        this.RequirePersistenceConfigured()
         writeLease := CrossProcessWriteLock.Acquire(this.FilePath)
         try {
             this.LoadLocked()
@@ -102,6 +103,7 @@ class ScopedVariableStore {
     }
 
     ClearPersistent(name) {
+        this.RequirePersistenceConfigured()
         writeLease := CrossProcessWriteLock.Acquire(this.FilePath)
         try {
             this.LoadLocked()
@@ -120,6 +122,7 @@ class ScopedVariableStore {
     }
 
     ClearPersistentScope() {
+        this.RequirePersistenceConfigured()
         writeLease := CrossProcessWriteLock.Acquire(this.FilePath)
         try {
             this.LoadLocked()
@@ -238,6 +241,12 @@ class ScopedVariableStore {
     EnsureLoadedForMutation() {
         if this.LoadWarning != ""
             throw Error("持久变量文件无法安全修改：" this.LoadWarning)
+        return true
+    }
+
+    RequirePersistenceConfigured() {
+        if this.FilePath == ""
+            throw Error("未配置持久变量文件，不能使用 persistent 作用域。")
         return true
     }
 }

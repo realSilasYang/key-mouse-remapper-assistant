@@ -118,6 +118,38 @@ try {
             && actionEvent.Fields.Data.Has("duration_us"),
         "规则候选、条件、上下文、变量或阶段耗时诊断不完整")
 
+    structuredCondition := Map("operator", "regex", "value", "active",
+        "case_sensitive", JsonBoolean(true))
+    AssertTrue(runtime.ConditionEvaluator.Compare(Map("state", "active"),
+        true, structuredCondition),
+        "结构化条件值执行 regex 时发生错误或错误拒绝")
+
+    physicalOneSpec := BuildRuntimeSpec("physical-one", "A", [
+        VariableAction("physical_one", 1)])
+    physicalOneSpec["from"]["key"] := Map("name", "A", "kind", "keyboard",
+        "sc", "01E")
+    physicalTwoSpec := BuildRuntimeSpec("physical-two", "A", [
+        VariableAction("physical_two", 1)])
+    physicalTwoSpec["from"]["key"] := Map("name", "A", "kind", "keyboard",
+        "sc", "030")
+    physicalOne := {Mode: "managed", Enabled: true,
+        Spec: RuleSpec.Normalize(physicalOneSpec)}
+    physicalOne.Descriptor := RuleCompiler.Compile(physicalOne.Spec)
+    physicalTwo := {Mode: "managed", Enabled: true,
+        Spec: RuleSpec.Normalize(physicalTwoSpec)}
+    physicalTwo.Descriptor := RuleCompiler.Compile(physicalTwo.Spec)
+    physicalReport := runtime.ApplyMappings([physicalOne, physicalTwo])
+    AssertTrue(physicalReport.Applied == 2 && runtime.Groups.Count == 2,
+        "相同热键文本下的不同实体键被错误判定冲突或合并分组")
+    for physicalGroupKey, physicalGroup in runtime.Groups {
+        AssertEqual(1, physicalGroup.Down.Length,
+            "不同实体键描述符仍被串入同一回调组")
+        runtime.HandleSimpleGroup(physicalGroupKey, "down")
+    }
+    AssertTrue(runtime.Variables.Has("physical_one")
+            && runtime.Variables.Has("physical_two"),
+        "拆分后的实体键规则没有各自执行")
+
     lowPriority := BuildManagedMapping("priority-low", "F21",
         [VariableAction("priority_low", 1)])
     lowPriority.Spec["priority"] := 1
@@ -185,6 +217,24 @@ try {
     AssertTrue(runtime.Variables.Has("repeat_ignore")
             && runtime.Variables.Has("repeat_only"),
         "来源 ignore/only 重复策略没有分别匹配首次和重复回调")
+
+    upCanceled := BuildManagedMapping("up-canceled", "F27", [
+        VariableAction("up_to", 1)])
+    upCanceled.Spec["from"]["event"] := "up"
+    upCanceled.Spec["to_delayed_if_canceled"] := [
+        VariableAction("up_canceled", 1)]
+    upCanceled.Spec := RuleSpec.Normalize(upCanceled.Spec)
+    upCanceled.Descriptor := RuleCompiler.Compile(upCanceled.Spec)
+    runtime.ApplyMappings([upCanceled])
+    for upGroupKey, upGroup in runtime.Groups {
+        if upGroup.Up.Length {
+            runtime.HandleSimpleGroup(upGroupKey, "up")
+            break
+        }
+    }
+    AssertTrue(runtime.Variables.Has("up_to")
+            && runtime.Variables.Has("up_canceled"),
+        "up 来源没有执行规范和模拟器声明的取消动作分支")
 
     multiTap := BuildManagedMapping("double-tap", "F17", [
         VariableAction("double_tap", 1)])
@@ -448,6 +498,17 @@ try {
     AssertTrue(!runtime.StateMachine.States.Count,
         "序列最后一键松开后仍残留状态")
 
+    runtime.ApplyMappings([strictMapping])
+    runtime.Variables.Delete("strict_match")
+    runtime.HandleComplexKey("f6", "down", "device-a")
+    runtime.HandleComplexKey("x", "down", "device-b")
+    runtime.HandleComplexKey("f7", "down", "device-a")
+    AssertEqual(1, runtime.Variables["strict_match"],
+        "其他设备的按键错误干扰了严格同时键顺序")
+    runtime.HandleComplexKey("f6", "up", "device-a")
+    runtime.HandleComplexKey("f7", "up", "device-a")
+    runtime.HandleComplexKey("x", "up", "device-b")
+
     firstSimSpec := BuildRuntimeSpec("first-sim", "", [
         VariableAction("first_sim", 1)])
     firstSimSpec["from"] := Map("simultaneous", ["A", "B"],
@@ -517,6 +578,24 @@ try {
     runtime.HandleComplexKey("a", "up")
     AssertTrue(!runtime.StateMachine.States.Count,
         "滚轮同时规则完成后仍残留运行状态")
+
+    mouseMoveSimSpec := BuildRuntimeSpec("mousemove-sim", "", [
+        VariableAction("mousemove_sim", 1)])
+    mouseMoveSimSpec["from"] := Map("simultaneous", ["A", "MouseMove"],
+        "event", "down")
+    mouseMoveSimSpec["timing"] := Map("simultaneous_threshold_ms", 0)
+    mouseMoveMapping := {Mode: "managed", Enabled: true,
+        Spec: RuleSpec.Normalize(mouseMoveSimSpec)}
+    mouseMoveMapping.Descriptor := RuleCompiler.Compile(mouseMoveMapping.Spec)
+    runtime.ApplyMappings([mouseMoveMapping])
+    runtime.HandleComplexKey("a", "down", "mouse-device")
+    runtime.HandleComplexKey("mousemove", "down", "mouse-device")
+    AssertEqual(1, runtime.Variables["mousemove_sim"],
+        "鼠标移动没有在发生时参与同时按键匹配")
+    AssertTrue(!runtime.ComplexHeld.Has(
+            "mouse-device|keyboard:name:mousemove"),
+        "鼠标移动事件永久残留在复杂按下状态中")
+    runtime.HandleComplexKey("a", "up", "mouse-device")
 
     repeatedSequenceSpec := BuildRuntimeSpec("repeat-sequence", "", [
         VariableAction("repeat_sequence", 1)])
@@ -615,6 +694,13 @@ try {
     AssertTrue(trackingRuntime.PressedOutputKeys.Has("f13")
             && trackingRuntime.SentKeyEvents[1] == "F13:down",
         "key_down 动作没有登记待释放输出键")
+    trackingDescriptor := trackingRuntime.Rules["tracked-key-down"]
+    trackingRuntime.ExecuteActions([
+        RuleSpec.NormalizeAction(Map("type", "key_up", "value", "F13"))],
+        trackingDescriptor, "to", false, "foreign-owner")
+    AssertTrue(trackingRuntime.PressedOutputKeys.Has("f13")
+            && trackingRuntime.SentKeyEvents.Length == 1,
+        "无所有权的 key_up 误释放了其他规则仍按住的输出键")
     trackingRuntime.ResetActiveState("rules_reloaded")
     AssertTrue(!trackingRuntime.PressedOutputKeys.Count
             && trackingRuntime.SentKeyEvents[2] == "F13:up"

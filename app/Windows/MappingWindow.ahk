@@ -116,7 +116,7 @@ class MappingWindow {
         this.Gui.OnEvent("Close", ObjBindMethod(this, "Hide"))
         this.Gui.OnEvent("Escape", ObjBindMethod(this, "OnEscape"))
         } catch as buildError {
-            this.Dispose()
+            try this.Dispose()
             throw buildError
         }
     }
@@ -161,6 +161,7 @@ class MappingWindow {
             ObjBindMethod(this.App, "OpenDonation"), "",
             MappingWindow.SettingsButtonHeight)
         this.ApplyCommandIcons()
+        this.RefreshToolbarTooltips()
 
         this.HeaderLabels := [Tr("序号"), Tr("来源按键"), Tr("映射结果"),
             Tr("生效范围"), Tr("设计目的")]
@@ -175,7 +176,6 @@ class MappingWindow {
         this.List.OnEvent("DoubleClick", ObjBindMethod(this, "OnListDoubleClick"))
         this.List.OnEvent("ContextMenu", ObjBindMethod(this, "OnListContextMenu"))
         this.List.OnNotify(-109, ObjBindMethod(this, "OnListBeginDrag"))
-        this.Interactions.SetFocusSink(this.List)
         this.CellTooltip := ListCellTooltipWindow(this.List,
             MappingWindow.SourceColumn, MappingWindow.PurposeColumn)
         this.ListSelection := ListViewSelectionPresenter(this.List,
@@ -276,6 +276,9 @@ class MappingWindow {
             "eraser.svg", 16, 7, MappingWindow.ToolbarIconColor)
         this.Status := this.Gui.Add("Text", "x10 y554 w700 h24 +Wrap Background" colors.Window " c" colors.Muted,
             Tr("准备就绪"))
+        ; A plain status label is a stable, non-interactive keyboard-focus sink.
+        ; It removes ListView focus without adding a visible or Tab-stop control.
+        this.Interactions.SetFocusSink(this.Status)
     }
 
     AddCommandButton(x, y, width, text, color, callback, textColor := "",
@@ -292,11 +295,13 @@ class MappingWindow {
     }
 
     ApplyCommandIcons() {
-        ; 与小助手主命令栏一致：新增、暂停/恢复、删除使用 Emoji 文本，
-        ; 右侧工具命令才使用 Lucide。主题刷新时也要清掉旧图像状态。
+        ; The assistant command bar keeps the established Emoji shapes, but
+        ; gives each one the same fixed visual slot and text gap.
         for button in [this.AddButton, this.PauseResumeButton,
-                this.DeleteButton]
+                this.DeleteButton] {
             this.Interactions.ClearButtonIcon(button)
+            this.Interactions.SetButtonLeadingTextSlot(button, 20, 4, 10)
+        }
         for item in [
             {Button: this.SettingsButton, Icon: "settings.svg",
                 Tint: MappingWindow.ToolbarIconColor},
@@ -307,6 +312,15 @@ class MappingWindow {
                 item.Icon, 15, 6,
                 item.HasOwnProp("Tint") ? item.Tint : "none")
         }
+    }
+
+    RefreshToolbarTooltips() {
+        this.Interactions.SetButtonTooltip(this.SettingsButton,
+            Tr("配置外观、规则包、事件`n以及关于选项"))
+        this.Interactions.SetButtonTooltip(this.SupportButton,
+            Tr("打开帮助信息`n可选择查看使用说明、运行日志或提交反馈"))
+        this.Interactions.SetButtonTooltip(this.DonateButton,
+            Tr("快揭不开锅了（≥Д≤）"))
     }
 
     GetAddButtonText() => "➕ " Tr("新增")
@@ -341,41 +355,77 @@ class MappingWindow {
         if this.Disposed
             return
         this.Disposed := true
+        cleanupFailures := []
         if this.HoverHotkeyRegistered {
             try {
                 HotIf(this.HoverHotIf)
                 Hotkey("F2", "Off")
+                this.HoverHotkeyRegistered := false
+            } catch as hotkeyError {
+                cleanupFailures.Push("F2 热键：" hotkeyError.Message)
             } finally {
                 HotIf()
             }
-            this.HoverHotkeyRegistered := false
         }
-        if IsObject(this.BlockEditor)
-            this.BlockEditor.Dispose(false)
-        this.BlockEditor := ""
-        if IsObject(this.CellTooltip)
-            this.CellTooltip.Dispose()
-        this.CellTooltip := ""
-        if IsObject(this.ListSelection)
-            this.ListSelection.Dispose()
-        this.ListSelection := ""
-        if IsObject(this.ContextPopup)
-            this.ContextPopup.Dispose()
-        this.ContextPopup := ""
-        try SetTimer(this.ThemeTimer, 0)
-        if IsObject(this.Interactions)
-            this.Interactions.Dispose()
-        if IsObject(this.ListHeader)
-            this.ListHeader.Dispose()
-        this.ListHeader := ""
-        this.ReleaseListRowImageList()
-        if IsObject(this.Gui)
+        this.DisposeOwnedResource(cleanupFailures, "映射编辑器",
+            "BlockEditor", false)
+        this.DisposeOwnedResource(cleanupFailures, "单元格提示",
+            "CellTooltip")
+        this.DisposeOwnedResource(cleanupFailures, "列表选择器",
+            "ListSelection")
+        this.DisposeOwnedResource(cleanupFailures, "右键菜单",
+            "ContextPopup")
+        try {
+            SetTimer(this.ThemeTimer, 0)
+            this.ThemeTimer := ""
+        } catch as timerError
+            cleanupFailures.Push("主题计时器：" timerError.Message)
+        this.DisposeOwnedResource(cleanupFailures, "交互服务",
+            "Interactions")
+        this.DisposeOwnedResource(cleanupFailures, "列表表头",
+            "ListHeader")
+        try this.ReleaseListRowImageList()
+        catch as imageListError
+            cleanupFailures.Push("列表图像：" imageListError.Message)
+        if IsObject(this.Gui) {
             try this.Gui.Destroy()
-        ReleaseApplicationWindowIcons(this.IconHandles)
-        this.IconHandles := []
-        this.ThemeTimer := ""
-        this.HoverHotIf := ""
-        this.HoverF2Callback := ""
+            catch as guiError
+                cleanupFailures.Push("主窗口：" guiError.Message)
+        }
+        try {
+            ReleaseApplicationWindowIcons(this.IconHandles)
+            this.IconHandles := []
+        } catch as iconError
+            cleanupFailures.Push("窗口图标：" iconError.Message)
+        if !this.HoverHotkeyRegistered {
+            this.HoverHotIf := ""
+            this.HoverF2Callback := ""
+        }
+        if cleanupFailures.Length
+            throw Error("主窗口资源清理失败："
+                . this.JoinCleanupFailures(cleanupFailures))
+        return true
+    }
+
+    DisposeOwnedResource(failures, label, propertyName, arguments*) {
+        resource := this.%propertyName%
+        if !IsObject(resource)
+            return false
+        try {
+            resource.Dispose(arguments*)
+            this.%propertyName% := ""
+            return true
+        } catch as resourceError {
+            failures.Push(label "：" resourceError.Message)
+            return false
+        }
+    }
+
+    JoinCleanupFailures(failures) {
+        message := ""
+        for failure in failures
+            message .= (message == "" ? "" : "；") failure
+        return message
     }
 
     LoadRows(mappings) {
@@ -791,6 +841,7 @@ class MappingWindow {
             this.Interactions.SetButtonAppearance(this.ClearButton,
                 colors.Toolbar, colors.ToolbarText, true)
             this.ApplyCommandIcons()
+            this.RefreshToolbarTooltips()
             this.RefreshCaptureButtonIcons()
             this.Interactions.SetButtonLucideIcon(this.ClearButton,
                 "eraser.svg", 16, 7, MappingWindow.ToolbarIconColor)

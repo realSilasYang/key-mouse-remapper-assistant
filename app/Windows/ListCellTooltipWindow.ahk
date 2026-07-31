@@ -22,7 +22,7 @@ class ListCellTooltipWindow {
             OnMessage(0x02A3, this.MouseLeaveCallback) ; WM_MOUSELEAVE
             OnMessage(0x020A, this.MouseWheelCallback) ; WM_MOUSEWHEEL
         } catch as registrationError {
-            this.Dispose()
+            try this.Dispose()
             throw registrationError
         }
     }
@@ -201,12 +201,12 @@ class ListCellTooltipWindow {
     }
 
     Hide(*) {
-        try SetTimer(this.ShowTimer, 0)
+        SetTimer(this.ShowTimer, 0)
         this.PendingCell := ""
         this.PendingText := ""
         this.VisibleCell := ""
         if IsObject(this.Gui)
-            try this.Gui.Hide()
+            this.Gui.Hide()
     }
 
     InvalidateMeasurements() {
@@ -218,19 +218,29 @@ class ListCellTooltipWindow {
         if this.Disposed
             return
         this.Disposed := true
-        this.Hide()
-        try OnMessage(0x0200, this.MouseMoveCallback, 0)
-        try OnMessage(0x02A3, this.MouseLeaveCallback, 0)
-        try OnMessage(0x020A, this.MouseWheelCallback, 0)
+        cleanup := CleanupCollector("列表单元格提示")
+        hidden := cleanup.Run("隐藏窗口", () => this.Hide())
+        moveReleased := cleanup.Run("注销移动消息",
+            () => OnMessage(0x0200, this.MouseMoveCallback, 0))
+        leaveReleased := cleanup.Run("注销离开消息",
+            () => OnMessage(0x02A3, this.MouseLeaveCallback, 0))
+        wheelReleased := cleanup.Run("注销滚轮消息",
+            () => OnMessage(0x020A, this.MouseWheelCallback, 0))
         if IsObject(this.Gui)
-            try this.Gui.Destroy()
-        this.Gui := ""
+                && cleanup.Run("销毁窗口", () => this.Gui.Destroy())
+            this.Gui := ""
         this.TextControl := ""
         this.List := ""
-        this.ShowTimer := ""
-        this.MouseMoveCallback := ""
-        this.MouseLeaveCallback := ""
-        this.MouseWheelCallback := ""
+        if hidden
+            this.ShowTimer := ""
+        if moveReleased
+            this.MouseMoveCallback := ""
+        if leaveReleased
+            this.MouseLeaveCallback := ""
+        if wheelReleased
+            this.MouseWheelCallback := ""
         this.WidthCache.Clear()
+        cleanup.Complete()
+        return true
     }
 }

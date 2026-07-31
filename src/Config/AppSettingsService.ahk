@@ -31,8 +31,6 @@ class AppSettingsService {
                     "UiFont", "auto"),
                 Theme: this.ReadSnapshotValue(values, "Appearance",
                     "Theme", "auto"),
-                ShowMainWindowAtStartup: this.ReadSnapshotValue(values, "General",
-                    "ShowMainWindowAtStartup", "1"),
                 EscapeCancelsRecording: this.ReadSnapshotValue(values, "Recording",
                     "EscapeCancelsRecording", "1"),
                 EventBufferCapacity: this.ReadSnapshotValue(values, "Events",
@@ -60,9 +58,6 @@ class AppSettingsService {
                 this.GetProperty(settings, "UiFont", "auto")),
             Theme: UiThemeService.NormalizeTheme(
                 this.GetProperty(settings, "Theme", "auto")),
-            ShowMainWindowAtStartup: this.NormalizeBoolean(
-                this.GetProperty(settings, "ShowMainWindowAtStartup", true),
-                true),
             EscapeCancelsRecording: this.NormalizeBoolean(
                 this.GetProperty(settings, "EscapeCancelsRecording", true),
                 true),
@@ -143,11 +138,7 @@ class AppSettingsService {
     }
 
     BuildSnapshot(settings) {
-        return "[General]`r`n"
-            . "ShowMainWindowAtStartup="
-                . (settings.ShowMainWindowAtStartup ? 1 : 0) "`r`n"
-            . "`r`n"
-            . "[Appearance]`r`n"
+        return "[Appearance]`r`n"
             . "UiLanguage=" settings.UiLanguage "`r`n"
             . "UiFont=" settings.UiFont "`r`n"
             . "Theme=" settings.Theme "`r`n`r`n"

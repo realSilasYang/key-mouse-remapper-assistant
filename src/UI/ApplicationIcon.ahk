@@ -70,9 +70,29 @@ ApplyApplicationWindowIcon(hwnd) {
 
 ReleaseApplicationWindowIcons(handles) {
     if !IsObject(handles)
-        return
-    for iconHandle in handles {
-        if iconHandle
-            try DllCall("user32\DestroyIcon", "Ptr", iconHandle)
+        return true
+    failures := []
+    initialHandleCount := handles.Length
+    Loop initialHandleCount {
+        index := initialHandleCount - A_Index + 1
+        iconHandle := handles[index]
+        if !iconHandle {
+            handles.RemoveAt(index)
+            continue
+        }
+        try {
+            if DllCall("user32\DestroyIcon", "Ptr", iconHandle, "Int")
+                handles.RemoveAt(index)
+            else
+                failures.Push("Win32 " A_LastError)
+        } catch as iconError
+            failures.Push(iconError.Message)
     }
+    if failures.Length {
+        message := ""
+        for failure in failures
+            message .= (message == "" ? "" : "；") failure
+        throw Error("无法释放窗口图标：" message)
+    }
+    return true
 }

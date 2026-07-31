@@ -1,0 +1,61 @@
+# 中文改进建议表单。
+# 用当前行为、期望行为和可验证收益描述对既有映射、界面或实现的优化；性能问题要求可比较数据。
+name: 改进建议（简体中文）
+description: 优化已有映射行为、界面、性能、兼容性或开发设计
+title: "[IMPROVEMENT] "
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: 改进概要
+      description: 请说明希望优化的现有功能、行为或设计。
+    validations:
+      required: true
+
+  - type: textarea
+    id: current
+    attributes:
+      label: 当前情况
+      description: 请描述现有行为、限制和出现条件。性能问题请提供可比较的延迟、事件频率、CPU、内存或句柄数据。
+    validations:
+      required: true
+
+  - type: textarea
+    id: change
+    attributes:
+      label: 建议改动
+      description: 请描述期望交互或行为，并覆盖相关的设备移除、输出释放、取消、挂起、重载、多窗口和权限边界。
+    validations:
+      required: true
+
+  - type: textarea
+    id: benefit
+    attributes:
+      label: 预期收益与验收方式
+      description: 请说明如何判断改进有效，例如映射准确性、输入延迟、资源占用、设备隔离、可访问性、清晰度或维护成本。
+    validations:
+      required: true
+
+  - type: textarea
+    id: risk
+    attributes:
+      label: 兼容性与风险
+      description: 请说明是否可能影响 RuleSpec、规则包、stable_id、原输入边界、合成输出释放、GUI／input-worker 生命周期、DPI、暗色模式或原生资源。
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: 规则、截图、日志或性能数据
+      description: 可提供经过脱敏的前后对比、最小规则、事件记录、诊断包、录屏或测量结果。
+
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: 提交确认
+      options:
+        - label: 我已搜索现有 Issue，并确认建议针对已有功能或设计。
+          required: true
+        - label: 我已删除规则、事件、日志和截图中的真实按键内容、设备标识及其他敏感信息。
+          required: true

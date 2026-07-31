@@ -125,9 +125,9 @@ class ManagedRuleRuntime {
         if hotkeyName == ""
             return
         registrationName := this.EnsureHookHotkey(hotkeyName)
-        groupKey := StrLower(RegExReplace(registrationName, "\s+", ""))
-            if !groups.Has(groupKey)
-                groups[groupKey] := {Name: registrationName,
+        groupKey := this.GetSimpleGroupKey(registrationName, descriptor)
+        if !groups.Has(groupKey)
+            groups[groupKey] := {Name: registrationName,
                 Down: [], Up: [], Release: [], RepeatRelease: [],
                 TrackRelease: false}
         group := groups[groupKey]
@@ -157,40 +157,20 @@ class ManagedRuleRuntime {
     BuildRegistrations(groups) {
         registrations := []
         for groupKey, group in groups {
-            triggerKeys := this.GetGroupTriggerKeys(group)
             triggers := this.GetGroupTriggers(group)
             if group.Down.Length
                 registrations.Push({Name: group.Name,
                     Callback: ObjBindMethod(this, "HandleSimpleGroup",
                         groupKey, "down"), Kind: "simple",
-                    GroupKey: groupKey, Phase: "down", Keys: triggerKeys,
-                    Triggers: triggers})
+                    GroupKey: groupKey, Phase: "down", Triggers: triggers})
             if group.Up.Length || group.Release.Length
                     || group.RepeatRelease.Length || group.TrackRelease
                 registrations.Push({Name: group.Name " Up",
                     Callback: ObjBindMethod(this, "HandleSimpleGroup",
                         groupKey, "up"), Kind: "simple",
-                    GroupKey: groupKey, Phase: "up", Keys: triggerKeys,
-                    Triggers: triggers})
+                    GroupKey: groupKey, Phase: "up", Triggers: triggers})
         }
         return registrations
-    }
-
-    GetGroupTriggerKeys(group) {
-        keys := [], seen := Map()
-        for descriptors in [group.Down, group.Up] {
-            for descriptor in descriptors {
-                from := descriptor.Spec["from"]
-                if !from.Has("key") || Type(from["key"]) != "Map"
-                    continue
-                signature := RuleCompiler.GetKeyIdentitySignature(from["key"])
-                if seen.Has(signature)
-                    continue
-                seen[signature] := true
-                keys.Push(RuleSpec.Clone(from["key"]))
-            }
-        }
-        return keys
     }
 
     GetGroupTriggers(group) {
@@ -212,6 +192,11 @@ class ManagedRuleRuntime {
             }
         }
         return triggers
+    }
+
+    GetSimpleGroupKey(registrationName, descriptor) {
+        return StrLower(RegExReplace(registrationName, "\s+", ""))
+            . "|" descriptor.DispatchSignature
     }
 
     HandleSimpleGroup(groupKey, phase, unifiedEvent := "", *) {
@@ -280,6 +265,8 @@ class ManagedRuleRuntime {
                 false, stateId)
             this.ExecuteActions(descriptor.Spec["to_after_key_up"],
                 descriptor, "to_after_key_up", false, stateId)
+            this.ExecuteActions(descriptor.Spec["to_delayed_if_canceled"],
+                descriptor, "to_delayed_if_canceled", false, stateId)
             this.Trace("rule_matched", {Source: descriptor.Source,
                 RuleId: descriptor.Id, Outcome: "up",
                 Data: Map("priority", descriptor.Priority,
@@ -323,8 +310,8 @@ class ManagedRuleRuntime {
                 if matched
                     matchedAny := true
             }
-            ; 滚轮没有对应的物理 Up 事件，只在它发生的这一刻参与共同
-            ; 按下判断，并立即清理状态。
+            ; 滚轮和鼠标移动没有对应的物理 Up 事件，只在它发生的这一刻
+            ; 参与共同按下判断，并立即清理状态。
             if !isRepeat && !this.IsReleasable(normalizedKey)
                 this.ReleaseComplexKey(normalizedKey, deviceScope)
             return matchedAny
@@ -533,14 +520,6 @@ class ManagedRuleRuntime {
         return pattern.Length
     }
 
-    FindEligible(descriptors) {
-        for descriptor in descriptors {
-            if this.IsEligible(descriptor)
-                return descriptor
-        }
-        return false
-    }
-
     FindEligibleChain(descriptors, isRepeat := false, deviceScope := "") {
         result := []
         for descriptor in descriptors {
@@ -588,16 +567,20 @@ class ManagedRuleRuntime {
     MatchesStrictSimultaneousOrder(descriptor, deviceScope := "") {
         deviceScope := this.NormalizeDeviceScope(deviceScope)
         keys := this.GetComplexKeys(descriptor)
-        if this.ComplexDownOrder.Length < keys.Length
-            return false
-        offset := this.ComplexDownOrder.Length - keys.Length
-        for index, key in keys {
-            if this.ComplexDownOrder[offset + index]
-                    != deviceScope "|"
-                        . RuleCompiler.GetKeyIdentitySignature(key)
+        prefix := deviceScope "|"
+        expectedIndex := keys.Length
+        index := this.ComplexDownOrder.Length
+        while index >= 1 && expectedIndex >= 1 {
+            stateKey := this.ComplexDownOrder[index]
+            index--
+            if SubStr(stateKey, 1, StrLen(prefix)) != prefix
+                continue
+            if stateKey != prefix
+                    . RuleCompiler.GetKeyIdentitySignature(keys[expectedIndex])
                 return false
+            expectedIndex--
         }
-        return true
+        return expectedIndex == 0
     }
 
     HasHeldDescriptorKey(descriptor, deviceScope := "") {
@@ -825,10 +808,9 @@ class ManagedRuleRuntime {
                             owner,
                             ObjBindMethod(this, "SendKeyEvent"))
                     case "key_up":
-                        releaseOwner := this.OutputLedger.HasOwner(value, owner)
-                            ? owner : ""
-                        this.OutputLedger.Release(value, releaseOwner,
-                            ObjBindMethod(this, "SendKeyEvent"))
+                        if this.OutputLedger.HasOwner(value, owner)
+                            this.OutputLedger.Release(value, owner,
+                                ObjBindMethod(this, "SendKeyEvent"))
                     case "set_variable":
                         this.VariableStore.Set(action["name"], value,
                             action["scope"])
@@ -949,7 +931,9 @@ class ManagedRuleRuntime {
         try backendReleased := this.Backend.ReleaseAll()
         catch as backendReleaseError
             releaseErrors.Push("input backend: " backendReleaseError.Message)
-        this.CancelAllTimers()
+        try this.CancelAllTimers()
+        catch as timerCancelError
+            releaseErrors.Push("scheduler: " timerCancelError.Message)
         this.RepeatActive.Clear()
         this.OneShotOwners.Clear()
         this.StateMachine.CancelAll()
@@ -964,6 +948,9 @@ class ManagedRuleRuntime {
             Data: Map("released_outputs", releasedOutputs,
                 "backend_released", backendReleased,
                 "release_errors", releaseErrors)})
+        if releaseErrors.Length
+            throw Error("活动输入状态清理失败："
+                . this.JoinCleanupErrors(releaseErrors))
         return releasedOutputs + backendReleased
     }
 
@@ -1078,14 +1065,6 @@ class ManagedRuleRuntime {
         return InStr(hotkeyName, "$") ? hotkeyName : "$" hotkeyName
     }
 
-    NormalizeHotkey(hotkeyName, phase := "") {
-        effectivePhase := phase == ""
-            ? RuleCompiler.GetHotkeyPhase(hotkeyName)
-            : RuleCompiler.GetHotkeyPhase(hotkeyName, phase)
-        return RuleCompiler.NormalizeHotkeySignature(hotkeyName)
-            . "`n" effectivePhase
-    }
-
     GetPrimaryKeyName(hotkeyName) {
         name := RegExReplace(String(hotkeyName), "[~*$<>^+!#]", "")
         name := RegExReplace(name, "i)\s+Up$")
@@ -1093,7 +1072,8 @@ class ManagedRuleRuntime {
     }
 
     IsReleasable(hotkeyName) {
-        return !RegExMatch(hotkeyName, "i)Wheel(?:Up|Down|Left|Right)$")
+        return !RegExMatch(hotkeyName,
+            "i)(?:Wheel(?:Up|Down|Left|Right)|MouseMove)$")
     }
 
     Elapsed(startTick, endTick) {
@@ -1113,15 +1093,37 @@ class ManagedRuleRuntime {
     }
 
     Shutdown() {
-        this.StopObserver()
-        this.ResetActiveState("shutdown")
-        this.Backend.Shutdown()
-        this.Scheduler.Shutdown()
+        cleanupErrors := []
+        this.CollectCleanupError(cleanupErrors, "observer",
+            () => this.StopObserver())
+        this.CollectCleanupError(cleanupErrors, "active state",
+            () => this.ResetActiveState("shutdown"))
+        this.CollectCleanupError(cleanupErrors, "input backend",
+            () => this.Backend.Shutdown())
+        this.CollectCleanupError(cleanupErrors, "scheduler",
+            () => this.Scheduler.Shutdown())
         this.Rules.Clear()
         this.Groups.Clear()
         this.ComplexRules := []
         this.ComplexDownOrder := []
         this.SimpleHeld.Clear()
         this.TapStates.Clear()
+        if cleanupErrors.Length
+            throw Error("托管规则运行时清理失败："
+                . this.JoinCleanupErrors(cleanupErrors))
+        return true
+    }
+
+    CollectCleanupError(errors, label, callback) {
+        try callback.Call()
+        catch as cleanupError
+            errors.Push(String(label) ": " cleanupError.Message)
+    }
+
+    JoinCleanupErrors(errors) {
+        message := ""
+        for cleanupError in errors
+            message .= (message == "" ? "" : "；") cleanupError
+        return message
     }
 }

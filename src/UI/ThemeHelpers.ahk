@@ -261,7 +261,7 @@ class DarkComboBoxListThemeRegistry {
         if this.ListHandles.Count || !this.MessageRegistered
             return false
         if IsObject(this.MessageCallback)
-            try OnMessage(0x0134, this.MessageCallback, 0)
+            OnMessage(0x0134, this.MessageCallback, 0)
         this.MessageCallback := ""
         this.MessageRegistered := false
         return true

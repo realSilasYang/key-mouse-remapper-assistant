@@ -39,6 +39,8 @@ class MappingBlockEditor {
             this.GetLineCount(this.OriginalText))
         this.NativeDestroying := false
         this.NativeCloseContext := ""
+        this.NativeCleanup := ""
+        this.NativeCallbacksReleased := true
         this.NativeFinalizeTimer := ObjBindMethod(this, "FinishNativeDestroy")
         this.ThemeTimer := ObjBindMethod(this, "ApplyNativeThemes")
         this.EditorHwnd := 0
@@ -89,7 +91,7 @@ class MappingBlockEditor {
             this.Gui.OnEvent("Close", ObjBindMethod(this, "RequestClose"))
             this.Gui.OnEvent("Escape", ObjBindMethod(this, "RequestClose"))
         } catch as createError {
-            this.Dispose(false)
+            try this.Dispose(false)
             throw createError
         }
     }
@@ -758,8 +760,12 @@ class MappingBlockEditor {
             return
         this.Disposed := true
         this.NativeDestroying := true
-        this.NativeCloseContext := this.ReleaseOwner()
-        this.StopEditorCallbacks(false)
+        this.NativeCleanup := CleanupCollector("映射代码编辑器")
+        if this.OwnerLease
+            this.NativeCleanup.Run("释放父窗口关系", () =>
+                this.NativeCloseContext := this.ReleaseOwner())
+        this.NativeCallbacksReleased := this.StopEditorCallbacks(false,
+            this.NativeCleanup)
     }
 
     FinishNativeDestroy(*) {
@@ -768,39 +774,68 @@ class MappingBlockEditor {
         this.NativeDestroying := false
         closeContext := this.NativeCloseContext
         this.NativeCloseContext := ""
-        this.StopEditorCallbacks(true)
+        cleanup := IsObject(this.NativeCleanup) ? this.NativeCleanup
+            : CleanupCollector("映射代码编辑器")
+        this.NativeCleanup := ""
+        finalCallbacksReleased := this.StopEditorCallbacks(true, cleanup)
+        callbacksReleased := this.NativeCallbacksReleased
+            && finalCallbacksReleased
         if IsObject(this.Interactions)
-            try this.Interactions.Dispose()
-        this.Interactions := ""
+                && cleanup.Run("释放交互服务",
+                    () => this.Interactions.Dispose())
+            this.Interactions := ""
         this.Gui := ""
         this.EditorHwnd := 0
         this.CodeEditHwnd := 0
         this.LineNumberEditHwnd := 0
-        this.ReleaseRichEditModule()
+        cleanup.Run("释放 RichEdit 模块",
+            () => this.ReleaseRichEditModule())
         if this.HasOwnProp("IconHandles") {
-            ReleaseApplicationWindowIcons(this.IconHandles)
-            this.IconHandles := []
+            if cleanup.Run("释放窗口图标", () =>
+                    ReleaseApplicationWindowIcons(this.IconHandles))
+                this.IconHandles := []
         }
-        this.ReleaseCallbackReferences()
-        this.OwnerWindow.OnBlockEditorClosed(this)
-        WindowHierarchy.CompleteClose(closeContext)
+        if callbacksReleased
+            this.ReleaseCallbackReferences()
+        cleanup.Run("通知父窗口",
+            () => this.OwnerWindow.OnBlockEditorClosed(this))
+        cleanup.Run("恢复父窗口",
+            () => WindowHierarchy.CompleteClose(closeContext))
+        cleanup.Complete()
     }
 
-    StopEditorCallbacks(includeNativeDestroy := true) {
+    StopEditorCallbacks(includeNativeDestroy := true, cleanup := "") {
+        ownsCleanup := !IsObject(cleanup)
+        if ownsCleanup
+            cleanup := CleanupCollector("映射代码编辑器回调")
+        initialFailures := cleanup.Failures.Length
         if IsObject(this.ThemeTimer)
-            try SetTimer(this.ThemeTimer, 0)
+            cleanup.Run("停止主题计时器",
+                () => SetTimer(this.ThemeTimer, 0))
         if IsObject(this.FormatTimer)
-            try SetTimer(this.FormatTimer, 0)
+            cleanup.Run("停止格式计时器",
+                () => SetTimer(this.FormatTimer, 0))
         if IsObject(this.ScrollTimer)
-            try SetTimer(this.ScrollTimer, 0)
+            cleanup.Run("停止滚动计时器",
+                () => SetTimer(this.ScrollTimer, 0))
         if IsObject(this.KeyDownCallback)
-            try OnMessage(0x0100, this.KeyDownCallback, 0)
+            cleanup.Run("注销按键消息",
+                () => OnMessage(0x0100, this.KeyDownCallback, 0))
         if IsObject(this.CommandCallback)
-            try OnMessage(0x0111, this.CommandCallback, 0)
+            cleanup.Run("注销命令消息",
+                () => OnMessage(0x0111, this.CommandCallback, 0))
         if includeNativeDestroy && IsObject(this.NativeDestroyCallback) {
-            try OnMessage(0x0002, this.NativeDestroyCallback, 0)
-            try OnMessage(0x0082, this.NativeDestroyCallback, 0)
+            cleanup.Run("注销销毁消息",
+                () => OnMessage(0x0002, this.NativeDestroyCallback, 0))
+            cleanup.Run("注销最终销毁消息",
+                () => OnMessage(0x0082, this.NativeDestroyCallback, 0))
+            cleanup.Run("停止销毁完成计时器",
+                () => SetTimer(this.NativeFinalizeTimer, 0))
         }
+        succeeded := cleanup.Failures.Length == initialFailures
+        if ownsCleanup
+            cleanup.Complete()
+        return succeeded
     }
 
     ReleaseCallbackReferences() {
@@ -815,50 +850,73 @@ class MappingBlockEditor {
 
     ReleaseRichEditModule() {
         if this.RichEditModule {
-            DllCall("kernel32\FreeLibrary", "Ptr", this.RichEditModule)
+            if !DllCall("kernel32\FreeLibrary", "Ptr", this.RichEditModule,
+                    "Int")
+                throw OSError(A_LastError, "无法释放 RichEdit 模块。")
             this.RichEditModule := 0
         }
+        return true
     }
 
     ReleaseOwner() {
         if !this.OwnerLease
             return ""
         ownerLease := this.OwnerLease
+        closeContext := WindowHierarchy.Release(ownerLease)
         this.OwnerLease := ""
-        return WindowHierarchy.Release(ownerLease)
+        return closeContext
     }
 
     Dispose(activateOwner := true, destroyGui := true) {
         if this.Disposed
             return
         this.Disposed := true
-        closeContext := this.ReleaseOwner()
-        try {
-            this.StopEditorCallbacks(true)
-            if IsObject(this.Interactions)
-                try this.Interactions.Dispose()
+        cleanup := CleanupCollector("映射代码编辑器")
+        closeContext := ""
+        if this.OwnerLease {
+            try closeContext := this.ReleaseOwner()
+            catch as ownerError
+                cleanup.Failures.Push("释放父窗口关系：" ownerError.Message)
+        }
+        callbacksReleased := this.StopEditorCallbacks(true, cleanup)
+        if IsObject(this.Interactions)
+                && cleanup.Run("释放交互服务",
+                    () => this.Interactions.Dispose())
             this.Interactions := ""
-            if destroyGui && this.Gui {
-                try editorHwnd := this.Gui.Hwnd
-                catch
-                    editorHwnd := 0
-                if editorHwnd && DllCall("user32\IsWindow", "Ptr", editorHwnd, "Int")
-                    try this.Gui.Destroy()
-            }
+        guiReleased := !destroyGui || !this.Gui
+        if destroyGui && this.Gui {
+            editorHwnd := 0
+            try editorHwnd := this.Gui.Hwnd
+            catch as hwndError
+                cleanup.Failures.Push("读取窗口句柄：" hwndError.Message)
+            if !editorHwnd || !DllCall("user32\IsWindow", "Ptr",
+                    editorHwnd, "Int")
+                guiReleased := true
+            else
+                guiReleased := cleanup.Run("销毁窗口",
+                    () => this.Gui.Destroy())
+        }
+        if guiReleased {
             this.Gui := ""
             this.EditorHwnd := 0
             this.CodeEditHwnd := 0
             this.LineNumberEditHwnd := 0
-        } finally {
-            this.ReleaseRichEditModule()
-            if this.HasOwnProp("IconHandles") {
-                ReleaseApplicationWindowIcons(this.IconHandles)
-                this.IconHandles := []
-            }
-            this.ReleaseCallbackReferences()
-            this.OwnerWindow.OnBlockEditorClosed(this)
-            if activateOwner
-                WindowHierarchy.CompleteClose(closeContext)
         }
+        cleanup.Run("释放 RichEdit 模块",
+            () => this.ReleaseRichEditModule())
+        if this.HasOwnProp("IconHandles") {
+            if cleanup.Run("释放窗口图标", () =>
+                    ReleaseApplicationWindowIcons(this.IconHandles))
+                this.IconHandles := []
+        }
+        if callbacksReleased
+            this.ReleaseCallbackReferences()
+        cleanup.Run("通知父窗口",
+            () => this.OwnerWindow.OnBlockEditorClosed(this))
+        if activateOwner
+            cleanup.Run("恢复父窗口",
+                () => WindowHierarchy.CompleteClose(closeContext))
+        cleanup.Complete()
+        return true
     }
 }

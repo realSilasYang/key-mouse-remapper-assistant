@@ -42,6 +42,8 @@ try {
 } finally {
     testGui.Destroy()
     ReleaseApplicationWindowIcons(iconHandles)
+    AssertEqual(iconHandles.Length, 0,
+        "已释放的窗口图标句柄应从资源账本移除")
 }
 
 WriteTestSuccess("application-icon")

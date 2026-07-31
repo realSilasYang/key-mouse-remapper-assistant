@@ -1,0 +1,61 @@
+# English improvement form describing existing behavior, a proposed change, and measurable acceptance.
+# Performance reports request comparable data so a change can be shown to reduce rather than move cost.
+name: Improvement (English)
+description: Improve existing mapping behavior, UI, performance, compatibility, or design
+title: "[IMPROVEMENT] "
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: Identify the existing feature, behavior, or design to improve.
+    validations:
+      required: true
+
+  - type: textarea
+    id: current
+    attributes:
+      label: Current behavior
+      description: Describe current behavior, limitations, and conditions. Include comparable latency, event frequency, CPU, memory, or handle data for performance issues.
+    validations:
+      required: true
+
+  - type: textarea
+    id: change
+    attributes:
+      label: Proposed change
+      description: Describe the desired interaction or behavior, including relevant device removal, output release, cancellation, suspension, reload, multi-window, and privilege boundaries.
+    validations:
+      required: true
+
+  - type: textarea
+    id: benefit
+    attributes:
+      label: Benefit and acceptance
+      description: Explain how to verify mapping accuracy, input latency, resource use, device isolation, accessibility, clarity, or maintenance improvement.
+    validations:
+      required: true
+
+  - type: textarea
+    id: risk
+    attributes:
+      label: Compatibility and risk
+      description: Consider RuleSpec, rule packages, stable_id values, original-input boundaries, synthetic-output release, GUI/input-worker lifecycle, DPI, dark mode, and native resources.
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Rules, screenshots, logs, or measurements
+      description: Attach redacted before/after evidence, a minimal rule, event trace, diagnostics, recording, or measurements.
+
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: Confirmation
+      options:
+        - label: I searched existing issues and confirmed this improves an existing feature or design.
+          required: true
+        - label: I removed real input content, device identifiers, and other sensitive information from rules, events, logs, and screenshots.
+          required: true

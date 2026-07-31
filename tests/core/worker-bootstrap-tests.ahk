@@ -43,6 +43,11 @@ try {
         "启动信封丢失了认证密钥")
     AssertEqual(testRoot "\启动错误.txt", EnvGet("KMR_WORKER_ERROR_PATH"),
         "启动信封破坏了 Unicode 路径")
+    AssertTrue(WorkerBootstrap.ClearAppliedEnvironment(),
+        "成功读取启动信封后无法清除注入的环境变量")
+    for bootstrapVariableName in bootstrapVariableNames
+        AssertEqual("", EnvGet(bootstrapVariableName),
+            "启动环境变量在消费后仍残留：" bootstrapVariableName)
     AssertTrue(!FileExist(createdBootstrapPath)
             && !FileExist(createdBootstrapPath ".claimed"),
         "一次性启动信封在成功消费后仍然存在")

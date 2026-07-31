@@ -19,7 +19,8 @@ class RuleCompiler {
             Target: spec["display"]["target"],
             Scope: spec["display"]["scope"],
             Purpose: spec["display"]["purpose"],
-            Spec: spec, Signature: this.GetTriggerSignature(spec)
+            Spec: spec, Signature: this.GetTriggerSignature(spec),
+            DispatchSignature: this.GetDispatchSignature(spec)
         }
     }
 
@@ -52,6 +53,21 @@ class RuleCompiler {
         hotkeyName := from["hotkey"] != ""
             ? from["hotkey"] : this.BuildHotkeyName(from)
         return "hotkey:" this.NormalizeHotkeySignature(hotkeyName)
+    }
+
+    static GetDispatchSignature(specValue) {
+        spec := RuleSpec.Normalize(specValue)
+        from := spec["from"]
+        if from["simultaneous"].Length || from["sequence"].Length
+            return this.GetTriggerSignature(spec)
+        modifiers := from["modifiers"].Clone()
+        this.SortStrings(modifiers)
+        trigger := Map(
+            "key", this.GetKeyIdentitySignature(from["key"]),
+            "modifiers", modifiers,
+            "allow_extra_modifiers",
+                JsonBoolean(from["optional_modifiers"].Length > 0))
+        return "simple:" JsonCodec.Stringify(trigger, false, true)
     }
 
     static NormalizeHotkeySignature(hotkeyName) {

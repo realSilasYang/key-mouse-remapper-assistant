@@ -124,6 +124,15 @@ try {
     AssertEqual(2, ledger.ReleaseOwner("owner-c", sendCallback),
         "按所有者释放输出键数量错误")
     AssertEqual(6, output.Length, "按所有者释放输出事件数量错误")
+
+    sortable := []
+    Loop 1024
+        sortable.Push({Id: Format("{:04}", 1025 - A_Index),
+            Deadline: Mod(A_Index, 17), Callback: (*) => 0})
+    scheduler.SortEntries(sortable)
+    Loop sortable.Length - 1
+        AssertTrue(scheduler.EntryComesFirst(sortable[A_Index],
+            sortable[A_Index + 1]), "大批调度任务没有按稳定键正确排序")
     WriteTestSuccess("rule-scheduler")
 } catch as testError {
     FileAppend(testError.Message "`n" testError.Stack, "**")

@@ -1,0 +1,94 @@
+# English feature-request form centered on real physical-device scenarios and complete workflows.
+# Existing behavior, UI, or performance changes are routed to the Improvement form.
+name: Feature request (English)
+description: Propose a new mapping capability or complete workflow
+title: "[FEATURE] "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Start from a real user scenario. Use the Improvement form for changes to existing mapping behavior, UI, or performance.
+        Raw Input can identify physical devices and produce additive output only; it cannot consume, replace, or hide original Windows input.
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Feature summary
+      description: In one paragraph, explain the capability you want to add.
+    validations:
+      required: true
+
+  - type: textarea
+    id: scenario
+    attributes:
+      label: Scenario and current problem
+      description: Explain who needs this, which physical devices and target applications are involved, and why current mappings, RuleSpec, or CLI behavior is insufficient.
+    validations:
+      required: true
+
+  - type: textarea
+    id: workflow
+    attributes:
+      label: Expected workflow
+      description: Describe the entry point, capture or configuration, device selection, conditions, result, cancellation, and failure handling in order.
+      placeholder: |
+        1. The user opens ...
+        2. Selects a device and captures or enters ...
+        3. When condition ... is true, the assistant should ...
+        4. If the device disconnects or the rule fails, then ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: input_scope
+    attributes:
+      label: Input, device, and scope
+      description: Identify keyboard, mouse, chord, sequence, or hold inputs; device-specific behavior; and applicable application, window, variable, or privilege scope.
+    validations:
+      required: true
+
+  - type: textarea
+    id: edge_cases
+    attributes:
+      label: Edge cases
+      description: Cover relevant device removal or rebinding, system resume, repeated input, concurrent rules, suspension, reload, target exit, and privilege mismatch.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed approach
+      description: Optional UI, RuleSpec, CLI, input-state-machine, or compatibility design.
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives
+      description: Explain the current workaround and why a feature is still needed.
+
+  - type: textarea
+    id: compatibility
+    attributes:
+      label: Compatibility and data impact
+      description: Consider existing RuleSpec v2, entry-script mappings, rule packages, device stable_id values, output release, GUI/input-worker isolation, CLI behavior, and legacy-data migration.
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: References
+      description: Add reference products, sketches, screenshots, related issues, or redacted rule examples.
+
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: Confirmation
+      options:
+        - label: I searched existing issues and found no equivalent request.
+          required: true
+        - label: This describes a new user capability, not a defect or a small improvement to existing behavior.
+          required: true
+        - label: This request does not depend on original-input suppression, a kernel driver, secure-desktop input, or cross-user session input that Raw Input cannot provide.
+          required: true

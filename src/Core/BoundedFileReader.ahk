@@ -36,7 +36,8 @@ class BoundedFileReader {
             if expectedBytes > maximumBytes
                 throw BoundedFileLimitError(
                     String(label) "超过读取大小上限。")
-            readBuffer := Buffer(maximumBytes + 1, 0)
+            readBuffer := Buffer(Min(maximumBytes + 1,
+                expectedBytes + 1), 0)
             input.Pos := 0
             bytesRead := input.RawRead(readBuffer)
         } finally input.Close()

@@ -8,6 +8,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 Import-Module (Join-Path $PSScriptRoot 'BuildPathSafety.psm1') -Force
+Import-Module (Join-Path $PSScriptRoot 'WindowsProcessArguments.psm1') -Force
 $projectRoot = Assert-SafeBuildRoot (Split-Path -Parent $PSScriptRoot) `
     'Project root'
 $version = (Get-Content -LiteralPath (Join-Path $projectRoot 'VERSION') `
@@ -199,9 +200,15 @@ Assert-SafeBuildRoot $OutputRoot 'Release output root' | Out-Null
 $packageName = "key-mouse-remapper-assistant-$version-windows-x64"
 $packageDirectory = Assert-OutputPath (Join-Path $OutputRoot $packageName)
 $zipPath = Assert-OutputPath (Join-Path $OutputRoot "$packageName.zip")
-$checksumsPath = Assert-OutputPath (Join-Path $OutputRoot 'SHA256SUMS.txt')
+$sourcePackageName = "key-mouse-remapper-assistant-$version-source"
+$sourcePackageDirectory = Assert-OutputPath `
+    (Join-Path $OutputRoot $sourcePackageName)
+$sourceZipPath = Assert-OutputPath `
+    (Join-Path $OutputRoot "$sourcePackageName.zip")
+$obsoleteChecksumsPath = Assert-OutputPath `
+    (Join-Path $OutputRoot 'SHA256SUMS.txt')
 $versionedArtifactPattern =
-    '^key-mouse-remapper-assistant-[0-9]+\.[0-9]+\.[0-9]+-windows-x64(?:\.zip)?$'
+    '^key-mouse-remapper-assistant-[0-9]+\.[0-9]+\.[0-9]+-(?:windows-x64|source)(?:\.zip)?$'
 $legacyTargets = @()
 if ($usingDefaultOutputRoot) {
     $legacyTargets = @(
@@ -242,6 +249,8 @@ $releaseMutex = [Threading.Mutex]::new($false,
 $releaseMutexAcquired = $false
 $releaseTransactionStarted = $false
 $releaseCompleted = $false
+$releaseFailure = $null
+$rollbackErrors = [Collections.Generic.List[string]]::new()
 try {
 try { $releaseMutexAcquired = $releaseMutex.WaitOne(30000) }
 catch [Threading.AbandonedMutexException] { $releaseMutexAcquired = $true }
@@ -254,10 +263,16 @@ $outputsToBackup = [Collections.Generic.List[object]]::new()
 foreach ($output in @(
         [pscustomobject]@{ Path = $packageDirectory; Name = 'package' },
         [pscustomobject]@{ Path = $zipPath; Name = 'archive.zip' },
-        [pscustomobject]@{ Path = $checksumsPath; Name = 'checksums.txt' })) {
+        [pscustomobject]@{ Path = $sourcePackageDirectory;
+            Name = 'source-package' },
+        [pscustomobject]@{ Path = $sourceZipPath;
+            Name = 'source-archive.zip' },
+        [pscustomobject]@{ Path = $obsoleteChecksumsPath;
+            Name = 'obsolete-checksums.txt' })) {
     $outputsToBackup.Add($output)
 }
-$currentArtifactNames = @($packageName, "$packageName.zip")
+$currentArtifactNames = @($packageName, "$packageName.zip",
+    $sourcePackageName, "$sourcePackageName.zip")
 $obsoleteVersionTargets = @(Get-ChildItem -LiteralPath $OutputRoot -Force |
     Where-Object {
         $_.Name -match $versionedArtifactPattern -and
@@ -326,6 +341,9 @@ $stageExecutable = Join-Path $scratchRoot 'KeyMouseRemapperAssistant.exe'
 
 $substituteDrive = $null
 $mappedProjectRoot = $projectRoot
+$compilerProcess = $null
+$compilationFailure = $null
+$compilationCleanupErrors = [Collections.Generic.List[string]]::new()
 try {
     if (($stageSource + $stageExecutable + $stageCompiler + $stageAhk) `
             -match '[^\x00-\x7F]') {
@@ -372,9 +390,8 @@ try {
     )
     $compilerStartInfo = [System.Diagnostics.ProcessStartInfo]::new()
     $compilerStartInfo.FileName = ConvertTo-CompilerPath $stageCompiler
-    $compilerStartInfo.Arguments = ($compilerArguments | ForEach-Object {
-        '"' + ([string]$_).Replace('"', '\"') + '"'
-    }) -join ' '
+    $compilerStartInfo.Arguments = Join-WindowsProcessArguments `
+        $compilerArguments
     $compilerStartInfo.UseShellExecute = $false
     $compilerStartInfo.CreateNoWindow = $true
     $compilerStartInfo.RedirectStandardOutput = $true
@@ -383,7 +400,18 @@ try {
     $stdoutTask = $compilerProcess.StandardOutput.ReadToEndAsync()
     $stderrTask = $compilerProcess.StandardError.ReadToEndAsync()
     if (-not $compilerProcess.WaitForExit(120000)) {
-        try { $compilerProcess.Kill(); $compilerProcess.WaitForExit() } catch {}
+        try {
+            if (-not $compilerProcess.HasExited) {
+                $compilerProcess.Kill()
+            }
+            if (-not $compilerProcess.WaitForExit(10000)) {
+                throw 'Ahk2Exe did not exit within 10 seconds after termination.'
+            }
+        } catch {
+            throw [InvalidOperationException]::new(
+                'Ahk2Exe timed out after 120 seconds and could not be terminated: ' +
+                $_.Exception.Message, $_.Exception)
+        }
         throw 'Ahk2Exe timed out after 120 seconds.'
     }
     $compilerOutput = @(
@@ -395,15 +423,43 @@ try {
         throw "Ahk2Exe failed with exit code $($compilerProcess.ExitCode):`n$($compilerOutput -join "`n")"
     }
     Normalize-Ahk2ExeVersionPadding $stageExecutable
+} catch {
+    $compilationFailure = $_.Exception
 } finally {
-    if ($substituteDrive) {
-        $result = Start-Process -FilePath 'subst.exe' `
-            -ArgumentList $substituteDrive, '/D' -PassThru -Wait `
-            -WindowStyle Hidden
-        if ($result.ExitCode -ne 0) {
-            Write-Warning "Unable to remove temporary drive $substituteDrive."
+    if ($null -ne $compilerProcess) {
+        try { $compilerProcess.Dispose() }
+        catch {
+            $compilationCleanupErrors.Add(
+                "Unable to dispose the Ahk2Exe process: $($_.Exception.Message)")
         }
     }
+    if ($substituteDrive) {
+        try {
+            $result = Start-Process -FilePath 'subst.exe' `
+                -ArgumentList $substituteDrive, '/D' -PassThru -Wait `
+                -WindowStyle Hidden
+            if ($result.ExitCode -ne 0) {
+                throw "subst.exe exited with code $($result.ExitCode)."
+            }
+        } catch {
+            $compilationCleanupErrors.Add(
+                "Unable to remove temporary drive $substituteDrive`: " +
+                $_.Exception.Message)
+        }
+    }
+}
+if ($null -ne $compilationFailure) {
+    if ($compilationCleanupErrors.Count -gt 0) {
+        throw [InvalidOperationException]::new(
+            ('Release compilation failed: ' + $compilationFailure.Message +
+            ' Compilation cleanup also failed: ' +
+            ($compilationCleanupErrors -join '; ')), $compilationFailure)
+    }
+    throw $compilationFailure
+}
+if ($compilationCleanupErrors.Count -gt 0) {
+    throw ('Release compilation cleanup failed: ' +
+        ($compilationCleanupErrors -join '; '))
 }
 
 New-Item -ItemType Directory -Force -Path $packageDirectory | Out-Null
@@ -432,7 +488,8 @@ foreach ($file in @('README.md', 'CHANGELOG.md', 'CONTRIBUTING.md',
 }
 $packagedToolsDirectory = Join-Path $packageDirectory 'tools'
 New-Item -ItemType Directory -Force -Path $packagedToolsDirectory | Out-Null
-foreach ($toolFile in @('toolchain.lock.json')) {
+foreach ($toolFile in @('toolchain.lock.json',
+        'WindowsProcessArguments.psm1')) {
     Copy-Item -LiteralPath (Join-Path $projectRoot ('tools\' + $toolFile)) `
         -Destination $packagedToolsDirectory
 }
@@ -476,7 +533,7 @@ function ConvertTo-StableJsonString {
 $manifestJson = (@(
     '{'
     '  "schemaVersion": 1,'
-    '  "packageKind": "portable-source-runtime",'
+    '  "packageKind": "portable-runtime",'
     ('  "version": ' + (ConvertTo-StableJsonString $version) + ',')
     '  "platform": "windows-x64",'
     '  "entry": "键鼠重映射小助手.exe",'
@@ -505,6 +562,34 @@ $manifestJson = (@(
 [System.IO.File]::WriteAllText(
     (Join-Path $packageDirectory 'build-manifest.json'), $manifestJson,
     [System.Text.UTF8Encoding]::new($false))
+
+# 源码版保持仓库的可运行布局，但不夹带本机工具链、编译 EXE、便携运行时或构建产物。
+# 它与便携版分别归档，避免用户为审阅源码下载重复的运行时副本。
+New-Item -ItemType Directory -Force -Path $sourcePackageDirectory |
+    Out-Null
+Assert-SafeBuildRoot $sourcePackageDirectory `
+    'Release source package directory' | Out-Null
+$sourcePackageFiles = @(
+    '.editorconfig', '.gitattributes', '.gitignore',
+    'CHANGELOG.md', 'CODE_OF_CONDUCT.md', 'CONTRIBUTING.md',
+    'key-mouse-remapper-assistant-cli.ahk', 'LICENSE', 'README.md',
+    'SECURITY.md', 'THIRD_PARTY_NOTICES.md', 'VERSION',
+    '键鼠重映射小助手-CLI.ps1', '键鼠重映射小助手.ahk'
+)
+foreach ($relativePath in $sourcePackageFiles) {
+    $sourcePath = Join-Path $projectRoot $relativePath
+    Assert-NoReparsePointInPath $sourcePath `
+        "Release source file $relativePath" | Out-Null
+    Copy-Item -LiteralPath $sourcePath -Destination $sourcePackageDirectory
+}
+foreach ($directory in @('.github', 'app', 'assets', 'docs', 'src',
+        'tests', 'third_party', 'tools', 'workers')) {
+    $sourceDirectory = Join-Path $projectRoot $directory
+    Assert-NoReparsePointTree $sourceDirectory `
+        "Release source directory $directory" | Out-Null
+    Copy-Item -LiteralPath $sourceDirectory `
+        -Destination $sourcePackageDirectory -Recurse
+}
 
 if (-not ('KeyMouseRemapperAssistant.Build.Crc32' -as [type])) {
     Add-Type -TypeDefinition @'
@@ -671,23 +756,23 @@ function New-DeterministicArchive {
 
 Assert-NoReparsePointTree $packageDirectory `
     'Release package directory' | Out-Null
+Assert-NoReparsePointTree $sourcePackageDirectory `
+    'Release source package directory' | Out-Null
 New-DeterministicArchive $packageDirectory $zipPath
+New-DeterministicArchive $sourcePackageDirectory $sourceZipPath
 $zipHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $zipPath).Hash
+$sourceZipHash = (Get-FileHash -Algorithm SHA256 `
+    -LiteralPath $sourceZipPath).Hash
 $exePath = Join-Path $packageDirectory '键鼠重映射小助手.exe'
 $exeHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $exePath).Hash
-$checksumLines = @(
-    "$zipHash  $([System.IO.Path]::GetFileName($zipPath))"
-    "$exeHash  $packageName/键鼠重映射小助手.exe"
-)
-[System.IO.File]::WriteAllText($checksumsPath,
-    ($checksumLines -join "`n") + "`n",
-    [System.Text.UTF8Encoding]::new($false))
 $releaseCompleted = $true
 
+} catch {
+    $releaseFailure = $_.Exception
 } finally {
-    $rollbackErrors = [Collections.Generic.List[string]]::new()
     if ($releaseTransactionStarted -and -not $releaseCompleted) {
-        foreach ($target in @($packageDirectory, $zipPath, $checksumsPath)) {
+        foreach ($target in @($packageDirectory, $zipPath,
+                $sourcePackageDirectory, $sourceZipPath)) {
             try {
                 $safeTarget = Assert-OutputPath $target
                 if (Test-Path -LiteralPath $safeTarget) {
@@ -729,25 +814,35 @@ $releaseCompleted = $true
     }
     try { $releaseMutex.Dispose() }
     catch { $rollbackErrors.Add($_.Exception.Message) }
+}
+
+if ($null -ne $releaseFailure) {
     if ($rollbackErrors.Count -gt 0) {
-        $failureContext = if ($releaseCompleted) {
-            'Release build completed but final cleanup was incomplete: '
-        } else {
-            'Release build failed and previous-output rollback was incomplete: '
-        }
-        throw ($failureContext + ($rollbackErrors -join '; ') +
-            ". Recoverable backup path: $backupRoot")
+        throw [InvalidOperationException]::new(
+            ('Release build failed: ' + $releaseFailure.Message +
+            ' Previous-output rollback or final cleanup also failed: ' +
+            ($rollbackErrors -join '; ') +
+            ". Recoverable backup path: $backupRoot"), $releaseFailure)
     }
+    throw $releaseFailure
+}
+if ($rollbackErrors.Count -gt 0) {
+    throw ('Release build completed but final cleanup was incomplete: ' +
+        ($rollbackErrors -join '; ') +
+        ". Recoverable backup path: $backupRoot")
 }
 
 Write-Host "Release package: $zipPath"
+Write-Host "Source package: $sourceZipPath"
 Write-Host "Executable: $exePath"
 [pscustomobject]@{
     Version = $version
     PackageDirectory = $packageDirectory
     ZipPath = $zipPath
+    SourcePackageDirectory = $sourcePackageDirectory
+    SourceZipPath = $sourceZipPath
     ExecutablePath = $exePath
-    ChecksumsPath = $checksumsPath
     ZipSha256 = $zipHash
+    SourceZipSha256 = $sourceZipHash
     ExecutableSha256 = $exeHash
 }

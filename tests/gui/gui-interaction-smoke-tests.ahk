@@ -47,6 +47,7 @@
 #Include ..\..\src\Core\OutputLedger.ahk
 #Include ..\..\src\Core\InputBackend.ahk
 #Include ..\..\src\Platform\Win32.ahk
+#Include ..\..\src\Input\RawInputObservationPolicy.ahk
 #Include ..\..\src\Input\RawInputService.ahk
 #Include ..\..\src\Core\RawInputBackend.ahk
 #Include ..\..\src\Core\ManagedRuleRuntime.ahk
@@ -59,6 +60,7 @@
 #Include ..\..\src\UI\ThemeHelpers.ahk
 #Include ..\..\src\UI\ApplicationIcon.ahk
 #Include ..\..\src\Core\ApplicationVersionInfo.ahk
+#Include ..\..\src\UI\CleanupCollector.ahk
 #Include ..\..\src\UI\SvgRenderLibrary.ahk
 #Include ..\..\src\UI\RoundedButtonPainter.ahk
 #Include ..\..\src\UI\ControlAccessibilityService.ahk
@@ -395,8 +397,14 @@ AssertSubclassCallbackRetentionOnDetachFailure() {
             "Ptr", interactions.SubclassCallback, "UPtr",
             MappingUiInteractions.SubclassId, "Int"),
             "子类回调保留测试无法预先移除原生子类")
-        AssertTrue(!interactions.Dispose(),
-            "存活窗口的原生脱离失败被错误报告为完整清理")
+        detachFailureReported := false
+        try interactions.Dispose()
+        catch as detachError
+            detachFailureReported := InStr(detachError.Message,
+                "控件子类未移除") || InStr(detachError.Message,
+                    "移除控件子类")
+        AssertTrue(detachFailureReported,
+            "存活窗口的原生脱离失败没有作为清理错误报告")
         AssertTrue(interactions.SubclassCallback
                 && interactions.AttachedHwnds.Has(probeHwnd),
             "原生脱离失败后释放了仍可能被窗口调用的回调")
@@ -610,6 +618,21 @@ try {
     AssertEqual(ColorRef(MappingWindow.Colors.Window),
         ReadTestClientPixel(app.Window.Gui.Hwnd, 500, 430),
         "GUI 测试首帧绕过正式显示管线并露出错误背景")
+    app.Window.List.Modify(1, "Select Focus")
+    AssertTrue(FocusOffscreenControl(app.Window.List),
+        "空白区域失焦测试前 ListView 没有取得焦点")
+    selectedRowBeforeBlankClick := app.Window.List.GetNext()
+    blankPoint := 500 | (430 << 16)
+    SendMessage(Win32.WM_LBUTTONDOWN, 0, blankPoint, ,
+        app.Window.Gui.Hwnd)
+    blankClickFocus := DllCall("user32\GetFocus", "Ptr")
+    selectedRowAfterBlankClick := app.Window.List.GetNext()
+    AssertTrue(blankClickFocus == app.Window.Status.Hwnd
+            && blankClickFocus != app.Window.List.Hwnd
+            && selectedRowAfterBlankClick == selectedRowBeforeBlankClick,
+        "点击主窗口空白区域后 ListView 仍持有焦点或当前选择被清除：focus="
+            blankClickFocus "，sink=" app.Window.Status.Hwnd "，selected="
+            selectedRowBeforeBlankClick "->" selectedRowAfterBlankClick)
     AssertTrue(FocusOffscreenControl(app.Window.PurposeEdit),
         "气泡测试前设计目的输入框没有取得焦点")
     AssertTrue(app.Toast.Show("已撤销：新增映射：LShift -> F23"),
@@ -1117,8 +1140,11 @@ try {
     for textButton in [app.Window.AddButton,
             app.Window.PauseResumeButton, app.Window.DeleteButton] {
         textButtonState := app.Window.Interactions.Controls[textButton.Hwnd]
-        AssertTrue(!textButtonState.HasOwnProp("ButtonImage"),
-            "小助手同款 Emoji 主命令按钮仍残留 Lucide 图像")
+        AssertTrue(!textButtonState.HasOwnProp("ButtonImage")
+                && textButtonState.LeadingTextSlotDip == 20
+                && textButtonState.LeadingTextGapDip == 4
+                && textButtonState.LeadingTextVisualSizeDip == 10,
+            "小助手同款 Emoji 主命令按钮没有使用固定图标槽")
     }
     AssertEqual(app.Window.GetAddButtonText(), app.Window.AddButton.Text,
         "新增按钮没有使用小助手同款 Emoji 文本")
@@ -1146,13 +1172,23 @@ try {
     AssertTrue(!app.Window.Interactions.Controls[
             app.Window.SaveButton.Hwnd].HasOwnProp("ButtonImage"),
         "保存映射作为表单提交动作不应附加图标")
-    for button in [app.Window.AddButton, app.Window.PauseResumeButton,
-            app.Window.DeleteButton, app.Window.SettingsButton,
-            app.Window.SupportButton, app.Window.DonateButton,
-            app.Window.SaveButton, app.Window.ClearButton] {
-        AssertTrue(app.Window.Interactions.Controls[button.Hwnd]
-                .TooltipText == "",
-            "主窗口按钮不应显示基准项目不存在的悬浮文案")
+    for tooltipSpec in [
+        {Button: app.Window.SettingsButton,
+            Text: "配置外观、规则包、事件`n以及关于选项"},
+        {Button: app.Window.SupportButton,
+            Text: "打开帮助信息`n可选择查看使用说明、运行日志或提交反馈"},
+        {Button: app.Window.DonateButton,
+            Text: "快揭不开锅了（≥Д≤）"}
+    ] {
+        AssertEqual(tooltipSpec.Text, app.Window.Interactions.Controls[
+            tooltipSpec.Button.Hwnd].TooltipText,
+            "主窗口工具按钮悬浮提示与小助手基准不一致")
+    }
+    for mainButton in [app.Window.AddButton, app.Window.PauseResumeButton,
+            app.Window.DeleteButton, app.Window.SaveButton,
+            app.Window.ClearButton] {
+        AssertEqual("", app.Window.Interactions.Controls[mainButton.Hwnd]
+            .TooltipText, "没有提示契约的主窗口按钮出现了悬浮文案")
     }
     arrowState := app.Window.Interactions.Controls[app.Window.ArrowText.Hwnd]
     AssertTrue(arrowState.Kind == "icon"
@@ -1243,12 +1279,24 @@ try {
         "中文主题标签格式错误")
     AssertEqual("保存", darkSettings.SaveButton.Text,
         "中文保存按钮仍包含旧版 Emoji 或冗余文案")
-    AssertTrue(darkSettings.ShowAtStartupCheck.Value == 1,
-        "通用页没有加载启动窗口设置")
+    AssertTrue(!darkSettings.HasOwnProp("EscapeCancelsCheck")
+            && darkSettings.TabButtons[1].Text == "外观",
+        "外观页仍保留 Esc 取消录制选项或页签名称错误")
     darkSettings.SwitchTab(2)
     AssertTrue(darkSettings.TabBuilt[2]
-            && darkSettings.EscapeCancelsCheck.Value == 1,
-        "录制设置页没有延迟构建或加载配置")
+            && darkSettings.ImportRulePackageButton.Text == "导入规则包"
+            && darkSettings.ExportRulePackageButton.Text == "导出规则包"
+            && !darkSettings.SaveButton.Visible
+            && !darkSettings.CancelButton.Visible
+            && !darkSettings.ValidationStatus.Visible,
+        "规则包页没有延迟构建独立操作或仍显示设置提交区")
+    AssertTrue(RegExMatch(darkSettings.Interactions.Controls[
+            darkSettings.ImportRulePackageButton.Hwnd].ButtonImage.SourcePath,
+            "i)\\square-plus\.svg$")
+        && RegExMatch(darkSettings.Interactions.Controls[
+            darkSettings.ExportRulePackageButton.Hwnd].ButtonImage.SourcePath,
+            "i)\\file-output\.svg$"),
+        "规则包页导入导出按钮没有使用对应语义图标")
     darkSettings.SwitchTab(3)
     AssertTrue(darkSettings.TabBuilt[3]
             && darkSettings.EventCapacityInput.Edit.Value == "1000"
@@ -1280,7 +1328,7 @@ try {
     darkSettings.SwitchTab(4)
     AssertTrue(darkSettings.TabBuilt[4]
             && darkSettings.AboutName.Text == "键鼠重映射小助手"
-            && InStr(darkSettings.VersionValue.Text, "v0.1.0")
+            && InStr(darkSettings.VersionValue.Text, "v0.1.1")
             && InStr(darkSettings.RuntimeValue.Text, "AutoHotkey 2.0.26")
             && !darkSettings.SaveButton.Visible
             && !darkSettings.CancelButton.Visible,
@@ -1609,8 +1657,10 @@ try {
     app.Window.Interactions.OnGlobalPointerDown(1, 0,
         Win32.WM_LBUTTONDOWN, app.Window.SectionTitle.Hwnd)
     Sleep(20)
-    AssertEqual(app.Window.List.Hwnd, DllCall("user32\GetFocus", "Ptr"),
-        "点击普通文字或窗口空白区域后输入框没有真正失焦")
+    AssertEqual(app.Window.Status.Hwnd, DllCall("user32\GetFocus", "Ptr"),
+        "点击普通文字或窗口空白区域后没有转移到非交互焦点接收器")
+    AssertTrue(DllCall("user32\GetFocus", "Ptr") != app.Window.List.Hwnd,
+        "输入框失焦后错误地把键盘焦点转回 ListView")
     AssertTrue(GetGuiThreadCaretHwnd(app.Window.PurposeEdit.Hwnd)
             != app.Window.PurposeEdit.Hwnd,
         "输入框失焦后原生 caret 仍在闪烁")
@@ -1844,6 +1894,21 @@ try {
     AssertTrue(mutationFailed
             && app.Repository.ReadRegionBody() == mappingStateBeforeFailure,
         "历史提交失败后映射修改没有补偿回滚")
+    app.History := originalHistory
+    mappingStateBeforeBuilderFailure := app.Repository.ReadRegionBody()
+    builderFailed := false
+    try app.RunMappingMutation("动作构建失败事务",
+        ObjBindMethod(app.Repository, "Append", leftShiftCapture,
+            BuildGuiKeyboardCapture(app.Capture,
+                GetKeyVK("F23"), GetKeySC("F23")),
+            "动作构建失败事务"),
+        ObjBindMethod(ThrowingActionBuilder(), "Build"))
+    catch
+        builderFailed := true
+    AssertTrue(builderFailed && app.Repository.ReadRegionBody()
+            == mappingStateBeforeBuilderFailure,
+        "动作历史构建失败后映射修改没有在同一写锁内回滚")
+    app.History := failingHistoryStub
     settingsBeforeFailure := app.SettingsService.GetSnapshot()
     candidateTheme := app.Settings.Theme == "light" ? "dark" : "light"
     AssertTrue(!app.SaveSettings({UiLanguage: app.Settings.UiLanguage,
@@ -1957,6 +2022,17 @@ try {
         Spec: previewSpec, Descriptor: RuleCompiler.Compile(previewSpec)}
     previewPackagePath := app.TestRoot "\preview-package.json"
     app.PackageService.ExportTo(previewPackagePath, [previewMapping])
+    app.OpenSettings()
+    packageSettings := app.SettingsWindow
+    AssertTrue(app.ImportRulePackageFrom(previewPackagePath, "rename",
+        packageSettings),
+        "设置窗口规则包页没有打开安全预览")
+    AssertTrue(app.PackageImportPreview.OwnerWindow == packageSettings
+            && !DllCall("user32\IsWindowEnabled", "Ptr",
+                packageSettings.Gui.Hwnd, "Int"),
+        "规则包预览没有以设置窗口为父级并建立模态层级")
+    app.PackageImportPreview.RequestClose()
+    packageSettings.RequestClose()
     AssertTrue(app.ImportRulePackageFrom(previewPackagePath),
         "规则包导入没有打开安全预览")
     importPreview := app.PackageImportPreview
@@ -1997,6 +2073,18 @@ try {
     AssertTrue(IsObject(viewer)
         && DllCall("user32\IsWindowVisible", "Ptr", viewer.Gui.Hwnd, "Int"),
         "事件查看器打开后不可见")
+    Loop 5 {
+        localBefore := A_Now
+        utcSample := A_NowUTC
+        localAfter := A_Now
+        if localBefore == localAfter
+            break
+    }
+    utcTimestamp := FormatTime(utcSample, "yyyy-MM-dd'T'HH:mm:ss")
+        . ".000Z"
+    AssertEqual(FormatTime(localBefore, "HH:mm:ss") ".000",
+        EventViewerWindow.FormatLocalTimestamp(utcTimestamp),
+        "事件查看器时间列没有把 UTC 时间转换为当前 Windows 本地时间")
     AssertTrue(DllCall("user32\IsWindowEnabled", "Ptr",
         app.Window.Gui.Hwnd, "Int"), "事件查看器错误禁用了主窗口")
     AssertTrue(IsObject(viewer.ListSelection)
@@ -2018,6 +2106,22 @@ try {
             viewer.List.Hwnd) * 96 / DllCall("user32\GetDpiForWindow", "Ptr",
                 viewer.List.Hwnd, "UInt")),
         "事件查看器没有把序号列空间交给事件列")
+    mouseMoveEvent := InputEvent.Create(KeyIdentity.Create("mouse",
+        "MouseMove", 0, 0, false, "gui-mouse", "gui-mouse"),
+        "move", false, false, "raw-input", "",
+        Map("delta_x", 8, "delta_y", -3))
+    moveTraceCount := app.Trace.Count
+    moveRowCount := viewer.List.GetCount()
+    AssertTrue(!app.OnRawInputEvent(mouseMoveEvent)
+            && app.Trace.Count == moveTraceCount
+            && viewer.List.GetCount() == moveRowCount,
+        "普通运行仍把鼠标移动写入 GUI 事件流")
+    app.RawObservationDepth := 1
+    AssertTrue(app.OnRawInputEvent(mouseMoveEvent)
+            && app.Trace.Count == moveTraceCount + 1
+            && viewer.List.GetCount() == moveRowCount + 1,
+        "原始观察没有恢复鼠标移动的完整 GUI 事件流")
+    app.RawObservationDepth := 0
     visibleEventCount := viewer.List.GetCount()
     guiUnifiedEvent := InputEvent.Create(KeyIdentity.Create("keyboard",
         "LShift", 0xA0, 0x02A), "down", false, false, "gui-test")
@@ -2153,11 +2257,16 @@ try {
     try {
         AssertTrue(safeModeApp.SafeMode,
             "安全模式 GUI 测试没有进入安全模式")
+        EnvSet("KEY_MOUSE_REMAPPER_SHOW_AFTER_RELOAD", "1")
         safeModeApp.Start()
         AssertTrue(safeModeApp.ApplicationCallbacksRegistered
                 && safeModeApp.ExitCallbackRegistered
                 && safeModeApp.MessageRegistrations.Length == 7,
             "应用消息与退出回调没有作为完整事务登记")
+        AssertTrue(DllCall("user32\IsWindowVisible", "Ptr",
+                safeModeApp.Window.Gui.Hwnd, "Int"),
+            "重载后显示标记没有在新实例显示主界面")
+        safeModeApp.Window.Gui.Hide()
         AssertTrue(safeModeApp.Runtime.ApplyCount == 0
                 && safeModeApp.RawInput.StartCount == 0,
             "安全模式启动仍激活了映射或输入观察")
@@ -2169,14 +2278,31 @@ try {
             safeModeApp.StartupState.ConsecutiveFailures)
         AssertEqual(expectedSafeModeStatus, safeModeApp.Window.Status.Text,
             "安全模式主窗口没有显示完整本地化状态")
-        recoveryMenuPresent := true
-        try A_TrayMenu.Disable(Tr("恢复最后正常配置"))
-        catch
-            recoveryMenuPresent := false
-        AssertTrue(recoveryMenuPresent,
-            "有恢复快照时托盘没有提供恢复入口")
-        if recoveryMenuPresent
-            A_TrayMenu.Enable(Tr("恢复最后正常配置"))
+        AssertTrue(!DllCall("user32\IsWindowVisible", "Ptr",
+                safeModeApp.Window.Gui.Hwnd, "Int"),
+            "首次启动没有静默进入托盘")
+        for trayLabel in [Tr("显示主界面"), Tr("重新加载"), Tr("退出程序")] {
+            trayMenuPresent := true
+            try A_TrayMenu.Disable(trayLabel)
+            catch
+                trayMenuPresent := false
+            AssertTrue(trayMenuPresent, "托盘缺少保留菜单：" trayLabel)
+            if trayMenuPresent
+                A_TrayMenu.Enable(trayLabel)
+        }
+        for removedTrayLabel in [Tr("事件查看器"), Tr("导入规则包"),
+                Tr("导出规则包"), "恢复最后正常配置",
+                "以管理员身份重新启动", "管理员模式（当前）"] {
+            removedMenuPresent := true
+            try A_TrayMenu.Disable(removedTrayLabel)
+            catch
+                removedMenuPresent := false
+            AssertTrue(!removedMenuPresent,
+                "托盘仍包含已移除菜单：" removedTrayLabel)
+        }
+        exitCallbackResult := safeModeApp.ExitCallback.Call("Reload", 0)
+        AssertEqual(0, exitCallbackResult,
+            "退出回调成功清理后返回了非零值，会阻止旧实例在重新加载时退出")
     } finally {
         safeModeApp.Shutdown()
     }
@@ -2227,7 +2353,8 @@ class TestKeyMouseRemapperAssistantApp extends KeyMouseRemapperAssistantApp {
             this.TestRoot "\history.dat", this.TestRoot "\notification.txt")
         this.Capture.Stop(false)
         this.Capture := DeterministicGuiKeyCaptureSession(this)
-        this.Repository := FakeMappingRepository()
+        this.Repository := FakeMappingRepository(
+            this.TestRoot "\fake-mappings.ahk")
         this.ReloadScheduled := false
         this.LastToast := ""
         this.ControlModifierDown := false
@@ -2321,9 +2448,9 @@ class SafeModeGuiTestApp extends KeyMouseRemapperAssistantApp {
         super.__New(settingsPath, historyPath, notificationPath,
             variablePath, controlPath, healthPath,
             recoveryPath, outputPath, crashPath)
-        this.Settings.ShowMainWindowAtStartup := false
         this.Capture.Stop(false)
-        this.Repository := FakeMappingRepository()
+        this.Repository := FakeMappingRepository(
+            this.TestRoot "\fake-mappings.ahk")
         this.Runtime := SafeModeRuntimeProbe()
         this.RawInput := SafeModeInputProbe()
     }
@@ -2378,8 +2505,15 @@ class SafeModeInputProbe {
 class DeterministicGuiKeyCaptureSession extends KeyCaptureSession {
 }
 
+class ThrowingActionBuilder {
+    Build(*) {
+        throw Error("injected action-builder failure")
+    }
+}
+
 class FakeMappingRepository {
-    __New() {
+    __New(scriptPath) {
+        this.ScriptPath := CrossProcessWriteLock.NormalizePath(scriptPath)
         this.AppendCount := 0
         this.AppendBlockCount := 0
         this.LastPurpose := ""

@@ -43,6 +43,7 @@ class CrossProcessWriteLock {
                         || waitResult == 0x80
                     continue
                 }
+                waitError := A_LastError
                 closeSucceeded := DllCall("kernel32\CloseHandle",
                     "Ptr", handle, "Int")
                 closeError := A_LastError
@@ -53,7 +54,7 @@ class CrossProcessWriteLock {
                 if !closeSucceeded
                     throw Error("无法取得跨进程写锁，且关闭等待句柄失败"
                         . "（Win32 " closeError "）。")
-                throw OSError(A_LastError, "无法取得跨进程写锁。")
+                throw OSError(waitError, "无法取得跨进程写锁。")
             }
             return CrossProcessWriteLockLease(handles, normalized,
                 abandonedRecovered)

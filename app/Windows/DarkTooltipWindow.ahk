@@ -18,7 +18,7 @@ class DarkTooltipWindow {
             OnMessage(0x0018, this.ShowWindowCallback) ; WM_SHOWWINDOW
             OnMessage(0x0006, this.ActivateCallback) ; WM_ACTIVATE
         } catch as registrationError {
-            this.Dispose()
+            try this.Dispose()
             throw registrationError
         }
     }
@@ -211,18 +211,19 @@ class DarkTooltipWindow {
         this.Hide()
         this.MeasurementCache.Clear()
         if IsObject(this.Gui)
-            try this.Gui.Destroy()
+            this.Gui.Destroy()
         this.Gui := ""
         this.TextControl := ""
+        return true
     }
 
     Hide(*) {
-        try SetTimer(this.ShowTimer, 0)
+        SetTimer(this.ShowTimer, 0)
         this.PendingHwnd := 0
         this.VisibleHwnd := 0
         this.PendingText := ""
         if IsObject(this.Gui)
-            try this.Gui.Hide()
+            this.Gui.Hide()
         return false
     }
 
@@ -230,19 +231,29 @@ class DarkTooltipWindow {
         if this.Disposed
             return
         this.Disposed := true
-        this.Hide()
-        try OnMessage(0x020A, this.WheelCallback, 0)
-        try OnMessage(0x0018, this.ShowWindowCallback, 0)
-        try OnMessage(0x0006, this.ActivateCallback, 0)
+        cleanup := CleanupCollector("深色工具提示")
+        hidden := cleanup.Run("隐藏窗口", () => this.Hide())
+        wheelReleased := cleanup.Run("注销滚轮消息",
+            () => OnMessage(0x020A, this.WheelCallback, 0))
+        showReleased := cleanup.Run("注销显示消息",
+            () => OnMessage(0x0018, this.ShowWindowCallback, 0))
+        activateReleased := cleanup.Run("注销激活消息",
+            () => OnMessage(0x0006, this.ActivateCallback, 0))
         if IsObject(this.Gui)
-            try this.Gui.Destroy()
-        this.Gui := ""
+                && cleanup.Run("销毁窗口", () => this.Gui.Destroy())
+            this.Gui := ""
         this.TextControl := ""
         this.OwnerGui := ""
-        this.ShowTimer := ""
-        this.WheelCallback := ""
-        this.ShowWindowCallback := ""
-        this.ActivateCallback := ""
+        if hidden
+            this.ShowTimer := ""
+        if wheelReleased
+            this.WheelCallback := ""
+        if showReleased
+            this.ShowWindowCallback := ""
+        if activateReleased
+            this.ActivateCallback := ""
         this.MeasurementCache.Clear()
+        cleanup.Complete()
+        return true
     }
 }

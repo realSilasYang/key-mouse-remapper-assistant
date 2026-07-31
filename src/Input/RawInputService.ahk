@@ -123,6 +123,8 @@ class RawInputService {
         this.DeviceMessageRegistered := false
         this.Devices := Map()
         this.HeldKeys := Map()
+        this.LastCallbackError := ""
+        this.CallbackFailureCount := 0
         this.InputCallback := ObjBindMethod(this, "OnRawInput")
         this.DeviceCallback := ObjBindMethod(this, "OnDeviceChange")
     }
@@ -133,6 +135,7 @@ class RawInputService {
         if this.DevicesRegistered || this.InputMessageRegistered
                 || this.DeviceMessageRegistered
             throw Error("Raw Input 观察器仍有未清理的注册资源。")
+        this.LastCallbackError := ""
         this.RegisterDevices(false)
         this.DevicesRegistered := true
         try {
@@ -336,7 +339,13 @@ class RawInputService {
     }
 
     Emit(unifiedEvent) {
-        try this.EventCallback.Call(unifiedEvent)
+        try return this.EventCallback.Call(unifiedEvent)
+        catch as callbackError {
+            this.HeldKeys.Clear()
+            this.LastCallbackError := callbackError.Message
+            this.CallbackFailureCount++
+            return false
+        }
     }
 
     EmitError(eventName, errorCode := 0, detail := "") {

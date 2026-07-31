@@ -4,6 +4,7 @@ class ListViewPseudoHeader {
     static DefaultHeight := 28
     static InputGuardSubclassId := 0x4C565048
     static InputGuardCallback := 0
+    static InputGuardAttachmentCount := 0
     static PressedCellHwnd := 0
 
     static EnsureInputGuardCallback() {
@@ -19,9 +20,38 @@ class ListViewPseudoHeader {
     static AttachInputGuard(cellHwnd, listHwnd) {
         if !cellHwnd || !listHwnd || !this.EnsureInputGuardCallback()
             return false
-        return !!DllCall("comctl32\SetWindowSubclass", "Ptr", cellHwnd,
+        attached := !!DllCall("comctl32\SetWindowSubclass", "Ptr", cellHwnd,
             "Ptr", this.InputGuardCallback, "UPtr", this.InputGuardSubclassId,
             "UPtr", listHwnd, "Int")
+        if attached
+            this.InputGuardAttachmentCount++
+        return attached
+    }
+
+    static DetachInputGuard(cellHwnd) {
+        if !cellHwnd || !this.InputGuardCallback
+            return true
+        detached := !DllCall("user32\IsWindow", "Ptr", cellHwnd, "Int")
+            || !!DllCall("comctl32\RemoveWindowSubclass", "Ptr", cellHwnd,
+                "Ptr", this.InputGuardCallback,
+                "UPtr", this.InputGuardSubclassId, "Int")
+        if !detached
+            return false
+        this.InputGuardAttachmentCount := Max(0,
+            this.InputGuardAttachmentCount - 1)
+        if !this.InputGuardAttachmentCount {
+            CallbackFree(this.InputGuardCallback)
+            this.InputGuardCallback := 0
+        }
+        return true
+    }
+
+    static ReleaseMouseCapture(cellHwnd) {
+        if DllCall("user32\GetCapture", "Ptr") != cellHwnd
+            return true
+        if !DllCall("user32\ReleaseCapture", "Int")
+            throw OSError(A_LastError, "无法释放伪表头鼠标捕获。")
+        return true
     }
 
     __New(guiObj, listView, columns, options := "") {
@@ -100,7 +130,7 @@ class ListViewPseudoHeader {
             this.FontName, this.FontSize)
         this.RefreshLabels()
         } catch as constructionError {
-            this.Dispose()
+            try this.Dispose()
             throw constructionError
         }
     }
@@ -295,35 +325,39 @@ class ListViewPseudoHeader {
         if this.Disposed
             return true
         this.Disposed := true
+        cleanup := CleanupCollector("列表伪表头")
         for cell in this.Cells {
             hwnd := 0
             try hwnd := cell.Hwnd
+            catch as hwndError
+                cleanup.Failures.Push("读取表头句柄：" hwndError.Message)
             if hwnd && this.CellCallbacks.Has(hwnd) {
                 callback := this.CellCallbacks[hwnd]
-                try cell.OnEvent("Click", callback, 0)
-                try cell.OnEvent("DoubleClick", callback, 0)
+                cleanup.Run("注销单击事件",
+                    ObjBindMethod(cell, "OnEvent", "Click", callback, 0))
+                cleanup.Run("注销双击事件",
+                    ObjBindMethod(cell, "OnEvent", "DoubleClick", callback, 0))
             }
             if hwnd && ListViewPseudoHeader.PressedCellHwnd == hwnd {
                 ListViewPseudoHeader.PressedCellHwnd := 0
-                if DllCall("user32\GetCapture", "Ptr") == hwnd
-                    try DllCall("user32\ReleaseCapture", "Int")
+                cleanup.Run("释放鼠标捕获", ObjBindMethod(
+                    ListViewPseudoHeader, "ReleaseMouseCapture", hwnd))
             }
-            if hwnd && ListViewPseudoHeader.InputGuardCallback
-                    && DllCall("user32\IsWindow", "Ptr", hwnd, "Int") {
-                try DllCall("comctl32\RemoveWindowSubclass", "Ptr", hwnd,
-                    "Ptr", ListViewPseudoHeader.InputGuardCallback,
-                    "UPtr", ListViewPseudoHeader.InputGuardSubclassId, "Int")
-            }
+            if hwnd && !ListViewPseudoHeader.DetachInputGuard(hwnd)
+                cleanup.Failures.Push("移除输入保护子类：Win32 " A_LastError)
         }
-        this.CellCallbacks.Clear()
-        this.Cells := []
-        this.Columns := []
-        this.OnBeforeSort := ""
-        this.OnSortChanged := ""
-        this.CursorRegistrar := ""
-        this.Background := ""
-        this.List := ""
-        this.Gui := ""
+        if !cleanup.Failures.Length {
+            this.CellCallbacks.Clear()
+            this.Cells := []
+            this.Columns := []
+            this.OnBeforeSort := ""
+            this.OnSortChanged := ""
+            this.CursorRegistrar := ""
+            this.Background := ""
+            this.List := ""
+            this.Gui := ""
+        }
+        cleanup.Complete()
         return true
     }
 }

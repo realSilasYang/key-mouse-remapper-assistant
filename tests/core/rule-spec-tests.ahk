@@ -43,6 +43,9 @@ testDescriptor := RuleCompiler.Compile(testNormalized)
 AssertTrue(testNormalized["priority"] == 0
         && testNormalized["stop_processing"].Value,
     "旧规则没有保留源码顺序优先且命中终止的默认语义")
+AssertTrue(testNormalized["from"]["modifiers"].Length == 1
+        && testNormalized["from"]["modifiers"][1] == "LCtrl",
+    "显式 AHK 热键前缀没有进入 Raw Input 修饰键语义")
 AssertEqual(JsonCodec.Stringify(testNormalized, false, true),
     JsonCodec.Stringify(RuleSpec.Normalize(testNormalized), false, true),
     "RuleSpec 二次规范化结果不幂等")
@@ -57,6 +60,9 @@ canonicalModifierSpec["from"]["hotkey"] := "<^>+A"
 AssertEqual(RuleCompiler.Compile(canonicalModifierSpec).Signature,
     RuleCompiler.Compile(reorderedModifierSpec).Signature,
     "语义相同但顺序不同的修饰键没有得到统一触发签名")
+AssertEqual(RuleCompiler.Compile(canonicalModifierSpec).DispatchSignature,
+    RuleCompiler.Compile(reorderedModifierSpec).DispatchSignature,
+    "语义相同但顺序不同的修饰键没有得到统一派发签名")
 implicitUpSpec := RuleSpec.Clone(testSpec)
 implicitUpSpec["id"] := "implicit-up"
 implicitUpSpec["from"].Delete("event")
@@ -73,6 +79,36 @@ try RuleSpec.Normalize(contradictoryUpSpec)
 catch
     failed := true
 AssertTrue(failed, "hotkey Up 后缀与 event=down 的矛盾没有被拒绝")
+hotkeyOnlySpec := RuleSpec.Clone(testSpec)
+hotkeyOnlySpec["id"] := "hotkey-only"
+hotkeyOnlySpec["from"].Delete("key")
+failed := false
+try RuleSpec.Normalize(hotkeyOnlySpec)
+catch
+    failed := true
+AssertTrue(failed, "当前后端无法执行的 hotkey-only 规则没有被提前拒绝")
+for invalidField in ["to_if_alone", "to_if_held_down",
+        "to_if_other_key_pressed", "to_delayed_if_invoked"] {
+    invalidUpActionSpec := RuleSpec.Clone(testSpec)
+    invalidUpActionSpec["id"] := "invalid-up-" invalidField
+    invalidUpActionSpec["from"]["event"] := "up"
+    invalidUpActionSpec[invalidField] := [
+        Map("type", "send", "value", "{F21}")]
+    failed := false
+    try RuleSpec.Normalize(invalidUpActionSpec)
+    catch
+        failed := true
+    AssertTrue(failed, "up 来源接受了无法执行的 " invalidField)
+}
+invalidUpRepeatSpec := RuleSpec.Clone(testSpec)
+invalidUpRepeatSpec["id"] := "invalid-up-repeat-only"
+invalidUpRepeatSpec["from"]["event"] := "up"
+invalidUpRepeatSpec["from"]["repeat"] := "only"
+failed := false
+try RuleSpec.Normalize(invalidUpRepeatSpec)
+catch
+    failed := true
+AssertTrue(failed, "up 来源接受了永远无法命中的 repeat=only")
 testBlock := RuleCompiler.BuildManagedBlock(testNormalized)
 testRoundTrip := RuleCompiler.ParseManagedSpec(testBlock)
 AssertEqual(JsonCodec.Stringify(testNormalized, false, true),
@@ -178,6 +214,46 @@ generatedHotkeySpec["from"] := Map("event", "down",
 generatedDescriptor := RuleCompiler.Compile(generatedHotkeySpec)
 AssertEqual("*<^A", generatedDescriptor.Hotkey,
     "optional_modifiers=any 没有生成通配热键")
+
+recordedModifierSource := {
+    RawDisplay: "LCtrl + A", Display: "左侧 Ctrl + A", KeyName: "A",
+    SourceSpec: "<^sc01E", Kind: "keyboard", VKHex: "41",
+    SCHex: "01E", SC: 0x01E, IsSimultaneous: false,
+    Modifiers: [{KeyName: "LCtrl"}]
+}
+recordedModifierTarget := {
+    RawDisplay: "F20", Display: "F20", TargetSend: "{F20}"
+}
+recordedModifierSpec := RuleSpec.CreateFromCaptures("recorded-modifier",
+    recordedModifierSource, recordedModifierTarget, "录制修饰键")
+AssertTrue(recordedModifierSpec["from"]["key"]["name"] == "A"
+        && recordedModifierSpec["from"]["modifiers"].Length == 1
+        && recordedModifierSpec["from"]["modifiers"][1] == "LCtrl",
+    "录制组合没有分离主键身份和显示文本或丢失修饰键")
+
+shortCodeSpec := RuleSpec.Clone(testSpec)
+shortCodeSpec["id"] := "short-code"
+shortCodeSpec["from"]["key"]["sc"] := "1E"
+AssertEqual("01E", RuleSpec.Normalize(shortCodeSpec)["from"]["key"]["sc"],
+    "短格式扫描码没有规范化为稳定宽度")
+extendedCodeSpec := RuleSpec.Clone(testSpec)
+extendedCodeSpec["id"] := "extended-code"
+extendedCodeSpec["from"]["key"]["sc"] := "1D"
+extendedCodeSpec["from"]["key"]["extended"] := JsonBoolean(true)
+AssertEqual("11D", RuleSpec.Normalize(extendedCodeSpec)["from"]["key"]["sc"],
+    "扩展键标记没有规范化到扫描码身份")
+for invalidCode in [
+        {Field: "vk", Value: "100"},
+        {Field: "sc", Value: "200"}] {
+    invalidCodeSpec := RuleSpec.Clone(testSpec)
+    invalidCodeSpec["id"] := "invalid-" invalidCode.Field
+    invalidCodeSpec["from"]["key"][invalidCode.Field] := invalidCode.Value
+    failed := false
+    try RuleSpec.Normalize(invalidCodeSpec)
+    catch
+        failed := true
+    AssertTrue(failed, "越界 " invalidCode.Field " 没有被拒绝")
+}
 
 recordedSimultaneousSource := {
     RawDisplay: "A + B + RButton", Display: "A + B + 鼠标右键",

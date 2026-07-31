@@ -15,12 +15,25 @@ $editableSource = "$productName.ahk"
 $cliLauncher = "$productName-CLI.ps1"
 $packageDirectory = Join-Path $outputRoot $packageName
 $zipPath = Join-Path $outputRoot "$packageName.zip"
-$checksumsPath = Join-Path $outputRoot 'SHA256SUMS.txt'
+$sourcePackageName = "key-mouse-remapper-assistant-$version-source"
+$sourcePackageDirectory = Join-Path $outputRoot $sourcePackageName
+$sourceZipPath = Join-Path $outputRoot "$sourcePackageName.zip"
 
-foreach ($requiredPath in @($packageDirectory, $zipPath, $checksumsPath)) {
+foreach ($requiredPath in @($packageDirectory, $zipPath,
+        $sourcePackageDirectory, $sourceZipPath)) {
     if (-not (Test-Path -LiteralPath $requiredPath)) {
         throw "Release artifact is missing: $requiredPath"
     }
+}
+if (Test-Path -LiteralPath (Join-Path $outputRoot 'SHA256SUMS.txt')) {
+    throw 'Release output must not contain SHA256SUMS.txt.'
+}
+$releaseArchives = @(Get-ChildItem -LiteralPath $outputRoot -File `
+    -Filter '*.zip')
+if ($releaseArchives.Count -ne 2 -or
+        $releaseArchives.Name -notcontains "$packageName.zip" -or
+        $releaseArchives.Name -notcontains "$sourcePackageName.zip") {
+    throw 'Release output must contain exactly the portable and source ZIPs.'
 }
 
 $legacyArtifactNames = @(
@@ -37,8 +50,9 @@ foreach ($legacyArtifactName in $legacyArtifactNames) {
     }
 }
 $versionedArtifactPattern =
-    '^key-mouse-remapper-assistant-[0-9]+\.[0-9]+\.[0-9]+-windows-x64(?:\.zip)?$'
-$currentArtifactNames = @($packageName, "$packageName.zip")
+    '^key-mouse-remapper-assistant-[0-9]+\.[0-9]+\.[0-9]+-(?:windows-x64|source)(?:\.zip)?$'
+$currentArtifactNames = @($packageName, "$packageName.zip",
+    $sourcePackageName, "$sourcePackageName.zip")
 $obsoleteVersionArtifacts = @(Get-ChildItem -LiteralPath $outputRoot -Force |
     Where-Object {
         $_.Name -match $versionedArtifactPattern -and
@@ -53,6 +67,7 @@ $requiredFiles = @(
     $guiExecutable, $editableSource, $cliLauncher,
     'key-mouse-remapper-assistant-cli.ahk', 'build-manifest.json', 'runtime\AutoHotkey64.exe',
     'runtime\license.txt', 'tools\toolchain.lock.json',
+    'tools\WindowsProcessArguments.psm1',
     'README.md', 'LICENSE', 'THIRD_PARTY_NOTICES.md',
     'docs\validation-matrix.md',
     'third_party\resvg\resvg.dll',
@@ -75,6 +90,33 @@ foreach ($relativePath in $requiredFiles) {
     if (-not (Test-Path -LiteralPath (Join-Path $packageDirectory $relativePath) `
             -PathType Leaf)) {
         throw "Release package is missing $relativePath."
+    }
+}
+$requiredSourceFiles = @(
+    '.editorconfig', '.gitattributes', '.gitignore',
+    '.github\workflows\ci.yml', '.github\workflows\release.yml',
+    $editableSource, $cliLauncher,
+    'key-mouse-remapper-assistant-cli.ahk',
+    'app\KeyMouseRemapperAssistantApp.ahk',
+    'src\Core\ManagedRuleRuntime.ahk',
+    'workers\input-engine-worker.ahk',
+    'tests\verify.ps1', 'tools\build-release.ps1',
+    'tools\toolchain.lock.json', 'README.md', 'CHANGELOG.md',
+    'LICENSE', 'VERSION'
+)
+foreach ($relativePath in $requiredSourceFiles) {
+    if (-not (Test-Path -LiteralPath `
+            (Join-Path $sourcePackageDirectory $relativePath) `
+            -PathType Leaf)) {
+        throw "Source package is missing $relativePath."
+    }
+}
+foreach ($forbiddenSourcePath in @('.git', '.tools', '.build', 'dist',
+        $guiExecutable, 'runtime\AutoHotkey64.exe',
+        'build-manifest.json')) {
+    if (Test-Path -LiteralPath `
+            (Join-Path $sourcePackageDirectory $forbiddenSourcePath)) {
+        throw "Source package contains non-source payload: $forbiddenSourcePath"
     }
 }
 $applicationIconPaths = @(
@@ -112,7 +154,10 @@ if ($manifestBytes.Length -lt 2 -or
         $manifestBytes[$manifestBytes.Length - 1] -ne 0x0A) {
     throw 'build-manifest.json is not canonical UTF-8 with LF endings.'
 }
-if ($manifest.schemaVersion -ne 1 -or $manifest.version -ne $version -or
+if ($manifest.schemaVersion -ne 1 -or
+    $manifest.packageKind -cne 'portable-runtime' -or
+    $manifest.version -ne $version -or
+    $manifest.autoHotkey -cne '2.0.26' -or
     $manifest.entry -ne $guiExecutable -or
     $manifest.editableSource -ne $editableSource -or
     $manifest.cli -ne $cliLauncher -or
@@ -122,6 +167,15 @@ if ($manifest.schemaVersion -ne 1 -or $manifest.version -ne $version -or
     $null -ne $manifest.nativeDriver -or
     [string]$manifest.autoHotkeySha256 -notmatch '^[A-Fa-f0-9]{64}$') {
     throw 'build-manifest.json has invalid release metadata.'
+}
+$sourceVersion = (Get-Content -LiteralPath (Join-Path `
+    $sourcePackageDirectory 'VERSION') -Raw -Encoding UTF8).Trim()
+$sourceToolchain = Get-Content -LiteralPath (Join-Path `
+    $sourcePackageDirectory 'tools\toolchain.lock.json') -Raw `
+    -Encoding UTF8 | ConvertFrom-Json
+if ($sourceVersion -cne $version -or
+        [string]$sourceToolchain.tools.autoHotkey.version -cne '2.0.26') {
+    throw 'Source package version or AutoHotkey requirement is inconsistent.'
 }
 $runtimeHash = (Get-FileHash -Algorithm SHA256 -LiteralPath `
     (Join-Path $packageDirectory 'runtime\AutoHotkey64.exe')).Hash
@@ -146,13 +200,8 @@ foreach ($forbiddenPath in @('driver', 'native',
 
 $zipHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $zipPath).Hash
 $exePath = Join-Path $packageDirectory $guiExecutable
-$exeHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $exePath).Hash
-$checksumText = Get-Content -LiteralPath $checksumsPath -Raw -Encoding UTF8
-$expectedChecksumText = "$zipHash  $packageName.zip`n" +
-    "$exeHash  $packageName/$guiExecutable`n"
-if ($checksumText.Replace("`r`n", "`n") -cne $expectedChecksumText) {
-    throw 'SHA256SUMS.txt does not match the release ZIP and executable.'
-}
+$sourceZipHash = (Get-FileHash -Algorithm SHA256 `
+    -LiteralPath $sourceZipPath).Hash
 
 $validation = Start-Process -FilePath $exePath `
     -ArgumentList '--startup-validation' -PassThru -Wait -WindowStyle Hidden
@@ -169,6 +218,8 @@ if ($LASTEXITCODE -ne 0 -or $capabilities.backend -ne 'raw-input' -or
 }
 
 $extractRoot = Join-Path $projectRoot ('.build\artifact-check-' +
+    [guid]::NewGuid().ToString('N'))
+$sourceExtractRoot = Join-Path $projectRoot ('.build\source-artifact-check-' +
     [guid]::NewGuid().ToString('N'))
 try {
     Add-Type -AssemblyName System.IO.Compression
@@ -218,6 +269,55 @@ try {
         }
     }
 
+    $sourceZipStream = [IO.File]::OpenRead($sourceZipPath)
+    try {
+        $sourceArchive = [IO.Compression.ZipArchive]::new($sourceZipStream,
+            [IO.Compression.ZipArchiveMode]::Read, $false,
+            [Text.Encoding]::UTF8)
+        try {
+            $sourceEntryNames = [Collections.Generic.List[string]]::new()
+            foreach ($entry in $sourceArchive.Entries) {
+                $sourceEntryNames.Add($entry.FullName)
+                if ($entry.CompressedLength -ne $entry.Length -or
+                        $entry.LastWriteTime.DateTime -ne
+                            [datetime]::new(1980, 1, 1)) {
+                    throw "Source ZIP entry is not canonical: $($entry.FullName)"
+                }
+            }
+            $sortedSourceNames = [Collections.Generic.List[string]]::new(
+                [Collections.Generic.IEnumerable[string]]$sourceEntryNames)
+            $sortedSourceNames.Sort([StringComparer]::Ordinal)
+            if (($sourceEntryNames -join "`n") -cne
+                    ($sortedSourceNames -join "`n")) {
+                throw 'Source ZIP entries are not in ordinal path order.'
+            }
+        } finally { $sourceArchive.Dispose() }
+    } finally { $sourceZipStream.Dispose() }
+
+    Expand-Archive -LiteralPath $sourceZipPath `
+        -DestinationPath $sourceExtractRoot
+    $sourcePackageFiles = @(Get-ChildItem `
+        -LiteralPath $sourcePackageDirectory -Recurse -File |
+        Sort-Object FullName)
+    $sourceExtractedFiles = @(Get-ChildItem `
+        -LiteralPath $sourceExtractRoot -Recurse -File |
+        Sort-Object FullName)
+    if ($sourcePackageFiles.Count -ne $sourceExtractedFiles.Count) {
+        throw 'Source ZIP file count differs from its package directory.'
+    }
+    foreach ($sourceFile in $sourcePackageFiles) {
+        $relativePath = $sourceFile.FullName.Substring(
+            $sourcePackageDirectory.Length + 1)
+        $extractedPath = Join-Path $sourceExtractRoot $relativePath
+        if (-not (Test-Path -LiteralPath $extractedPath -PathType Leaf) -or
+            (Get-FileHash -Algorithm SHA256 `
+                -LiteralPath $sourceFile.FullName).Hash -cne
+            (Get-FileHash -Algorithm SHA256 `
+                -LiteralPath $extractedPath).Hash) {
+            throw "Source ZIP differs from package directory: $relativePath"
+        }
+    }
+
     $tamperedRuntime = Join-Path $extractRoot 'runtime\AutoHotkey64.exe'
     $tamperStream = [System.IO.File]::Open($tamperedRuntime,
         [System.IO.FileMode]::Open, [System.IO.FileAccess]::ReadWrite,
@@ -249,14 +349,16 @@ try {
         throw 'Packaged CLI accepted a tampered AutoHotkey runtime.'
     }
 } finally {
-    $fullExtractRoot = [System.IO.Path]::GetFullPath($extractRoot)
     $buildPrefix = [System.IO.Path]::GetFullPath(
         (Join-Path $projectRoot '.build')).TrimEnd('\') + '\'
-    if (($fullExtractRoot + '\').StartsWith($buildPrefix,
-            [System.StringComparison]::OrdinalIgnoreCase) -and
-        (Test-Path -LiteralPath $fullExtractRoot)) {
-        Remove-Item -LiteralPath $fullExtractRoot -Recurse -Force
+    foreach ($candidateRoot in @($extractRoot, $sourceExtractRoot)) {
+        $fullExtractRoot = [System.IO.Path]::GetFullPath($candidateRoot)
+        if (($fullExtractRoot + '\').StartsWith($buildPrefix,
+                [System.StringComparison]::OrdinalIgnoreCase) -and
+            (Test-Path -LiteralPath $fullExtractRoot)) {
+            Remove-Item -LiteralPath $fullExtractRoot -Recurse -Force
+        }
     }
 }
 
-Write-Host "Release artifact checks passed: $zipHash"
+Write-Host "Release artifact checks passed: $zipHash / $sourceZipHash"

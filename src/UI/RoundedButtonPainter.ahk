@@ -4,6 +4,8 @@
 class TextVisualAlignment {
     static InkBoundsCache := Map()
     static InkBoundsCacheLimit := 512
+    static RasterInkBoundsCache := Map()
+    static RasterInkBoundsCacheLimit := 128
 
     static MeasureText(hdc, text) {
         if !hdc || text == ""
@@ -105,6 +107,122 @@ class TextVisualAlignment {
         return rect
     }
 
+    ; Font linking can draw an Emoji fallback that GetGlyphOutline cannot
+    ; measure reliably. Rasterize these rare command glyphs once and cache the
+    ; actual ink bounds used by DrawText.
+    static MeasureRasterInkBounds(hdc, text) {
+        if !hdc || text == ""
+            return false
+        textMetrics := Buffer(64, 0)
+        if !DllCall("gdi32\GetTextMetricsW", "Ptr", hdc,
+                "Ptr", textMetrics, "Int")
+            return false
+        extent := this.MeasureText(hdc, text)
+        lineHeight := extent.Height > 0 ? extent.Height
+            : NumGet(textMetrics, 0, "Int")
+        if lineHeight <= 0
+            return false
+        cacheKey := this.GetFontCacheKey(hdc, textMetrics)
+            . Chr(30) . "raster" Chr(30) . text
+        if this.RasterInkBoundsCache.Has(cacheKey)
+            return this.RasterInkBoundsCache[cacheKey]
+
+        margin := Max(4, Ceil(lineHeight / 2))
+        canvasWidth := Max(1, extent.Width + margin * 2)
+        canvasHeight := Max(1, lineHeight + margin * 2)
+        measureDc := DllCall("gdi32\CreateCompatibleDC", "Ptr", hdc,
+            "Ptr")
+        sourceFont := DllCall("gdi32\GetCurrentObject", "Ptr", hdc,
+            "UInt", 6, "Ptr")
+        bitmapInfo := Buffer(40, 0)
+        NumPut("UInt", 40, bitmapInfo, 0)
+        NumPut("Int", canvasWidth, bitmapInfo, 4)
+        NumPut("Int", -canvasHeight, bitmapInfo, 8)
+        NumPut("UShort", 1, bitmapInfo, 12)
+        NumPut("UShort", 32, bitmapInfo, 14)
+        pixelAddress := 0
+        bitmap := measureDc ? DllCall("gdi32\CreateDIBSection",
+            "Ptr", measureDc, "Ptr", bitmapInfo, "UInt", 0,
+            "Ptr*", &pixelAddress, "Ptr", 0, "UInt", 0, "Ptr") : 0
+        previousBitmap := 0
+        previousFont := 0
+        try {
+            if !measureDc || !sourceFont || !bitmap || !pixelAddress
+                return false
+            previousBitmap := DllCall("gdi32\SelectObject", "Ptr",
+                measureDc, "Ptr", bitmap, "Ptr")
+            previousFont := DllCall("gdi32\SelectObject", "Ptr",
+                measureDc, "Ptr", sourceFont, "Ptr")
+            DllCall("gdi32\PatBlt", "Ptr", measureDc,
+                "Int", 0, "Int", 0, "Int", canvasWidth,
+                "Int", canvasHeight, "UInt", 0x00000042, "Int")
+            DllCall("gdi32\SetBkMode", "Ptr", measureDc, "Int", 1)
+            DllCall("gdi32\SetTextColor", "Ptr", measureDc,
+                "UInt", 0x00FFFFFF)
+            drawRect := Buffer(16, 0)
+            NumPut("Int", margin, "Int", margin,
+                "Int", margin + Max(1, extent.Width),
+                "Int", margin + lineHeight, drawRect)
+            DllCall("user32\DrawTextW", "Ptr", measureDc,
+                "Str", text, "Int", -1, "Ptr", drawRect,
+                "UInt", 0x00000920, "Int")
+
+            minimumY := canvasHeight
+            maximumY := -1
+            Loop canvasHeight {
+                y := A_Index - 1
+                rowOffset := y * canvasWidth * 4
+                Loop canvasWidth {
+                    x := A_Index - 1
+                    pixel := NumGet(pixelAddress,
+                        rowOffset + x * 4, "UInt") & 0x00FFFFFF
+                    if !pixel
+                        continue
+                    minimumY := Min(minimumY, y)
+                    maximumY := Max(maximumY, y)
+                }
+            }
+            if maximumY < minimumY
+                return false
+            result := {Top: minimumY - margin,
+                Bottom: maximumY - margin + 1, LineHeight: lineHeight}
+            if this.RasterInkBoundsCache.Count
+                    >= this.RasterInkBoundsCacheLimit
+                this.RasterInkBoundsCache.Clear()
+            this.RasterInkBoundsCache[cacheKey] := result
+            return result
+        } finally {
+            if previousFont
+                DllCall("gdi32\SelectObject", "Ptr", measureDc,
+                    "Ptr", previousFont, "Ptr")
+            if previousBitmap
+                DllCall("gdi32\SelectObject", "Ptr", measureDc,
+                    "Ptr", previousBitmap, "Ptr")
+            if bitmap
+                DllCall("gdi32\DeleteObject", "Ptr", bitmap)
+            if measureDc
+                DllCall("gdi32\DeleteDC", "Ptr", measureDc)
+        }
+    }
+
+    static GetRasterTextCenterOffset(hdc, text, containerHeight) {
+        bounds := this.MeasureRasterInkBounds(hdc, text)
+        if !bounds || containerHeight <= 0
+            return 0
+        lineTop := Floor((containerHeight - bounds.LineHeight) / 2)
+        currentInkCenter := lineTop + (bounds.Top + bounds.Bottom) / 2
+        return Round(containerHeight / 2 - currentInkCenter)
+    }
+
+    static CreateRasterCenteredTextRect(hdc, text, left, top, right,
+            bottom) {
+        offset := this.GetRasterTextCenterOffset(hdc, text, bottom - top)
+        rect := Buffer(16, 0)
+        NumPut("Int", left, "Int", top + offset,
+            "Int", right, "Int", bottom + offset, rect)
+        return rect
+    }
+
     static MeasureFontInkCenterDelta(fontName, pointSize, fontWeight,
             dpi, sampleText) {
         try dpi := Max(1, Integer(dpi))
@@ -172,18 +290,22 @@ class RoundedButtonPainter {
 
     Shutdown() {
         token := this.Token
-        this.Token := 0
-        if token
-            try DllCall("gdiplus\GdiplusShutdown", "UPtr", token)
+        if token {
+            DllCall("gdiplus\GdiplusShutdown", "UPtr", token)
+            this.Token := 0
+        }
         if this.ModuleHandle {
-            try DllCall("kernel32\FreeLibrary", "Ptr", this.ModuleHandle)
+            if !DllCall("kernel32\FreeLibrary", "Ptr", this.ModuleHandle,
+                    "Int")
+                throw OSError(A_LastError, "无法释放 GDI+ 模块。")
             this.ModuleHandle := 0
         }
         this.Ready := false
+        return true
     }
 
     __Delete() {
-        this.Shutdown()
+        try this.Shutdown()
     }
 
     SetParentColor(color) {
@@ -388,6 +510,81 @@ class RoundedButtonPainter {
         }
     }
 
+    DrawLeadingCommandSymbol(hdc, symbol, left, top, right, bottom,
+            color, visualSize) {
+        normalizedSymbol := StrReplace(symbol, Chr(0xFE0F))
+        if normalizedSymbol != "⏸" && normalizedSymbol != "▶"
+            return false
+        availableWidth := right - left
+        availableHeight := bottom - top
+        if !this.Ready || !hdc || availableWidth <= 0
+                || availableHeight <= 0
+            return false
+        try visualSize := Max(6.0, Min(visualSize + 0,
+            availableWidth, availableHeight))
+        catch
+            return false
+
+        graphics := 0
+        brush := 0
+        path := 0
+        try {
+            if DllCall("gdiplus\GdipCreateFromHDC", "Ptr", hdc,
+                    "Ptr*", &graphics, "UInt") || !graphics
+                return false
+            if DllCall("gdiplus\GdipCreateSolidFill", "UInt",
+                    this.ColorToArgb(color), "Ptr*", &brush, "UInt") || !brush
+                return false
+            DllCall("gdiplus\GdipSetSmoothingMode", "Ptr", graphics,
+                "Int", 4)
+            DllCall("gdiplus\GdipSetPixelOffsetMode", "Ptr", graphics,
+                "Int", 4)
+
+            visualLeft := (left + right - visualSize) / 2.0
+            visualTop := (top + bottom - visualSize) / 2.0
+            if normalizedSymbol == "⏸" {
+                barWidth := visualSize * 0.28
+                firstStatus := DllCall("gdiplus\GdipFillRectangle",
+                    "Ptr", graphics, "Ptr", brush,
+                    "Float", visualLeft, "Float", visualTop,
+                    "Float", barWidth, "Float", visualSize, "UInt")
+                secondStatus := DllCall("gdiplus\GdipFillRectangle",
+                    "Ptr", graphics, "Ptr", brush,
+                    "Float", visualLeft + visualSize - barWidth,
+                    "Float", visualTop, "Float", barWidth,
+                    "Float", visualSize, "UInt")
+                return firstStatus == 0 && secondStatus == 0
+            }
+
+            if DllCall("gdiplus\GdipCreatePath", "Int", 0,
+                    "Ptr*", &path, "UInt") || !path
+                return false
+            visualRight := visualLeft + visualSize
+            visualBottom := visualTop + visualSize
+            visualCenterY := visualTop + visualSize / 2.0
+            if DllCall("gdiplus\GdipAddPathLine", "Ptr", path,
+                    "Float", visualLeft, "Float", visualTop,
+                    "Float", visualRight, "Float", visualCenterY, "UInt")
+                    || DllCall("gdiplus\GdipAddPathLine", "Ptr", path,
+                    "Float", visualRight, "Float", visualCenterY,
+                    "Float", visualLeft, "Float", visualBottom, "UInt")
+                    || DllCall("gdiplus\GdipClosePathFigure", "Ptr", path,
+                    "UInt")
+                return false
+            return DllCall("gdiplus\GdipFillPath", "Ptr", graphics,
+                "Ptr", brush, "Ptr", path, "UInt") == 0
+        } catch {
+            return false
+        } finally {
+            if path
+                DllCall("gdiplus\GdipDeletePath", "Ptr", path)
+            if brush
+                DllCall("gdiplus\GdipDeleteBrush", "Ptr", brush)
+            if graphics
+                DllCall("gdiplus\GdipDeleteGraphics", "Ptr", graphics)
+        }
+    }
+
     DrawSurface(hdc, width, height, state) {
         graphics := 0
         path := 0
@@ -444,6 +641,39 @@ class RoundedButtonPainter {
             textRect := Buffer(16, 0)
             text := ""
             try text := state.Control.Text
+            if state.HasOwnProp("LeadingTextSlotDip")
+                    && RegExMatch(text, "^(\S+)\s+(.+)$", &leadingMatch) {
+                leadingText := leadingMatch[1]
+                bodyText := leadingMatch[2]
+                availableWidth := Max(1, width - inset * 2)
+                slotWidth := Min(availableWidth, Max(1, Round(
+                    state.LeadingTextSlotDip * textDpi / 96)))
+                gap := Min(Max(0, availableWidth - slotWidth), Max(0,
+                    Round(state.LeadingTextGapDip * textDpi / 96)))
+                bodyExtent := TextVisualAlignment.MeasureText(hdc, bodyText)
+                contentWidth := Min(availableWidth,
+                    slotWidth + gap + bodyExtent.Width)
+                contentX := Floor((width - contentWidth) / 2)
+                visualSize := Max(1, Round(
+                    state.LeadingTextVisualSizeDip * textDpi / 96))
+                if !this.DrawLeadingCommandSymbol(hdc, leadingText,
+                        contentX, 0, contentX + slotWidth, height,
+                        state.TextColor, visualSize) {
+                    leadingRect := TextVisualAlignment
+                        .CreateRasterCenteredTextRect(hdc, leadingText,
+                            contentX, 0, contentX + slotWidth, height)
+                    DllCall("user32\DrawTextW", "Ptr", hdc,
+                        "Str", leadingText, "Int", -1,
+                        "Ptr", leadingRect, "UInt", 0x00000825, "Int")
+                }
+                bodyLeft := contentX + slotWidth + gap
+                bodyRect := TextVisualAlignment.CreateCenteredTextRect(hdc,
+                    bodyText, bodyLeft, 0, contentX + contentWidth, height)
+                DllCall("user32\DrawTextW", "Ptr", hdc,
+                    "Str", bodyText, "Int", -1, "Ptr", bodyRect,
+                    "UInt", 0x00008824, "Int")
+                return
+            }
             hasLeadingImage := state.HasOwnProp("ButtonImage")
                 && IsObject(state.ButtonImage)
             hasTrailingImage := state.HasOwnProp("TrailingButtonImage")

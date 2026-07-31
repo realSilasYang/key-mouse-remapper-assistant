@@ -240,8 +240,11 @@ class NamedPipeChannel {
     Close() {
         if this.Closed
             return false
+        disconnectError := ""
         if this.IsServer && this.Connected
             try this.RejectServerConnection()
+            catch as pipeDisconnectError
+                disconnectError := pipeDisconnectError
         if this.Handle && !DllCall("kernel32\CloseHandle", "Ptr",
                 this.Handle, "Int")
             throw OSError(A_LastError, "无法关闭命名管道句柄。")
@@ -249,6 +252,9 @@ class NamedPipeChannel {
         this.Connected := false
         this.PeerProcessId := 0
         this.Closed := true
+        if IsObject(disconnectError)
+            throw Error("命名管道句柄已关闭，但断开服务端连接失败："
+                disconnectError.Message)
         return true
     }
 

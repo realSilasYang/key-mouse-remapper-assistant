@@ -117,7 +117,10 @@ if ($interaction -notmatch 'RegisterIconSurface\(' -or
     $interaction -notmatch 'tintColor := "none"' -or
     $buttonPainter -notmatch 'class TextVisualAlignment' -or
     $buttonPainter -notmatch 'MeasureInkBounds\(' -or
+    $buttonPainter -notmatch 'MeasureRasterInkBounds\(' -or
     $buttonPainter -notmatch 'CreateCenteredTextRect\(' -or
+    $buttonPainter -notmatch 'DrawLeadingCommandSymbol\(' -or
+    $interaction -notmatch 'SetButtonLeadingTextSlot\(' -or
     $buttonPainter -notmatch 'multiline \? 0x00000810 : 0x00008824') {
     $failures.Add('Lucide controls must preserve semantic colors, support explicit tinting and multiline text, and align visible text ink with icon centers.')
 }
@@ -184,6 +187,7 @@ $inputWorker = Get-Content -LiteralPath (Join-Path $projectRoot `
     'src\Workers\InputEngineWorker.ahk') -Raw -Encoding UTF8
 $workerController = Get-Content -LiteralPath (Join-Path $projectRoot `
     'src\Process\InputWorkerController.ahk') -Raw -Encoding UTF8
+$rawObservationPolicy = Get-Content -LiteralPath (Join-Path $projectRoot 'src\Input\RawInputObservationPolicy.ahk') -Raw -Encoding UTF8
 $workerEventBuffer = Get-Content -LiteralPath (Join-Path $projectRoot `
     'src\Process\WorkerEventBuffer.ahk') -Raw -Encoding UTF8
 $authenticatedIpc = Get-Content -LiteralPath (Join-Path $projectRoot `
@@ -194,6 +198,11 @@ $mappingRepository = Get-Content -LiteralPath (Join-Path $projectRoot `
     'src\Core\MappingCodeRepository.ahk') -Raw -Encoding UTF8
 $rulePackageService = Get-Content -LiteralPath (Join-Path $projectRoot `
     'src\Core\RulePackageService.ahk') -Raw -Encoding UTF8
+if ($mappingWindow -notmatch 'SetFocusSink\(this\.Status\)' -or
+    $interaction -notmatch
+        'if hwnd == this\.Gui\.Hwnd \{[\s\S]{0,240}GetFocusSinkHwnd\(this\.Gui\.Hwnd\)[\s\S]{0,100}MoveKeyboardFocus\(focusTarget\)') {
+    $failures.Add('Clicking the main client background must remove ListView focus without clearing its selection.')
+}
 if ($appController -notmatch 'OnExit\(this\.ExitCallback,\s*0\)' -or
         $inputWorker -notmatch 'OnExit\(this\.ExitCallback,\s*0\)') {
     $failures.Add('Manual application and worker shutdown must unregister global OnExit callbacks.')
@@ -232,7 +241,9 @@ if ($settingsWindow -match 'this\.Title\s*:=' -or
     $settingsWindow -notmatch 'CalculateCenteredPosition' -or
     $settingsWindow -notmatch 'MonitorFromWindow' -or
     $settingsWindow -notmatch 'GetMonitorInfoW' -or
-    $settingsWindow -notmatch 'Tr\("通用"\).*Tr\("录制"\).*Tr\("事件"\).*Tr\("关于"\)' -or
+    $settingsWindow -notmatch 'Tr\("外观"\).*Tr\("规则包"\).*Tr\("事件"\).*Tr\("关于"\)' -or
+    $settingsWindow -notmatch 'BuildRulePackageTab' -or
+    $settingsWindow -match 'BuildGeneralTab|BuildRecordingTab|EscapeCancelsCheck|ShowAtStartupCheck|ShowMainWindowAtStartup' -or
     $settingsWindow -notmatch 'Tr\("保存"\)' -or
     $settingsWindow -notmatch 'Tr\("取消"\)' -or
     $settingsWindow -notmatch 'RefreshFontDropDown' -or
@@ -378,7 +389,10 @@ if (Test-Path -LiteralPath (Join-Path $projectRoot `
         'assets\ui-icons\lucide\save.svg')) {
     $failures.Add('Unused save.svg must not return after form actions became text-only.')
 }
-if ($mappingWindow -match 'SetButtonTooltip\(' -or
+if ($mappingWindow -notmatch 'SetButtonTooltip\(this\.SettingsButton' -or
+    $mappingWindow -notmatch '配置外观、规则包、事件`n以及关于选项' -or
+    $mappingWindow -notmatch '打开帮助信息`n可选择查看使用说明、运行日志或提交反馈' -or
+    $mappingWindow -notmatch '快揭不开锅了（≥Д≤）' -or
     $settingsWindow -match 'SetButtonTooltip\(this\.ReleasesButton' -or
     $settingsWindow -notmatch
         'SetButtonLucideIcon\(this\.ReleasesButton,[\s\S]{0,100}refresh-cw-action\.svg' -or
@@ -436,6 +450,21 @@ if ($keyCapture -notmatch 'HandleRawDown\(' -or
         $keyCapture -notmatch 'this\.HeldKeys\.Count' -or
         $keyCapture -notmatch 'RecordedKeys') {
     $failures.Add('Raw Input recording must accumulate unique keys and finish on release or device removal.')
+}
+if ($eventViewerWindow -notmatch 'FormatLocalTimestamp\(entry\.Timestamp\)' -or
+    $eventViewerWindow -notmatch 'SystemTimeToTzSpecificLocalTimeEx' -or
+    $rawObservationPolicy -notmatch 'ShouldForwardToGui\(' -or
+    $rawObservationPolicy -notmatch 'String\(unifiedEvent\["phase"\]\)\s*!=\s*"move"' -or
+    $inputWorkerEntry -notmatch 'RawInputObservationPolicy\.ahk' -or
+    $inputWorker -notmatch
+        'ShouldForwardToGui\(unifiedEvent,\s*this\.FullRawInputObservation\)' -or
+    $inputWorker -notmatch 'case\s+"raw_observation"' -or
+    $workerController -notmatch 'SetRawObservation\(enabled\)' -or
+    $appController -notmatch
+        'ShouldForwardToGui\(unifiedEvent,\s*this\.RawObservationDepth\s*>\s*0\)' -or
+    $appController -notmatch 'SetRawObservation\(true\)' -or
+    $appController -notmatch 'SetRawObservation\(false\)') {
+    $failures.Add('The event viewer must display local time, suppress mouse moves by default, and enable the full Raw Input GUI stream only during raw observation.')
 }
 if ($mappingRepository -notmatch 'ToggleEnabled\(mappingId\)' -or
     $mappingRepository -notmatch 'ValidateCommentOnlyRegion\(regionBody\)' -or
@@ -527,7 +556,8 @@ if ($mappingWindow -match 'ReloadButton|🔄 重新加载' -or
     $mappingWindow -notmatch 'GetAddButtonText\(\).*➕' -or
     $mappingWindow -notmatch 'GetPauseButtonText\(resume\s*:=\s*false\)' -or
     $mappingWindow -notmatch 'GetDeleteButtonText\(\).*🗑' -or
-    $mappingWindow -notmatch 'ClearButtonIcon\(this\.PauseResumeButton\)') {
+    $mappingWindow -notmatch 'ClearButtonIcon\(this\.PauseResumeButton\)' -or
+    $mappingWindow -notmatch 'SetButtonLeadingTextSlot\(button, 20, 4, 10\)') {
     $failures.Add('The toolbar must preserve assistant-style mapping commands and the right-side Settings, Help, Donate group, while the tray retains Reload.')
 }
 if ($supportInfoWindow -notmatch [regex]::Escape(
@@ -553,14 +583,30 @@ if ($supportInfoWindow -notmatch [regex]::Escape(
     $appController -notmatch 'this\.SupportInfo\.ApplyAppearance\(' -or
     $appController -notmatch 'this\.Help\.ApplyAppearance\(' -or
     $appController -notmatch 'this\.Donation\.ApplyAppearance\(' -or
-    $appController -notmatch 'this\.SupportInfo\.Dispose\(false\)' -or
-    $appController -notmatch 'this\.Help\.Dispose\(false\)' -or
-    $appController -notmatch 'this\.Donation\.Dispose\(false\)') {
+    $appController -notmatch 'ObjBindMethod\(this\.SupportInfo,\s*"Dispose",\s*false\)' -or
+    $appController -notmatch 'ObjBindMethod\(this\.Help,\s*"Dispose",\s*false\)' -or
+    $appController -notmatch 'ObjBindMethod\(this\.Donation,\s*"Dispose",\s*false\)') {
     $failures.Add('Help routing, the built-in guide, donation QR resources, or their owned-window lifecycle is incomplete.')
 }
-if ($appController -notmatch 'A_TrayMenu\.Default\s*:=\s*Tr\("显示主界面"\)' -or
-    $appController -notmatch 'A_TrayMenu\.ClickCount\s*:=\s*1') {
-    $failures.Add('The tray icon must restore the main window with one click through its default menu item.')
+$trayMenuAddCount = [regex]::Matches($appController,
+    'A_TrayMenu\.Add\(').Count
+if ($trayMenuAddCount -ne 3 -or
+    $appController -notmatch 'A_TrayMenu\.Add\(Tr\("显示主界面"\)' -or
+    $appController -notmatch 'A_TrayMenu\.Add\(Tr\("重新加载"\)' -or
+    $appController -notmatch 'A_TrayMenu\.Add\(Tr\("退出程序"\)' -or
+    $appController -notmatch 'A_TrayMenu\.Default\s*:=\s*Tr\("显示主界面"\)' -or
+    $appController -notmatch 'A_TrayMenu\.ClickCount\s*:=\s*1' -or
+    $appController -match 'A_TrayMenu\.Add\(\)|RestoreLastKnownGood|RestartElevated') {
+    $failures.Add('The tray must contain only Show, Reload, and Exit, with one-click Show as the default.')
+}
+if ($appController -notmatch 'KEY_MOUSE_REMAPPER_SHOW_AFTER_RELOAD' -or
+    $appController -notmatch 'EnvSet\("KEY_MOUSE_REMAPPER_SHOW_AFTER_RELOAD",\s*"1"\)' -or
+    $appController -match 'ShowMainWindowAtStartup') {
+    $failures.Add('Startup must stay in the tray unless a one-shot reload request asks to show the main window.')
+}
+if ($appController -notmatch 'this\.ExitCallback\s*:=\s*ObjBindMethod\(this,\s*"HandleExit"\)' -or
+    $appController -notmatch 'HandleExit\(\*\)\s*\{[\s\S]{0,512}this\.Shutdown\(\)[\s\S]{0,512}return\s+0') {
+    $failures.Add('The OnExit callback must always allow ExitApp and Reload to close the previous instance after cleanup.')
 }
 if ($appController -notmatch 'ScheduleReload\(' -or
     $appController -notmatch 'this\.ReloadTimer\s*:=\s*ObjBindMethod' -or
@@ -743,6 +789,21 @@ if ($buildScript -notmatch 'key-mouse-remapper-\$version-windows-x64' -or
     $releaseArtifactTests -notmatch 'obsolete product artifact') {
     $failures.Add('Default release builds must remove and reject obsolete pre-rename artifacts.')
 }
+if ($buildScript -notmatch
+        'key-mouse-remapper-assistant-\$version-source' -or
+    $buildScript -notmatch 'SourcePackageDirectory' -or
+    $buildScript -notmatch 'SourceZipPath' -or
+    $buildScript -match
+        '(?im)^\s*\$checksumsPath\s*=|^\s*ChecksumsPath\s*=' -or
+    $releaseWorkflow -match 'SHA256SUMS\.txt|dist/\*\.zip' -or
+    $releaseWorkflow -notmatch
+        'key-mouse-remapper-assistant-\$\{\{ steps\.release_meta\.outputs\.version \}\}-windows-x64\.zip' -or
+    $releaseWorkflow -notmatch
+        'key-mouse-remapper-assistant-\$\{\{ steps\.release_meta\.outputs\.version \}\}-source\.zip' -or
+    $releaseArtifactTests -notmatch
+        'exactly the portable and source ZIPs') {
+    $failures.Add('Releases must publish exactly one portable ZIP and one source ZIP, without SHA256SUMS.txt.')
+}
 if ($buildScript -match
         'IncludeNativeDriver|MicrosoftSignedDriverDirectory|nativeDriver|KmrInput' -or
         $releaseWorkflow -match
@@ -837,9 +898,8 @@ if ($packagedLauncher -notmatch 'ShellExecuteW' -or
     $packagedLauncher -notmatch 'RunWait\(' -or
     $buildScript -notmatch '\.Replace\([\s\S]*?runtimeHashPlaceholder' -or
     $entry -match 'if !A_IsAdmin' -or
-    $appController -notmatch 'RestartElevated' -or
-    $appController -notmatch '"WStr", "runas"') {
-    $failures.Add('Normal startup must use least privilege and expose only explicit optional elevation.')
+    $appController -match 'RestartElevated|"WStr", "runas"') {
+    $failures.Add('Normal startup must use least privilege without an in-app elevation restart path.')
 }
 
 function Test-ActiveSyntaxProbe {

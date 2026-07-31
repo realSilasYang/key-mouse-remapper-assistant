@@ -75,6 +75,16 @@ class RuleSpec {
             spec[fieldName] := normalizedActions
             hasAction := hasAction || normalizedActions.Length > 0
         }
+        if spec["from"]["event"] == "up" {
+            if spec["from"]["repeat"] == "only"
+                throw Error("up 来源不支持 repeat=only；松开事件不会产生自动重复。")
+            for fieldName in ["to_if_alone", "to_if_held_down",
+                    "to_if_other_key_pressed", "to_delayed_if_invoked"] {
+                if spec[fieldName].Length
+                    throw Error("up 来源不支持 " fieldName
+                        "；该动作需要从按下开始跟踪状态。")
+            }
+        }
         if !hasAction
             throw Error("RuleSpec 至少需要一个输出动作。")
         if hasFixedRepeat && spec["from"]["event"] != "down"
@@ -93,6 +103,8 @@ class RuleSpec {
     static CreateFromCaptures(id, sourceCapture, targetCapture, purpose) {
         sourceName := sourceCapture.HasOwnProp("RawDisplay")
             ? sourceCapture.RawDisplay : sourceCapture.Display
+        sourceIdentityName := sourceCapture.HasOwnProp("KeyName")
+            ? sourceCapture.KeyName : sourceName
         targetName := targetCapture.HasOwnProp("RawDisplay")
             ? targetCapture.RawDisplay : targetCapture.Display
         isSimultaneous := sourceCapture.HasOwnProp("IsSimultaneous")
@@ -111,7 +123,13 @@ class RuleSpec {
             from := Map("hotkey", sourceCapture.SourceSpec,
                 "event", InStr(sourceCapture.SourceSpec, " Up")
                     ? "up" : "down",
-                "key", Map("name", sourceName))
+                "key", Map("name", sourceIdentityName))
+            if sourceCapture.HasOwnProp("Modifiers") {
+                capturedModifiers := this.CaptureModifiersToNames(
+                    sourceCapture.Modifiers)
+                if capturedModifiers.Length
+                    from["modifiers"] := capturedModifiers
+            }
             if sourceCapture.HasOwnProp("Kind")
                 from["key"]["kind"] := sourceCapture.Kind
             if sourceCapture.HasOwnProp("VKHex") && sourceCapture.VKHex != ""
@@ -187,8 +205,20 @@ class RuleSpec {
             this.ReadArray(from, "modifiers", []), false)
         optionalModifiers := this.NormalizeModifiers(
             this.ReadArray(from, "optional_modifiers", []), true)
+        if hotkeyName != "" {
+            parsedHotkey := this.ParseHotkeyModifiers(hotkeyName)
+            modifiers := this.ResolveParsedModifiers(modifiers,
+                parsedHotkey.Modifiers, "from.modifiers")
+            optionalModifiers := this.ResolveParsedModifiers(
+                optionalModifiers, parsedHotkey.OptionalModifiers,
+                "from.optional_modifiers")
+        }
         if hotkeyName == "" && !key.Count && !simultaneous.Length && !sequence.Length
             throw Error("RuleSpec from 必须指定 hotkey、key、simultaneous 或 sequence。")
+        if hotkeyName != "" && !key.Count
+                && !simultaneous.Length && !sequence.Length
+            throw Error("当前输入后端的简单规则必须指定 from.key，"
+                . "不能只写 from.hotkey。")
         if simultaneous.Length && sequence.Length
             throw Error("RuleSpec from 不能同时指定 simultaneous 和 sequence。")
         if (simultaneous.Length || sequence.Length) && hotkeyName != ""
@@ -198,8 +228,6 @@ class RuleSpec {
             throw Error("复杂来源暂不接受独立 modifiers；请把修饰键写入按键数组。")
         if simultaneous.Length == 1 || sequence.Length == 1
             throw Error("simultaneous 和 sequence 至少需要两个按键。")
-        if hotkeyName != "" && (modifiers.Length || optionalModifiers.Length)
-            throw Error("显式 hotkey 不能再指定 modifiers。")
         eventName := StrLower(this.ReadString(from, "event", "down"))
         if hotkeyName != "" && RegExMatch(hotkeyName, "i)\s+Up$") {
             if from.Has("event") && eventName != "up"
@@ -488,14 +516,20 @@ class RuleSpec {
         normalized["kind"] := kind
         if value.Has("vk")
             normalized["vk"] := this.NormalizeHexCode(value["vk"], 4,
-                label ".vk")
+                label ".vk", 0xFF, 2)
         if value.Has("sc")
             normalized["sc"] := this.NormalizeHexCode(value["sc"], 4,
-                label ".sc")
+                label ".sc", 0x1FF, 3)
         inferredExtended := normalized.Has("sc")
             && Integer("0x" normalized["sc"]) > 0xFF
-        normalized["extended"] := JsonBoolean(
-            this.ReadBoolean(value, "extended", inferredExtended))
+        extended := this.ReadBoolean(value, "extended", inferredExtended)
+        if inferredExtended && !extended
+            throw Error(label ".extended 不能与扩展扫描码冲突。")
+        if normalized.Has("sc") && extended {
+            scValue := Integer("0x" normalized["sc"]) | 0x100
+            normalized["sc"] := Format("{:03X}", scValue)
+        }
+        normalized["extended"] := JsonBoolean(extended)
         if value.Has("command") {
             command := this.ReadInteger(value, "command", 0)
             if command < 0 || command > 0xFFFF
@@ -505,13 +539,18 @@ class RuleSpec {
         return normalized
     }
 
-    static NormalizeHexCode(value, maximumDigits, label) {
+    static NormalizeHexCode(value, maximumDigits, label,
+            maximumValue := "", outputDigits := 0) {
         text := Trim(String(value))
         text := RegExReplace(text, "i)^(?:vk|sc|0x)")
         if text == "" || !RegExMatch(text,
                 "i)^[0-9a-f]{1," maximumDigits "}$")
             throw Error(label " 必须是 1 到 " maximumDigits " 位十六进制数。")
-        return StrUpper(text)
+        numericValue := Integer("0x" text)
+        if maximumValue != "" && numericValue > maximumValue
+            throw Error(label " 超出支持的取值范围。")
+        return outputDigits > 0
+            ? Format("{:0" outputDigits "X}", numericValue) : StrUpper(text)
     }
 
     static GetKeyIdentitySignature(key) {
@@ -544,6 +583,19 @@ class RuleSpec {
         return result
     }
 
+    static CaptureModifiersToNames(modifierInfos) {
+        if Type(modifierInfos) != "Array"
+            throw TypeError("录制结果的 Modifiers 必须是数组。")
+        result := []
+        for modifierInfo in modifierInfos {
+            if !IsObject(modifierInfo)
+                    || !modifierInfo.HasOwnProp("KeyName")
+                throw TypeError("录制结果包含无效修饰键。")
+            result.Push(this.CanonicalModifierName(modifierInfo.KeyName))
+        }
+        return result
+    }
+
     static NormalizeStringArray(values) {
         if values.Length > this.MaximumKeyListItems
             throw Error("字符串数组数量超过上限。")
@@ -560,18 +612,11 @@ class RuleSpec {
 
     static NormalizeModifiers(values, optional := false) {
         values := this.NormalizeStringArray(values)
-        allowed := Map("Ctrl", true, "Shift", true, "Alt", true,
-            "Win", true, "LCtrl", true, "RCtrl", true,
-            "LShift", true, "RShift", true, "LAlt", true,
-            "RAlt", true, "LWin", true, "RWin", true)
         seen := Map()
         result := []
         for value in values {
-            canonical := value
-            if optional && StrLower(value) == "any"
-                canonical := "any"
-            else if !allowed.Has(value)
-                throw Error("未知修饰键：" value)
+            canonical := optional && StrLower(value) == "any"
+                ? "any" : this.CanonicalModifierName(value)
             if optional && canonical != "any"
                 throw Error("当前后端的 optional_modifiers 仅支持 any。")
             if seen.Has(canonical)
@@ -580,6 +625,106 @@ class RuleSpec {
             result.Push(canonical)
         }
         return result
+    }
+
+    static CanonicalModifierName(value) {
+        value := StrLower(Trim(String(value)))
+        switch value {
+            case "control", "ctrl": return "Ctrl"
+            case "shift": return "Shift"
+            case "alt", "menu": return "Alt"
+            case "win": return "Win"
+            case "lcontrol", "lctrl": return "LCtrl"
+            case "rcontrol", "rctrl": return "RCtrl"
+            case "lshift": return "LShift"
+            case "rshift": return "RShift"
+            case "lalt", "lmenu": return "LAlt"
+            case "ralt", "rmenu": return "RAlt"
+            case "lwin": return "LWin"
+            case "rwin": return "RWin"
+        }
+        throw Error("未知修饰键：" value)
+    }
+
+    static ParseHotkeyModifiers(hotkeyName) {
+        name := RegExReplace(Trim(String(hotkeyName)), "i)\s+Up$")
+        position := 1
+        modifiers := []
+        optionalModifiers := []
+        while position <= StrLen(name) {
+            character := SubStr(name, position, 1)
+            if character == "$" || character == "~" {
+                position++
+                continue
+            }
+            if character == "*" {
+                if !optionalModifiers.Length
+                    optionalModifiers.Push("any")
+                position++
+                continue
+            }
+            prefix := ""
+            if (character == "<" || character == ">")
+                    && position < StrLen(name) {
+                nextCharacter := SubStr(name, position + 1, 1)
+                if InStr("^+!#", nextCharacter, true) {
+                    prefix := character nextCharacter
+                    position += 2
+                }
+            }
+            if prefix == "" && InStr("^+!#", character, true) {
+                prefix := character
+                position++
+            }
+            if prefix == ""
+                break
+            modifiers.Push(this.HotkeyPrefixToModifier(prefix))
+        }
+        primaryName := Trim(SubStr(name, position))
+        if primaryName == ""
+            throw Error("from.hotkey 缺少主键。")
+        if InStr(primaryName, "&")
+            throw Error("当前输入后端不支持 from.hotkey 自定义组合键；"
+                . "请使用 simultaneous 或 sequence。")
+        modifiers := this.NormalizeModifiers(modifiers)
+        return {Modifiers: modifiers,
+            OptionalModifiers: optionalModifiers}
+    }
+
+    static HotkeyPrefixToModifier(prefix) {
+        switch prefix {
+            case "^": return "Ctrl"
+            case "+": return "Shift"
+            case "!": return "Alt"
+            case "#": return "Win"
+            case "<^": return "LCtrl"
+            case ">^": return "RCtrl"
+            case "<+": return "LShift"
+            case ">+": return "RShift"
+            case "<!": return "LAlt"
+            case ">!": return "RAlt"
+            case "<#": return "LWin"
+            case ">#": return "RWin"
+        }
+        throw Error("未知热键修饰前缀：" prefix)
+    }
+
+    static ResolveParsedModifiers(explicitValues, parsedValues, label) {
+        if !explicitValues.Length
+            return parsedValues.Clone()
+        if !parsedValues.Length
+            return explicitValues
+        if explicitValues.Length != parsedValues.Length
+            throw Error(label " 与 from.hotkey 的修饰键不一致。")
+        parsedSet := Map()
+        for value in parsedValues
+            parsedSet[value] := parsedSet.Get(value, 0) + 1
+        for value in explicitValues {
+            if !parsedSet.Has(value) || parsedSet[value] < 1
+                throw Error(label " 与 from.hotkey 的修饰键不一致。")
+            parsedSet[value]--
+        }
+        return explicitValues
     }
 
     static ReadMap(container, key, fallback?) {

@@ -101,6 +101,21 @@ try {
     AssertEqual(0, throwingTrace.Subscribers.Count,
         "异常订阅者没有被隔离并移除")
 
+    mutatingTrace := EventTraceService(2)
+    mutationLog := []
+    mutatingSubscriber := SelfRemovingEventSubscriber(mutatingTrace,
+        mutationLog)
+    mutatingSubscriber.SubscriptionId := mutatingTrace.Subscribe(
+        mutatingSubscriber)
+    mutatingTrace.Subscribe(entry => mutationLog.Push("following"))
+    mutatingTrace.Record("runtime", "subscription_mutation")
+    mutatingTrace.Record("runtime", "subscription_after_mutation")
+    AssertTrue(mutationLog.Length == 3
+            && mutationLog[1] == "self"
+            && mutationLog[2] == "following"
+            && mutationLog[3] == "following",
+        "回调取消订阅破坏了当前发布或后续订阅者")
+
     longText := ""
     Loop EventTraceService.MaximumTextLength + 100
         longText .= "x"
@@ -166,4 +181,17 @@ ExitApp(0)
 
 ThrowingEventSubscriber(*) {
     throw Error("subscriber failure")
+}
+
+class SelfRemovingEventSubscriber {
+    __New(trace, log) {
+        this.Trace := trace
+        this.Log := log
+        this.SubscriptionId := 0
+    }
+
+    Call(*) {
+        this.Log.Push("self")
+        this.Trace.Unsubscribe(this.SubscriptionId)
+    }
 }

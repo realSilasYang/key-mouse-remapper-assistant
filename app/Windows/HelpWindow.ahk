@@ -19,7 +19,7 @@ class HelpWindow {
         this.Disposed := false
         try this.Build()
         catch as buildError {
-            this.Dispose()
+            try this.Dispose()
             throw buildError
         }
     }
@@ -84,7 +84,6 @@ class HelpWindow {
             Tr("• Ctrl+Z 撤销，Ctrl+Shift+Z 或 Ctrl+Y 重做。映射增删、暂停恢复、拖动排序、代码编辑和设置修改都会进入持久历史。"),
             Tr("五、后台运行与问题排查"),
             Tr("• 主窗口关闭后程序仍驻留托盘。托盘可以重新显示主界面、手动重新加载或彻底退出；修改映射规则后通常不需要手动重新加载。"),
-            Tr("• 映射对管理员程序无效时，请从托盘选择以管理员身份重新启动。遇到规则冲突或按键未按预期执行时，先在事件查看器中核对输入和规则结果。"),
             Tr("• “帮助信息”还可打开项目反馈页面。提交问题时请说明系统版本、复现步骤、相关 @mapping 代码和事件导出，并在公开前移除敏感路径或应用信息。"),
             "",
             Tr("当前版本") ": " GetApplicationEditionSummary(),
@@ -162,24 +161,35 @@ class HelpWindow {
         if this.Disposed
             return
         this.Disposed := true
-        try SetTimer(this.HideCaretTimer, 0)
+        cleanup := CleanupCollector("帮助窗口")
+        if cleanup.Run("停止光标计时器",
+                () => SetTimer(this.HideCaretTimer, 0))
+            this.HideCaretTimer := ""
         closeContext := ""
         if this.OwnerLease {
-            closeContext := WindowHierarchy.Release(this.OwnerLease)
-            this.OwnerLease := ""
+            try {
+                closeContext := WindowHierarchy.Release(this.OwnerLease)
+                this.OwnerLease := ""
+            } catch as ownerError {
+                cleanup.Failures.Push("释放父窗口关系：" ownerError.Message)
+            }
         }
         if IsObject(this.Interactions)
-            try this.Interactions.Dispose()
-        this.Interactions := ""
+                && cleanup.Run("释放交互服务",
+                    () => this.Interactions.Dispose())
+            this.Interactions := ""
         if IsObject(this.Gui)
-            try this.Gui.Destroy()
-        ReleaseApplicationWindowIcons(this.IconHandles)
-        this.IconHandles := []
-        this.Gui := ""
+                && cleanup.Run("销毁窗口", () => this.Gui.Destroy())
+            this.Gui := ""
+        if cleanup.Run("释放窗口图标",
+                () => ReleaseApplicationWindowIcons(this.IconHandles))
+            this.IconHandles := []
         this.TextEdit := ""
-        this.HideCaretTimer := ""
-        this.OwnerWindow.OnHelpClosed(this)
+        cleanup.Run("通知父窗口", () => this.OwnerWindow.OnHelpClosed(this))
         if activateOwner
-            WindowHierarchy.CompleteClose(closeContext)
+            cleanup.Run("恢复父窗口", () =>
+                WindowHierarchy.CompleteClose(closeContext))
+        cleanup.Complete()
+        return true
     }
 }

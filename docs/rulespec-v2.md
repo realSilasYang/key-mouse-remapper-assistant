@@ -60,6 +60,11 @@ JSON 的 SHA-256。映射区域每一行只能为空或以分号开头；任何�
 名称、VK、SC、扩展位和 usage。`modifiers` 支持左右侧明确的 Ctrl、Shift、Alt、Win；通用
 修饰键在运行时匹配任一侧，显式侧别仍保持严格。
 
+`up` 来源不会产生自动重复，也没有从按下开始的状态，因此不接受 `repeat=only`、
+`to_if_alone`、`to_if_held_down`、`to_if_other_key_pressed` 或
+`to_delayed_if_invoked`。它可以执行 `to`、`to_after_key_up` 和
+`to_delayed_if_canceled`。
+
 复杂手势使用：
 
 - `simultaneous`：无序同时键集合；

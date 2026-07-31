@@ -21,7 +21,7 @@ class DarkConfirmDialog {
         this.Disposed := false
         try this.Build()
         catch as buildError {
-            this.Dispose(false)
+            try this.Dispose(false)
             throw buildError
         }
     }
@@ -171,21 +171,32 @@ class DarkConfirmDialog {
         if this.Disposed
             return
         this.Disposed := true
+        cleanup := CleanupCollector("确认窗口")
         closeContext := ""
         if this.OwnerLease {
-            closeContext := WindowHierarchy.Release(this.OwnerLease)
-            this.OwnerLease := ""
+            try {
+                closeContext := WindowHierarchy.Release(this.OwnerLease)
+                this.OwnerLease := ""
+            } catch as ownerError {
+                cleanup.Failures.Push("释放父窗口关系：" ownerError.Message)
+            }
         }
         if IsObject(this.Interactions)
-            try this.Interactions.Dispose()
-        this.Interactions := ""
+                && cleanup.Run("释放交互服务",
+                    () => this.Interactions.Dispose())
+            this.Interactions := ""
         if IsObject(this.Gui)
-            try this.Gui.Destroy()
-        ReleaseApplicationWindowIcons(this.IconHandles)
-        this.IconHandles := []
-        this.Gui := ""
-        this.OwnerGui := ""
+                && cleanup.Run("销毁窗口", () => this.Gui.Destroy())
+            this.Gui := ""
+        if cleanup.Run("释放窗口图标",
+                () => ReleaseApplicationWindowIcons(this.IconHandles))
+            this.IconHandles := []
         if activateOwner
-            WindowHierarchy.CompleteClose(closeContext)
+            cleanup.Run("恢复父窗口", () =>
+                WindowHierarchy.CompleteClose(closeContext))
+        if !this.OwnerLease
+            this.OwnerGui := ""
+        cleanup.Complete()
+        return true
     }
 }

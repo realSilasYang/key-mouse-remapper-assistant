@@ -410,8 +410,8 @@ class HistoryToastWindow {
     }
 
     CancelTimers() {
-        try SetTimer(this.HideTimer, 0)
-        try SetTimer(this.AnimationTimer, 0)
+        SetTimer(this.HideTimer, 0)
+        SetTimer(this.AnimationTimer, 0)
         this.HideDeadlineTicks := 0
         this.AnimationPhase := "idle"
     }
@@ -424,9 +424,9 @@ class HistoryToastWindow {
         text := this.TextControl.Text
         this.CancelTimers()
         guiObj := this.Gui
+        guiObj.Destroy()
         this.Gui := ""
         this.TextControl := ""
-        try guiObj.Destroy()
         if wasVisible && text != ""
             return this.Show(text)
         return true
@@ -436,15 +436,20 @@ class HistoryToastWindow {
         if this.Disposed
             return
         this.Disposed := true
-        this.CancelTimers()
+        cleanup := CleanupCollector("历史提示窗口")
+        if cleanup.Run("停止计时器", () => this.CancelTimers()) {
+            this.HideTimer := ""
+            this.AnimationTimer := ""
+        }
         if this.IsOpen() {
             guiObj := this.Gui
-            this.Gui := ""
-            this.TextControl := ""
-            try guiObj.Destroy()
+            if cleanup.Run("销毁窗口", () => guiObj.Destroy()) {
+                this.Gui := ""
+                this.TextControl := ""
+            }
         }
         this.OwnerWindow := ""
-        this.HideTimer := ""
-        this.AnimationTimer := ""
+        cleanup.Complete()
+        return true
     }
 }

@@ -43,34 +43,45 @@ class ControlAccessibilityService {
         if !hwnd
             return false
         wasRegistered := this.ActiveButtons.Has(hwnd)
-        if wasRegistered
-            this.ActiveButtons.Delete(hwnd)
         if !wasRegistered
             return false
+        if !this.IsWindow(hwnd) {
+            this.ActiveButtons.Delete(hwnd)
+            return true
+        }
         service := this.GetService()
-        if !service || !this.IsWindow(hwnd)
-            return wasRegistered
+        if !service
+            return false
         propertyList := Buffer(32, 0)
         DllCall("kernel32\RtlMoveMemory", "Ptr", propertyList, "Ptr",
             this.GetRoleGuid(), "UPtr", 16)
         DllCall("kernel32\RtlMoveMemory", "Ptr", propertyList.Ptr + 16,
             "Ptr", this.GetDefaultActionGuid(), "UPtr", 16)
-        try return ComCall(9, service, "Ptr", hwnd, "Int", this.ObjectIdClient,
-            "Int", 0, "Ptr", propertyList, "Int", 2, "Int") >= 0
+        cleared := false
+        try cleared := ComCall(9, service, "Ptr", hwnd, "Int",
+            this.ObjectIdClient, "Int", 0, "Ptr", propertyList,
+            "Int", 2, "Int") >= 0
         catch
             return false
+        if cleared
+            this.ActiveButtons.Delete(hwnd)
+        return cleared
     }
 
     static Shutdown() {
         buttonHandles := []
         for hwnd, _ in this.ActiveButtons
             buttonHandles.Push(hwnd)
+        failures := []
         for hwnd in buttonHandles
-            this.ClearButton(hwnd)
-        this.ActiveButtons.Clear()
+            if !this.ClearButton(hwnd)
+                failures.Push(hwnd)
+        if failures.Length
+            throw Error("无法清除 " failures.Length " 个按钮的无障碍属性。")
         this.Service := ""
         this.RoleGuid := ""
         this.DefaultActionGuid := ""
+        return true
     }
 
     static GetService() {

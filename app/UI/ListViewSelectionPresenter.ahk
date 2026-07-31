@@ -18,13 +18,14 @@ class ListViewSelectionPresenter {
 
     Dispose(*) {
         if !this.Attached
-            return
-        this.Attached := false
-        try this.ListView.OnNotify(Win32.NM_CUSTOMDRAW,
+            return true
+        this.ListView.OnNotify(Win32.NM_CUSTOMDRAW,
             this.NotifyCallback, -1)
+        this.Attached := false
         this.ListView := ""
         this.Painter := ""
         this.NotifyCallback := ""
+        return true
     }
 
     IsSelected(listView, lParam, itemState) {

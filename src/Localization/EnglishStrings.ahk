@@ -112,15 +112,6 @@ class EnglishStrings {
             "重新加载",
                 "Reload")
         catalog.Set(
-            "以管理员身份重新启动",
-                "Restart as administrator")
-        catalog.Set(
-            "管理员模式（当前）",
-                "Administrator mode (active)")
-        catalog.Set(
-            "无法以管理员身份重新启动（错误代码 {1}）。",
-                "Could not restart as administrator (error {1}).")
-        catalog.Set(
             "事件查看器",
                 "Event Viewer")
         catalog.Set("事件详情", "Event details")
@@ -532,14 +523,12 @@ class EnglishStrings {
                 "{1} mappings active · custom script order")
         catalog.Set("键鼠重映射小助手设置",
             "Keyboard & Mouse Remapper Assistant settings")
-        catalog.Set("通用",
-            "General")
+        catalog.Set("外观",
+            "Appearance")
+        catalog.Set("规则包",
+            "Rule packages")
         catalog.Set("关于",
             "About")
-        catalog.Set("启动时显示主窗口",
-            "Show the main window at startup")
-        catalog.Set("单独按 Esc 时取消录制",
-            "Press Esc alone to cancel recording")
         catalog.Set("事件缓冲区容量（条）：",
             "Event buffer capacity:")
         catalog.Set("事件查看器自动跟随最新事件",
@@ -574,11 +563,16 @@ class EnglishStrings {
             "Esc cancels recording")
         catalog.Set("事件自动跟随",
             "Follow latest events")
-        catalog.Set("录制", "Recording")
         catalog.Set("事件", "Events")
         catalog.Set("{1}（便携版）", "{1} (portable build)")
         catalog.Set("帮助信息", "Help")
         catalog.Set("捐赠", "Donate")
+        catalog.Set("配置外观、规则包、事件`n以及关于选项",
+            "Configure Appearance, Rule packages, Events,`nand About")
+        catalog.Set("打开帮助信息`n可选择查看使用说明、运行日志或提交反馈",
+            "Open Help`nChoose the user guide, runtime log, or feedback page")
+        catalog.Set("快揭不开锅了（≥Д≤）",
+            "The budget's almost gone（≥Д≤）")
         catalog.Set("使用说明", "User guide")
         catalog.Set("提交反馈", "Send feedback")
         catalog.Set("支持开源项目", "Support the open-source project")
@@ -604,13 +598,8 @@ class EnglishStrings {
         catalog.Set("• 事件查看器记录输入、规则匹配、条件拒绝、执行结果、仓储和系统事件，支持筛选、暂停、清空及 JSONL 导出。", "• Event Viewer records input, rule matches, condition rejections, execution results, repository activity, and system events. It supports filtering, pausing, clearing, and JSONL export.")
         catalog.Set("五、后台运行与问题排查", "5. Background operation and troubleshooting")
         catalog.Set("• 主窗口关闭后程序仍驻留托盘。托盘可以重新显示主界面、手动重新加载或彻底退出；修改映射规则后通常不需要手动重新加载。", "• The app remains in the tray after the main window closes. The tray can show the window, reload manually, or exit completely; mapping changes normally do not require a manual reload.")
-        catalog.Set("• 映射对管理员程序无效时，请从托盘选择以管理员身份重新启动。遇到规则冲突或按键未按预期执行时，先在事件查看器中核对输入和规则结果。", "• If a mapping does not affect an elevated app, restart this app as administrator from the tray. For conflicts or unexpected input, inspect the input and rule outcomes in Event Viewer first.")
         catalog.Set("• “帮助信息”还可打开项目反馈页面。提交问题时请说明系统版本、复现步骤、相关 @mapping 代码和事件导出，并在公开前移除敏感路径或应用信息。", "• Help also opens the project's feedback page. When reporting an issue, include the Windows version, reproduction steps, relevant @mapping code, and an event export, and remove sensitive paths or app information before posting.")
         catalog.Set("安全模式：已停用所有映射和输入观察。连续启动失败 {1} 次。", "Safe mode: all mappings and input observation are disabled after {1} consecutive startup failures.")
-        catalog.Set("恢复最后正常配置", "Restore last known good configuration")
-        catalog.Set("没有可恢复的最后正常配置。", "No last known good configuration is available.")
-        catalog.Set("最后正常配置恢复失败：{1}", "Failed to restore the last known good configuration: {1}")
-        catalog.Set("最后正常配置已恢复，正在自动应用。", "The last known good configuration was restored and is being applied automatically.")
         catalog.Set("仅勾选的规则会被导入。", "Only selected rules will be imported.")
         catalog.Set("三、规则与生效范围", "3. Rules and scope")
         catalog.Set("• 所有规则属于同一全局规则集；生效范围和条件可在 @mapping 编辑器中精确调整，保存后会立即重新选择生效规则。", "• All rules belong to one global rule set. Scope and conditions can be adjusted precisely in the @mapping editor, and saving immediately reselects the active rules.")

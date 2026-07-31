@@ -8,6 +8,7 @@ class SettingsWindow {
 
     __New(ownerWindow) {
         this.OwnerWindow := ownerWindow
+        this.App := ownerWindow.App
         this.Gui := ""
         this.OwnerLease := ""
         this.IconHandles := []
@@ -25,7 +26,7 @@ class SettingsWindow {
         this.FontRefreshInProgress := false
         try this.Build()
         catch as buildError {
-            this.Dispose()
+            try this.Dispose()
             throw buildError
         }
     }
@@ -57,8 +58,8 @@ class SettingsWindow {
         }
         this.Gui.SetFont("norm " (isCompact ? "s9" : "s8") " c"
             UiThemeService.Color("TabText"), fontName)
-        tabLabels := [Tr("通用"), Tr("录制"), Tr("事件"), Tr("关于")]
-        tabIcons := ["sliders-horizontal.svg", "keyboard.svg", "logs.svg",
+        tabLabels := [Tr("外观"), Tr("规则包"), Tr("事件"), Tr("关于")]
+        tabIcons := ["sliders-horizontal.svg", "file-output.svg", "logs.svg",
             "circle-info.svg"]
         tabGap := 8
         tabWidths := this.GetTabButtonWidths(tabLabels,
@@ -83,7 +84,7 @@ class SettingsWindow {
             WindowWidth: this.WindowWidth, ContentX: contentX,
             ContentRight: contentRight, ContentWidth: contentWidth
         }
-        this.BuildGeneralTab()
+        this.BuildAppearanceTab()
 
         this.ValidationStatus := this.Gui.Add("Text", "x25 y255 w"
             (this.WindowWidth - 50) " h22 Center 0x200 BackgroundTrans c"
@@ -100,25 +101,16 @@ class SettingsWindow {
         this.SwitchTab(1)
     }
 
-    BuildGeneralTab() {
+    BuildAppearanceTab() {
         layout := this.Layout
         colors := UiThemeService.GetPalette()
         this.Gui.SetFont("norm s10 c" colors.Text, layout.FontName)
-        this.ShowAtStartupCheck := this.AddTabControl(1,
-            this.Gui.Add("CheckBox", "x0 y70 h26 c" colors.Text,
-                Tr("启动时显示主窗口")))
-        this.CenterControlHorizontally(this.ShowAtStartupCheck,
-            layout.WindowWidth)
-        this.ShowAtStartupCheck.Value :=
-            this.Original.ShowMainWindowAtStartup ? 1 : 0
-        this.AddTabControl(1, this.Gui.Add("Text", "x" layout.ContentX
-            " y111 w" layout.ContentWidth " h1 Background" colors.Divider))
 
         languageLabelWidth := layout.IsCompact ? 132 : 210
         languageInputX := layout.ContentX + languageLabelWidth + 12
         inputWidth := layout.ContentRight - languageInputX
         this.LanguageLabel := this.AddTabControl(1,
-            this.AddFieldLabel(layout.ContentX, 124, languageLabelWidth,
+            this.AddFieldLabel(layout.ContentX, 106, languageLabelWidth,
                 Tr("界面语言：")))
         languageLabels := []
         this.LanguageValues := []
@@ -130,11 +122,11 @@ class SettingsWindow {
                 selectedLanguage := index
         }
         this.LanguageDropDown := this.AddTabControl(1,
-            this.AddDropDown(languageInputX, 126, inputWidth,
+            this.AddDropDown(languageInputX, 108, inputWidth,
                 languageLabels, selectedLanguage))
 
         this.FontLabel := this.AddTabControl(1,
-            this.AddFieldLabel(layout.ContentX, 162, languageLabelWidth,
+            this.AddFieldLabel(layout.ContentX, 144, languageLabelWidth,
                 Tr("界面内容字体：")))
         this.FontValues := ["auto"]
         fontLabels := [Tr("跟随语言默认（{1}）",
@@ -147,13 +139,13 @@ class SettingsWindow {
                 selectedFontIndex := this.FontValues.Length
         }
         this.FontDropDown := this.AddTabControl(1,
-            this.AddDropDown(languageInputX, 164, inputWidth,
+            this.AddDropDown(languageInputX, 146, inputWidth,
                 fontLabels, selectedFontIndex))
         OnMessage(Win32.WM_COMMAND, this.FontDropDownCommandHandler)
         this.FontDropDownCommandRegistered := true
 
         this.ThemeLabel := this.AddTabControl(1,
-            this.AddFieldLabel(layout.ContentX, 200, languageLabelWidth,
+            this.AddFieldLabel(layout.ContentX, 182, languageLabelWidth,
                 Tr("主题：")))
         this.ThemeValues := ["auto", "light", "dark"]
         themeLabels := [Tr("跟随系统"), Tr("浅色"), Tr("深色")]
@@ -163,30 +155,37 @@ class SettingsWindow {
                 selectedTheme := index
         }
         this.ThemeDropDown := this.AddTabControl(1,
-            this.AddDropDown(languageInputX, 202, inputWidth,
+            this.AddDropDown(languageInputX, 184, inputWidth,
                 themeLabels, selectedTheme))
         for controls in [[this.LanguageLabel, this.LanguageDropDown],
                 [this.FontLabel, this.FontDropDown],
                 [this.ThemeLabel, this.ThemeDropDown]]
             this.AlignControlCentersVertically(controls[1], controls[2])
-        ApplyDarkControl(this.ShowAtStartupCheck.Hwnd)
-        this.Interactions.RegisterHandCursor(this.ShowAtStartupCheck)
         this.TabBuilt[1] := true
     }
 
-    BuildRecordingTab() {
+    BuildRulePackageTab() {
         layout := this.Layout
         colors := UiThemeService.GetPalette()
         this.Gui.SetFont("norm s10 c" colors.Text, layout.FontName)
-        this.EscapeCancelsCheck := this.AddTabControl(2,
-            this.Gui.Add("CheckBox", "x0 y138 h26 c" colors.Text,
-                Tr("单独按 Esc 时取消录制")))
-        this.CenterControlHorizontally(this.EscapeCancelsCheck,
-            layout.WindowWidth)
-        this.EscapeCancelsCheck.Value :=
-            this.Original.EscapeCancelsRecording ? 1 : 0
-        ApplyDarkControl(this.EscapeCancelsCheck.Hwnd)
-        this.Interactions.RegisterHandCursor(this.EscapeCancelsCheck)
+        buttonWidth := layout.IsCompact ? 150 : 190
+        buttonGap := 16
+        groupX := Floor((layout.WindowWidth - buttonWidth * 2
+            - buttonGap) / 2)
+        this.ImportRulePackageButton := this.AddTabControl(2,
+            this.AddActionButton(groupX, 134, Tr("导入规则包"),
+                colors.Primary, colors.ButtonText,
+                ObjBindMethod(this, "ChooseImportRulePackage"),
+                buttonWidth, 34))
+        this.ExportRulePackageButton := this.AddTabControl(2,
+            this.AddActionButton(groupX + buttonWidth + buttonGap, 134,
+                Tr("导出规则包"), colors.Toolbar, colors.ToolbarText,
+                ObjBindMethod(this, "ChooseExportRulePackage"),
+                buttonWidth, 34))
+        this.Interactions.SetButtonLucideIcon(this.ImportRulePackageButton,
+            "square-plus.svg", 15, 6)
+        this.Interactions.SetButtonLucideIcon(this.ExportRulePackageButton,
+            "file-output.svg", 15, 6)
         this.TabBuilt[2] := true
     }
 
@@ -407,7 +406,7 @@ class SettingsWindow {
         if this.TabBuilt[index]
             return true
         switch index {
-            case 2: this.BuildRecordingTab()
+            case 2: this.BuildRulePackageTab()
             case 3: this.BuildEventTab()
             case 4: this.BuildAboutTab()
             default: return false
@@ -466,7 +465,7 @@ class SettingsWindow {
                         ? "TabActiveText" : "TabText"), true)
             }
             this.ActiveTab := index
-            showActions := index != 4
+            showActions := index == 1 || index == 3
             this.SaveButton.Visible := showActions
             this.CancelButton.Visible := showActions
             this.ValidationStatus.Visible := showActions
@@ -549,8 +548,7 @@ class SettingsWindow {
             return false
         ApplyDarkWindow(this.Gui.Hwnd)
         this.ApplyComboBoxThemes()
-        for controlName in ["ShowAtStartupCheck", "EscapeCancelsCheck",
-                "EventAutoScrollCheck"] {
+        for controlName in ["EventAutoScrollCheck"] {
             if this.HasOwnProp(controlName) && this.%controlName%
                 ApplyDarkControl(this.%controlName%.Hwnd)
         }
@@ -635,10 +633,6 @@ class SettingsWindow {
             UiLanguage: this.LanguageValues[this.LanguageDropDown.Value],
             UiFont: this.FontValues[this.FontDropDown.Value],
             Theme: this.ThemeValues[this.ThemeDropDown.Value],
-            ShowMainWindowAtStartup: this.ShowAtStartupCheck.Value != 0,
-            EscapeCancelsRecording: this.TabBuilt[2]
-                ? this.EscapeCancelsCheck.Value != 0
-                : this.Original.EscapeCancelsRecording,
             EventBufferCapacity: eventCapacity,
             EventViewerAutoScroll: this.TabBuilt[3]
                 ? this.EventAutoScrollCheck.Value != 0
@@ -673,6 +667,22 @@ class SettingsWindow {
             try Run(SettingsWindow.ProjectHomeUrl)
     }
 
+    ChooseImportRulePackage(*) {
+        if this.Disposed
+            return false
+        return this.OwnerWindow.App.ChooseImportRulePackage(this)
+    }
+
+    ChooseExportRulePackage(*) {
+        if this.Disposed
+            return false
+        return this.OwnerWindow.App.ChooseExportRulePackage()
+    }
+
+    OnRulePackageImportClosed(previewWindow) {
+        return this.OwnerWindow.OnRulePackageImportClosed(previewWindow)
+    }
+
     RequestClose(*) {
         this.Dispose()
     }
@@ -687,36 +697,52 @@ class SettingsWindow {
         if this.Disposed
             return
         this.Disposed := true
+        cleanup := CleanupCollector("设置窗口")
         if this.FontDropDownCommandRegistered {
-            try OnMessage(Win32.WM_COMMAND,
-                this.FontDropDownCommandHandler, 0)
-            this.FontDropDownCommandRegistered := false
+            if cleanup.Run("注销字体下拉框消息", () =>
+                    OnMessage(Win32.WM_COMMAND,
+                        this.FontDropDownCommandHandler, 0))
+                this.FontDropDownCommandRegistered := false
         }
         for dropDownName in ["LanguageDropDown", "FontDropDown",
                 "ThemeDropDown"] {
-            if this.HasOwnProp(dropDownName) && this.%dropDownName%
-                try UnregisterDarkComboBoxTheme(this.%dropDownName%.Hwnd)
+            if this.HasOwnProp(dropDownName) && this.%dropDownName% {
+                dropDown := this.%dropDownName%
+                cleanup.Run("注销下拉框主题",
+                    UnregisterDarkComboBoxTheme.Bind(dropDown.Hwnd))
+            }
         }
         closeContext := ""
         if this.OwnerLease {
-            closeContext := WindowHierarchy.Release(this.OwnerLease)
-            this.OwnerLease := ""
+            try {
+                closeContext := WindowHierarchy.Release(this.OwnerLease)
+                this.OwnerLease := ""
+            } catch as ownerError {
+                cleanup.Failures.Push("释放父窗口关系：" ownerError.Message)
+            }
         }
         if IsObject(this.Interactions)
-            try this.Interactions.Dispose()
-        this.Interactions := ""
+                && cleanup.Run("释放交互服务",
+                    () => this.Interactions.Dispose())
+            this.Interactions := ""
         if IsObject(this.Gui)
-            try this.Gui.Destroy()
-        ReleaseApplicationWindowIcons(this.IconHandles)
-        this.IconHandles := []
-        this.Gui := ""
+                && cleanup.Run("销毁窗口", () => this.Gui.Destroy())
+            this.Gui := ""
+        if cleanup.Run("释放窗口图标",
+                () => ReleaseApplicationWindowIcons(this.IconHandles))
+            this.IconHandles := []
         this.TabButtons := []
         this.TabButtonPages := []
         this.TabControls := []
         this.TabBuilt := []
-        this.FontDropDownCommandHandler := ""
-        this.OwnerWindow.OnSettingsClosed(this)
+        if !this.FontDropDownCommandRegistered
+            this.FontDropDownCommandHandler := ""
+        cleanup.Run("通知父窗口",
+            () => this.OwnerWindow.OnSettingsClosed(this))
         if activateOwner
-            WindowHierarchy.CompleteClose(closeContext)
+            cleanup.Run("恢复父窗口", () =>
+                WindowHierarchy.CompleteClose(closeContext))
+        cleanup.Complete()
+        return true
     }
 }

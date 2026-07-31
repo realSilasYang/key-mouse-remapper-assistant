@@ -17,7 +17,7 @@ class DonationWindow {
         this.Disposed := false
         try this.Build()
         catch as buildError {
-            this.Dispose()
+            try this.Dispose()
             throw buildError
         }
     }
@@ -141,22 +141,32 @@ class DonationWindow {
         if this.Disposed
             return
         this.Disposed := true
+        cleanup := CleanupCollector("捐赠窗口")
         closeContext := ""
         if this.OwnerLease {
-            closeContext := WindowHierarchy.Release(this.OwnerLease)
-            this.OwnerLease := ""
+            try {
+                closeContext := WindowHierarchy.Release(this.OwnerLease)
+                this.OwnerLease := ""
+            } catch as ownerError {
+                cleanup.Failures.Push("释放父窗口关系：" ownerError.Message)
+            }
         }
         if IsObject(this.Gui)
-            try this.Gui.Destroy()
-        ReleaseApplicationWindowIcons(this.IconHandles)
-        this.IconHandles := []
-        this.Gui := ""
+                && cleanup.Run("销毁窗口", () => this.Gui.Destroy())
+            this.Gui := ""
+        if cleanup.Run("释放窗口图标",
+                () => ReleaseApplicationWindowIcons(this.IconHandles))
+            this.IconHandles := []
         this.MessageText := ""
         this.QrLabels := []
         this.QrPictures := []
         this.MissingQrTexts := []
-        this.OwnerWindow.OnDonationClosed(this)
+        cleanup.Run("通知父窗口",
+            () => this.OwnerWindow.OnDonationClosed(this))
         if activateOwner
-            WindowHierarchy.CompleteClose(closeContext)
+            cleanup.Run("恢复父窗口", () =>
+                WindowHierarchy.CompleteClose(closeContext))
+        cleanup.Complete()
+        return true
     }
 }

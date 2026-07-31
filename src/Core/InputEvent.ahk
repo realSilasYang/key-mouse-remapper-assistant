@@ -6,8 +6,14 @@ class KeyIdentity {
         name := Trim(String(name))
         if kind == "" || name == ""
             throw ValueError("按键身份必须包含类型和名称。")
-        vk := Max(0, Integer(vk))
-        sc := Max(0, Integer(sc))
+        vk := Integer(vk)
+        sc := Integer(sc)
+        if vk < 0 || vk > 0xFF
+            throw ValueError("虚拟键码必须在 0x00 到 0xFF 之间。")
+        if sc < 0 || sc > 0x1FF
+            throw ValueError("扫描码必须在 0x000 到 0x1FF 之间。")
+        if sc > 0xFF
+            extended := true
         return Map(
             "kind", kind,
             "name", name,
@@ -26,8 +32,8 @@ class KeyIdentity {
     static FromRuleKey(key) {
         if Type(key) != "Map"
             throw TypeError("规则按键身份必须是对象。")
-        vk := key.Has("vk") ? Integer("0x" key["vk"]) : 0
-        sc := key.Has("sc") ? Integer("0x" key["sc"]) : 0
+        vk := key.Has("vk") ? this.ReadCode(key["vk"]) : 0
+        sc := key.Has("sc") ? this.ReadCode(key["sc"]) : 0
         extended := key.Has("extended")
             && this.ReadBoolean(key["extended"])
         return this.Create(key.Has("kind") ? key["kind"] : "keyboard",
@@ -90,6 +96,11 @@ class KeyIdentity {
         if !IsObject(value) && (value == 0 || value == 1)
             return !!value
         throw TypeError("按键身份字段必须是布尔值。")
+    }
+
+    static ReadCode(value) {
+        return Type(value) == "String" ? Integer("0x" value)
+            : Integer(value)
     }
 
     static Signature(identity) {

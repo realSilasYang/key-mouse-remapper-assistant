@@ -21,7 +21,9 @@ class InputWorkerController {
         this.DeviceCache := []
         this.RestartScheduled := false
         this.RestartTicks := []
+        this.LastStopClean := true
         this.DesiredSuspended := false
+        this.DesiredRawObservation := false
         this.PowerSuspended := false
         this.ActiveRuntimeRole := "input-worker"
         this.PollTimer := ObjBindMethod(this, "Poll")
@@ -56,13 +58,16 @@ class InputWorkerController {
             if this.DesiredSuspended {
                 this.SendInputCommand("suspend")
             }
+            if this.DesiredRawObservation
+                this.SendObservationCommand("raw_observation",
+                    Map("enabled", JsonBoolean(true)))
             this.LastHeartbeatSent := this.TickCount64()
             SetTimer(this.PollTimer, 50)
             return true
         } catch as startupError {
             cleanupDetail := ""
             try {
-                if !this.StopWorkers(true)
+                if !this.StopWorkers(true) || !this.LastStopClean
                     cleanupDetail := "；启动失败后的进程清理未完成"
             } catch as cleanupError
                 cleanupDetail := "；启动失败后的进程清理异常："
@@ -92,6 +97,7 @@ class InputWorkerController {
             ProcessId: 0,
             ProcessHandle: 0,
             ProcessCanTerminate: false,
+            GracefulShutdownFailed: false,
             Connected: false,
             HelloReceived: false,
             Ready: false,
@@ -127,6 +133,7 @@ class InputWorkerController {
         SplitPath(state.ErrorPath, , &bootstrapDirectory)
         state.BootstrapPath := WorkerBootstrap.Create(bootstrapDirectory,
             state.Role, state.SessionId, environment)
+        state.Secret := ""
         try {
             workingDirectory := ""
             SplitPath(state.EntryPath, , &workingDirectory)
@@ -142,9 +149,6 @@ class InputWorkerController {
                 state.ProcessCanTerminate := canTerminate
             }
             catch as processHandleError {
-                if processId && ProcessExist(processId)
-                    try ProcessClose(processId)
-                state.ProcessId := 0
                 throw processHandleError
             }
         } catch as launchError {
@@ -484,6 +488,30 @@ class InputWorkerController {
         return Map("input", inputResult)
     }
 
+    SetRawObservation(enabled) {
+        if IsObject(enabled) || (enabled != 0 && enabled != 1)
+            throw TypeError("原始观察开关必须是布尔值。")
+        enabled := !!enabled
+        previousDesired := this.DesiredRawObservation
+        this.DesiredRawObservation := enabled
+        try {
+            result := this.SendObservationCommand("raw_observation",
+                Map("enabled", JsonBoolean(enabled)))
+            if !result.Has("enabled")
+                    || !(result["enabled"] is JsonBoolean)
+                    || result["enabled"].Value != enabled
+                throw Error("输入工作进程没有确认原始观察状态。")
+            return result.Has("changed") && result["changed"] is JsonBoolean
+                ? result["changed"].Value : true
+        } catch {
+            ; A failed disable must remain the desired state so an automatic
+            ; worker restart cannot resume full Raw Input forwarding.
+            if enabled
+                this.DesiredRawObservation := previousDesired
+            throw
+        }
+    }
+
     HandlePowerTransition(transition) {
         transition := StrLower(String(transition))
         if transition != "suspend" && transition != "resume"
@@ -620,13 +648,15 @@ class InputWorkerController {
     }
 
     Shutdown(*) {
-        return this.StopWorkers(true)
+        resourcesReleased := this.StopWorkers(true)
+        return resourcesReleased && this.LastStopClean
     }
 
     StopWorkers(forceOwnedProcesses := false) {
         if this.Stopping
             return false
         this.Stopping := true
+        this.LastStopClean := true
         cleanupFailures := []
         retainedStates := Map()
         try {
@@ -634,12 +664,14 @@ class InputWorkerController {
             try SetTimer(this.RestartTimer, 0)
             this.RestartScheduled := false
             for role, state in this.States {
+                state.GracefulShutdownFailed := false
                 try {
                     if state.Connected && this.IsStateProcessRunning(state)
                         this.SendCommand(state, "shutdown", Map(), 750)
                 } catch {
                     ; A failed graceful request falls through to owned-process
                     ; termination below.
+                    state.GracefulShutdownFailed := true
                 }
             }
             deadline := this.TickCount64() + 1000
@@ -663,7 +695,8 @@ class InputWorkerController {
                 processStopped := false
                 try {
                     running := this.IsStateProcessRunning(state)
-                    if running && forceOwnedProcesses
+                    forced := running && forceOwnedProcesses
+                    if forced
                         this.ForceStopState(state)
                     processStopped := !running || (forceOwnedProcesses
                         && this.WaitForStateExit(state, 1000))
@@ -671,6 +704,21 @@ class InputWorkerController {
                         cleanupFailures.Push(role
                             " process remained active after shutdown")
                         stateFailed := true
+                    }
+                    if forced {
+                        cleanupFailures.Push(role
+                            " required forced termination")
+                    }
+                    if state.GracefulShutdownFailed {
+                        cleanupFailures.Push(role
+                            " graceful shutdown request failed")
+                    }
+                    if processStopped && state.ProcessHandle {
+                        exitCode := this.GetStateExitCode(state)
+                        if exitCode != 0 {
+                            cleanupFailures.Push(role " exited with code "
+                                exitCode)
+                        }
                     }
                 } catch as forceStopError {
                     cleanupFailures.Push(role " process termination: "
@@ -718,7 +766,8 @@ class InputWorkerController {
                 try this.App.CrashRecovery.Record("worker_cleanup_failed",
                     "工作进程资源清理未完整完成。",
                     Map("failures", cleanupFailures))
-            return cleanupFailures.Length == 0 && !this.States.Count
+            this.LastStopClean := cleanupFailures.Length == 0
+            return !this.States.Count
         } finally this.Stopping := false
     }
 
@@ -811,6 +860,19 @@ class InputWorkerController {
         return true
     }
 
+    GetStateExitCode(state) {
+        if !IsObject(state) || !state.HasOwnProp("ProcessHandle")
+                || !state.ProcessHandle
+            throw Error("工作进程缺少可读取退出码的监督句柄。")
+        exitCode := 0
+        if !DllCall("kernel32\GetExitCodeProcess", "Ptr",
+                state.ProcessHandle, "UInt*", &exitCode, "Int")
+            throw OSError(A_LastError, "无法读取工作进程退出码。")
+        if exitCode == 259
+            throw Error("工作进程仍在运行，无法读取最终退出码。")
+        return exitCode
+    }
+
     Quote(value) => Chr(34) StrReplace(String(value), Chr(34), Chr(34) Chr(34))
         . Chr(34)
 
@@ -847,7 +909,9 @@ class RemoteManagedRuleRuntime {
     }
 
     Shutdown() {
-        this.Controller.Shutdown()
+        if !this.Controller.Shutdown()
+            throw Error("工作进程组关闭不完整。")
+        return true
     }
 }
 

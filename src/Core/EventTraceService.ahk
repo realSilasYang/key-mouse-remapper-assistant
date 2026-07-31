@@ -243,14 +243,20 @@ class EventTraceService {
     }
 
     Publish(entry) {
+        pending := []
+        for subscriptionId, callback in this.Subscribers
+            pending.Push({Id: subscriptionId, Callback: callback})
         staleSubscriptions := []
-        for subscriptionId, callback in this.Subscribers {
-            try callback.Call(this.CloneEntry(entry))
+        for pendingSubscription in pending {
+            if !this.Subscribers.Has(pendingSubscription.Id)
+                continue
+            try pendingSubscription.Callback.Call(this.CloneEntry(entry))
             catch
-                staleSubscriptions.Push(subscriptionId)
+                staleSubscriptions.Push(pendingSubscription.Id)
         }
         for subscriptionId in staleSubscriptions
-            this.Subscribers.Delete(subscriptionId)
+            if this.Subscribers.Has(subscriptionId)
+                this.Subscribers.Delete(subscriptionId)
     }
 
     ExportJsonLines(filePath, category := "") {

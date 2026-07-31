@@ -3,6 +3,7 @@
 #Warn All, StdOut
 
 #Include ..\TestSupport.ahk
+#Include ..\..\src\UI\CleanupCollector.ahk
 #Include ..\..\src\UI\ApplicationIcon.ahk
 #Include ..\..\src\UI\SvgRenderLibrary.ahk
 #Include ..\..\src\UI\RoundedButtonPainter.ahk
@@ -164,6 +165,59 @@ AssertDualSvgComposition(painter) {
     }
 }
 
+MeasureLeadingCommandSymbolPixels(painter, symbol) {
+    width := 40
+    height := 30
+    canvas := CreatePainterCanvas(width, height)
+    try {
+        AssertTrue(FillCanvas(canvas.TargetDc, width, height, 0),
+            "无法填充状态按钮符号像素画布")
+        AssertTrue(painter.DrawLeadingCommandSymbol(canvas.TargetDc, symbol,
+            10, 0, 30, height, "FFFFFF", 10),
+            "无法绘制状态按钮符号：" symbol)
+        minimumX := width
+        minimumY := height
+        maximumX := -1
+        maximumY := -1
+        visiblePixels := 0
+        Loop height {
+            y := A_Index - 1
+            Loop width {
+                x := A_Index - 1
+                if DllCall("gdi32\GetPixel", "Ptr", canvas.TargetDc,
+                        "Int", x, "Int", y, "UInt") == 0
+                    continue
+                minimumX := Min(minimumX, x)
+                minimumY := Min(minimumY, y)
+                maximumX := Max(maximumX, x)
+                maximumY := Max(maximumY, y)
+                visiblePixels++
+            }
+        }
+        AssertTrue(visiblePixels > 0,
+            "状态按钮符号没有可见像素：" symbol)
+        return {Width: maximumX - minimumX + 1,
+            Height: maximumY - minimumY + 1,
+            CenterX: (minimumX + maximumX) / 2,
+            CenterY: (minimumY + maximumY) / 2,
+            PixelCount: visiblePixels}
+    } finally DestroyPainterCanvas(canvas)
+}
+
+AssertLeadingCommandSymbolGeometry(painter) {
+    referenceBounds := MeasureLeadingCommandSymbolPixels(painter, "▶")
+    pauseBounds := MeasureLeadingCommandSymbolPixels(painter, "⏸")
+    weightRatio := pauseBounds.PixelCount / referenceBounds.PixelCount
+    AssertTrue(Abs(pauseBounds.Width - referenceBounds.Width) <= 1
+            && Abs(pauseBounds.Height - referenceBounds.Height) <= 1,
+        "暂停与恢复符号的外接尺寸不一致")
+    AssertTrue(Abs(pauseBounds.CenterX - referenceBounds.CenterX) <= 0.5
+            && Abs(pauseBounds.CenterY - referenceBounds.CenterY) <= 0.5,
+        "暂停与恢复符号的可见中心不一致")
+    AssertTrue(weightRatio >= 0.7 && weightRatio <= 1.4,
+        "暂停与恢复符号的视觉重量差异过大：" weightRatio)
+}
+
 AssertSvgInputBounds() {
     renderer := SvgRenderLibrary("missing-resvg.dll")
     try {
@@ -284,6 +338,7 @@ try {
     AssertRoundedMask(painter)
     AssertSvgComposition(painter)
     AssertDualSvgComposition(painter)
+    AssertLeadingCommandSymbolGeometry(painter)
     AssertSvgInputBounds()
     AssertTextVisualAlignment()
     AssertSemanticLucideColors()

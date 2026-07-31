@@ -10,6 +10,8 @@ $utf8 = [System.Text.UTF8Encoding]::new($false)
 [Console]::OutputEncoding = $utf8
 $OutputEncoding = $utf8
 $projectRoot = $PSScriptRoot
+Import-Module (Join-Path $projectRoot 'tools\WindowsProcessArguments.psm1') `
+    -Force
 $toolchainLock = Get-Content -LiteralPath `
     (Join-Path $projectRoot 'tools\toolchain.lock.json') -Raw -Encoding UTF8 |
     ConvertFrom-Json
@@ -61,9 +63,10 @@ $startInfo.RedirectStandardOutput = $true
 $startInfo.RedirectStandardError = $true
 $startInfo.StandardOutputEncoding = $utf8
 $startInfo.StandardErrorEncoding = $utf8
-$startInfo.Arguments = (@('/ErrorStdOut',
-    (Join-Path $projectRoot 'key-mouse-remapper-assistant-cli.ahk')) + $CliArguments |
-    ForEach-Object { '"' + ([string]$_).Replace('"', '\"') + '"' }) -join ' '
+$startInfo.Arguments = Join-WindowsProcessArguments `
+    (@('/ErrorStdOut',
+        (Join-Path $projectRoot 'key-mouse-remapper-assistant-cli.ahk')) +
+        $CliArguments)
 $process = [System.Diagnostics.Process]::Start($startInfo)
 $stdoutTask = $process.StandardOutput.ReadToEndAsync()
 $stderrTask = $process.StandardError.ReadToEndAsync()

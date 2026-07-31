@@ -6,6 +6,7 @@ class WorkerBootstrap {
     static MaximumAgeMs := 10 * 60 * 1000
     static FutureToleranceMs := 30 * 1000
     static EntropyText := "KeyMouseRemapperAssistant.WorkerBootstrap.v1"
+    static AppliedEnvironmentNames := []
 
     static Create(directory, role, sessionId, environment) {
         directory := RTrim(Trim(String(directory)), "\/")
@@ -83,17 +84,22 @@ class WorkerBootstrap {
             try document := JsonCodec.Parse(plainText)
             finally plainText := ""
             normalizedEnvironment := this.ValidateDocument(document)
+            if this.AppliedEnvironmentNames.Length
+                throw Error("上一组工作进程启动环境尚未清除。")
             savedEnvironment := Map()
+            appliedNames := []
             try {
                 for name, value in normalizedEnvironment {
                     savedEnvironment[name] := EnvGet(name)
                     EnvSet(name, value)
+                    appliedNames.Push(name)
                 }
             } catch as environmentError {
                 for name, previousValue in savedEnvironment
                     EnvSet(name, previousValue)
                 throw environmentError
             }
+            this.AppliedEnvironmentNames := appliedNames
             accepted := true
             return normalizedEnvironment.Count
         } finally {
@@ -103,6 +109,25 @@ class WorkerBootstrap {
             } else if FileExist(claimedPath) && !FileExist(path)
                 FileMove(claimedPath, path, false)
         }
+    }
+
+    static ClearAppliedEnvironment() {
+        if !this.AppliedEnvironmentNames.Length
+            return false
+        retained := []
+        failures := []
+        for environmentName in this.AppliedEnvironmentNames {
+            try EnvSet(environmentName, "")
+            catch as clearError {
+                retained.Push(environmentName)
+                failures.Push(environmentName "：" clearError.Message)
+            }
+        }
+        this.AppliedEnvironmentNames := retained
+        if failures.Length
+            throw Error("无法清除工作进程启动环境："
+                . this.JoinMessages(failures, "；"))
+        return true
     }
 
     static ValidateDocument(document) {
@@ -269,6 +294,13 @@ class WorkerBootstrap {
             DllCall("ntdll\RtlZeroMemory", "Ptr", byteBuffer.Ptr,
                 "UPtr", byteBuffer.Size)
         return true
+    }
+
+    static JoinMessages(values, separator) {
+        result := ""
+        for index, value in values
+            result .= (index > 1 ? separator : "") String(value)
+        return result
     }
 
     static WriteBytesAtomically(path, bytes) {

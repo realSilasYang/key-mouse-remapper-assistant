@@ -27,6 +27,19 @@ try {
         KeyIdentity.Signature(rightControl),
         "扩展扫描码身份签名错误")
 
+    rejectedRanges := 0
+    for invalidIdentity in [
+            {VK: 0x100, SC: 0},
+            {VK: 0, SC: 0x200},
+            {VK: -1, SC: 0}] {
+        try KeyIdentity.Create("keyboard", "invalid",
+            invalidIdentity.VK, invalidIdentity.SC)
+        catch
+            rejectedRanges++
+    }
+    AssertEqual(3, rejectedRanges,
+        "KeyIdentity 接受了越界或负数 VK/SC")
+
     createdEvent := InputEvent.Create(rightControl, "down", true, true,
         "test-hook", 1234)
     AssertTrue(createdEvent["phase"] == "down"

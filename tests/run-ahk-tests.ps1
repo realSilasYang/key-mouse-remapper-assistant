@@ -9,6 +9,8 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
+Import-Module (Join-Path $projectRoot 'tools\WindowsProcessArguments.psm1') `
+    -Force
 $toolchainLockPath = Join-Path $projectRoot 'tools\toolchain.lock.json'
 $toolchainLock = Get-Content -LiteralPath $toolchainLockPath -Raw `
     -Encoding UTF8 | ConvertFrom-Json
@@ -57,9 +59,7 @@ function Invoke-AhkFile {
     $startInfo.StandardOutputEncoding = [System.Text.Encoding]::Default
     $startInfo.StandardErrorEncoding = [System.Text.Encoding]::Default
     $commandArguments = @('/ErrorStdOut', $Path) + $Arguments
-    $startInfo.Arguments = ($commandArguments | ForEach-Object {
-        '"' + ([string]$_).Replace('"', '\"') + '"'
-    }) -join ' '
+    $startInfo.Arguments = Join-WindowsProcessArguments $commandArguments
     $process = [System.Diagnostics.Process]::Start($startInfo)
     $stdoutTask = $process.StandardOutput.ReadToEndAsync()
     $stderrTask = $process.StandardError.ReadToEndAsync()
@@ -91,9 +91,7 @@ function Assert-AhkFileFails {
     $startInfo.StandardOutputEncoding = [System.Text.Encoding]::Default
     $startInfo.StandardErrorEncoding = [System.Text.Encoding]::Default
     $commandArguments = @('/ErrorStdOut', $Path) + $Arguments
-    $startInfo.Arguments = ($commandArguments | ForEach-Object {
-        '"' + ([string]$_).Replace('"', '\"') + '"'
-    }) -join ' '
+    $startInfo.Arguments = Join-WindowsProcessArguments $commandArguments
     $process = [System.Diagnostics.Process]::Start($startInfo)
     $stdoutTask = $process.StandardOutput.ReadToEndAsync()
     $stderrTask = $process.StandardError.ReadToEndAsync()

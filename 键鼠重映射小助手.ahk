@@ -7,7 +7,7 @@
 
 ;@Ahk2Exe-SetName 键鼠重映射小助手
 ;@Ahk2Exe-SetDescription 键鼠重映射小助手可视化管理器
-;@Ahk2Exe-SetVersion 0.1.0.0
+;@Ahk2Exe-SetVersion 0.1.1.0
 ;@Ahk2Exe-SetCopyright Copyright (c) 2026 键鼠重映射小助手 contributors
 ;@Ahk2Exe-SetMainIcon assets\app\key-mouse-remapper-assistant.ico
 
@@ -60,6 +60,7 @@
 #Include src\Core\OutputLedger.ahk
 #Include src\Core\InputBackend.ahk
 #Include src\Platform\Win32.ahk
+#Include src\Input\RawInputObservationPolicy.ahk
 #Include src\Input\RawInputService.ahk
 #Include src\Core\RawInputBackend.ahk
 #Include src\Core\ManagedRuleRuntime.ahk
@@ -73,6 +74,7 @@
 #Include src\Platform\WindowHierarchy.ahk
 #Include src\UI\ThemeHelpers.ahk
 #Include src\UI\ApplicationIcon.ahk
+#Include src\UI\CleanupCollector.ahk
 #Include src\UI\SvgRenderLibrary.ahk
 #Include src\UI\RoundedButtonPainter.ahk
 #Include src\UI\ControlAccessibilityService.ahk
@@ -118,6 +120,93 @@ App.Start()
 
 ; === 重映射代码区域开始 ===
 ; 此区域由 GUI 维护；代码块顺序就是 GUI 的默认显示顺序，请勿删除元数据行。
+
+; @mapping-begin
+; @schema=2
+; @mode=managed
+; @id=word-styles
+; @spec-begin
+; {
+;   "conditions": [
+;     {
+;       "case_sensitive": false,
+;       "field": "process",
+;       "negate": false,
+;       "operator": "equals",
+;       "type": "application",
+;       "value": "WINWORD.EXE"
+;     }
+;   ],
+;   "description": "快速切换 Word 样式窗格并把焦点交还文档。",
+;   "display": {
+;     "purpose": "快速切换 Word 样式窗格并把焦点交还文档。",
+;     "scope": "Word",
+;     "source": "Alt + Z",
+;     "target": "样式窗格开关"
+;   },
+;   "enabled": true,
+;   "from": {
+;     "event": "down",
+;     "hotkey": "",
+;     "key": {
+;       "extended": false,
+;       "kind": "keyboard",
+;       "name": "Z"
+;     },
+;     "modifiers": [
+;       "Alt"
+;     ],
+;     "optional_modifiers": [],
+;     "repeat": "ignore",
+;     "sequence": [],
+;     "simultaneous": [],
+;     "tap_count": 1
+;   },
+;   "id": "word-styles",
+;   "priority": 0,
+;   "schema": 2,
+;   "stop_processing": true,
+;   "timing": {
+;     "alone_timeout_ms": "inherit",
+;     "delayed_action_ms": "inherit",
+;     "held_threshold_ms": "inherit",
+;     "multi_tap_timeout_ms": "inherit",
+;     "sequence_timeout_ms": "inherit",
+;     "simultaneous_threshold_ms": "inherit"
+;   },
+;   "to": [
+;     {
+;       "repeat": "inherit",
+;       "repeat_interval_ms": 0,
+;       "type": "send",
+;       "value": "!^+s"
+;     },
+;     {
+;       "repeat": "inherit",
+;       "repeat_interval_ms": 0,
+;       "type": "sleep",
+;       "value": "100"
+;     },
+;     {
+;       "repeat": "inherit",
+;       "repeat_interval_ms": 0,
+;       "type": "send",
+;       "value": "{Esc}"
+;     }
+;   ],
+;   "to_after_key_up": [],
+;   "to_delayed_if_canceled": [],
+;   "to_delayed_if_invoked": [],
+;   "to_if_alone": [],
+;   "to_if_held_down": [],
+;   "to_if_other_key_pressed": []
+; }
+; @spec-end
+; @generated-sha256=C1F751679219BA9D139E7E4A09CE3DC9EAEFC7BD29B150FCFD3A4EFB09C95693
+; @generated-begin
+; 此规则由托管运行时注册；此区域不包含可手工编辑的 AHK 代码。
+; @generated-end
+; @mapping-end
 
 ; @mapping-begin
 ; @schema=2
@@ -246,93 +335,6 @@ App.Start()
 ; }
 ; @spec-end
 ; @generated-sha256=DE068F6E5C20B4588B1495CC44717C8119023AB9F27E659DC0975BBB66EE900F
-; @generated-begin
-; 此规则由托管运行时注册；此区域不包含可手工编辑的 AHK 代码。
-; @generated-end
-; @mapping-end
-
-; @mapping-begin
-; @schema=2
-; @mode=managed
-; @id=word-styles
-; @spec-begin
-; {
-;   "conditions": [
-;     {
-;       "case_sensitive": false,
-;       "field": "process",
-;       "negate": false,
-;       "operator": "equals",
-;       "type": "application",
-;       "value": "WINWORD.EXE"
-;     }
-;   ],
-;   "description": "快速切换 Word 样式窗格并把焦点交还文档。",
-;   "display": {
-;     "purpose": "快速切换 Word 样式窗格并把焦点交还文档。",
-;     "scope": "Word",
-;     "source": "Alt + Z",
-;     "target": "样式窗格开关"
-;   },
-;   "enabled": true,
-;   "from": {
-;     "event": "down",
-;     "hotkey": "",
-;     "key": {
-;       "extended": false,
-;       "kind": "keyboard",
-;       "name": "Z"
-;     },
-;     "modifiers": [
-;       "Alt"
-;     ],
-;     "optional_modifiers": [],
-;     "repeat": "ignore",
-;     "sequence": [],
-;     "simultaneous": [],
-;     "tap_count": 1
-;   },
-;   "id": "word-styles",
-;   "priority": 0,
-;   "schema": 2,
-;   "stop_processing": true,
-;   "timing": {
-;     "alone_timeout_ms": "inherit",
-;     "delayed_action_ms": "inherit",
-;     "held_threshold_ms": "inherit",
-;     "multi_tap_timeout_ms": "inherit",
-;     "sequence_timeout_ms": "inherit",
-;     "simultaneous_threshold_ms": "inherit"
-;   },
-;   "to": [
-;     {
-;       "repeat": "inherit",
-;       "repeat_interval_ms": 0,
-;       "type": "send",
-;       "value": "!^+s"
-;     },
-;     {
-;       "repeat": "inherit",
-;       "repeat_interval_ms": 0,
-;       "type": "sleep",
-;       "value": "100"
-;     },
-;     {
-;       "repeat": "inherit",
-;       "repeat_interval_ms": 0,
-;       "type": "send",
-;       "value": "{Esc}"
-;     }
-;   ],
-;   "to_after_key_up": [],
-;   "to_delayed_if_canceled": [],
-;   "to_delayed_if_invoked": [],
-;   "to_if_alone": [],
-;   "to_if_held_down": [],
-;   "to_if_other_key_pressed": []
-; }
-; @spec-end
-; @generated-sha256=C1F751679219BA9D139E7E4A09CE3DC9EAEFC7BD29B150FCFD3A4EFB09C95693
 ; @generated-begin
 ; 此规则由托管运行时注册；此区域不包含可手工编辑的 AHK 代码。
 ; @generated-end

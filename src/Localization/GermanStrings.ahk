@@ -112,15 +112,6 @@ class GermanStrings {
             "重新加载",
                 "Neu laden")
         catalog.Set(
-            "以管理员身份重新启动",
-                "Starten Sie als Administrator neu")
-        catalog.Set(
-            "管理员模式（当前）",
-                "Administratormodus (aktiv)")
-        catalog.Set(
-            "无法以管理员身份重新启动（错误代码 {1}）。",
-                "Konnte nicht als Administrator neu gestartet werden (Fehler {1}).")
-        catalog.Set(
             "事件查看器",
                 "Ereignisse")
         catalog.Set("事件详情", "Ereignisdetails")
@@ -532,14 +523,12 @@ class GermanStrings {
                 "{1} Zuordnungen aktiv · benutzerdefinierte Skriptreihenfolge")
         catalog.Set("键鼠重映射小助手设置",
             "Einstellungen des Assistenten für Tastatur- und Maus-Neuzuordnung")
-        catalog.Set("通用",
-            "Allgemein")
+        catalog.Set("外观",
+            "Darstellung")
+        catalog.Set("规则包",
+            "Regelpakete")
         catalog.Set("关于",
             "Info")
-        catalog.Set("启动时显示主窗口",
-            "Hauptfenster beim Start anzeigen")
-        catalog.Set("单独按 Esc 时取消录制",
-            "Aufnahme mit einzeln gedrückter Esc-Taste abbrechen")
         catalog.Set("事件缓冲区容量（条）：",
             "Ereignispufferkapazität:")
         catalog.Set("事件查看器自动跟随最新事件",
@@ -574,11 +563,16 @@ class GermanStrings {
             "Esc bricht die Aufnahme ab")
         catalog.Set("事件自动跟随",
             "Neueste Ereignisse verfolgen")
-        catalog.Set("录制", "Aufnahme")
         catalog.Set("事件", "Ereignisse")
         catalog.Set("{1}（便携版）", "{1} (portable Version)")
         catalog.Set("帮助信息", "Hilfe")
         catalog.Set("捐赠", "Spenden")
+        catalog.Set("配置外观、规则包、事件`n以及关于选项",
+            "Darstellung, Regelpakete, Ereignisse`nund Info konfigurieren")
+        catalog.Set("打开帮助信息`n可选择查看使用说明、运行日志或提交反馈",
+            "Hilfe öffnen`nBenutzerhandbuch oder Laufzeitprotokoll öffnen oder Feedback senden")
+        catalog.Set("快揭不开锅了（≥Д≤）",
+            "Die Kasse ist fast leer（≥Д≤）")
         catalog.Set("使用说明", "Benutzerhandbuch")
         catalog.Set("提交反馈", "Feedback senden")
         catalog.Set("支持开源项目", "Open-Source-Projekt unterstützen")
@@ -604,13 +598,8 @@ class GermanStrings {
         catalog.Set("• 事件查看器记录输入、规则匹配、条件拒绝、执行结果、仓储和系统事件，支持筛选、暂停、清空及 JSONL 导出。", "• Die Ereignisanzeige protokolliert Eingaben, Regeltreffer, Bedingungsablehnungen, Ausführungsergebnisse, Repository-Aktivität und Systemereignisse. Sie unterstützt Filtern, Pausieren, Leeren und den JSONL-Export.")
         catalog.Set("五、后台运行与问题排查", "5. Hintergrundbetrieb und Problembehandlung")
         catalog.Set("• 主窗口关闭后程序仍驻留托盘。托盘可以重新显示主界面、手动重新加载或彻底退出；修改映射规则后通常不需要手动重新加载。", "• Nach dem Schließen des Hauptfensters bleibt die App im Infobereich. Dort können Sie das Fenster anzeigen, manuell neu laden oder die App vollständig beenden; Regeländerungen erfordern normalerweise kein manuelles Neuladen.")
-        catalog.Set("• 映射对管理员程序无效时，请从托盘选择以管理员身份重新启动。遇到规则冲突或按键未按预期执行时，先在事件查看器中核对输入和规则结果。", "• Wirkt eine Zuordnung nicht in einer erhöhten Anwendung, starten Sie diese App über den Infobereich als Administrator neu. Prüfen Sie bei Konflikten oder unerwarteten Eingaben zuerst Eingaben und Regelergebnisse in der Ereignisanzeige.")
         catalog.Set("• “帮助信息”还可打开项目反馈页面。提交问题时请说明系统版本、复现步骤、相关 @mapping 代码和事件导出，并在公开前移除敏感路径或应用信息。", "• Über Hilfe lässt sich auch die Feedbackseite des Projekts öffnen. Nennen Sie bei einem Bericht Windows-Version, Reproduktionsschritte, betroffenen @mapping-Code und einen Ereignisexport und entfernen Sie vor der Veröffentlichung vertrauliche Pfade oder Anwendungsdaten.")
         catalog.Set("安全模式：已停用所有映射和输入观察。连续启动失败 {1} 次。", "Abgesicherter Modus: Nach {1} aufeinanderfolgenden Startfehlern sind alle Zuordnungen und die Eingabebeobachtung deaktiviert.")
-        catalog.Set("恢复最后正常配置", "Letzte funktionierende Konfiguration wiederherstellen")
-        catalog.Set("没有可恢复的最后正常配置。", "Es ist keine letzte funktionierende Konfiguration verfügbar.")
-        catalog.Set("最后正常配置恢复失败：{1}", "Die letzte funktionierende Konfiguration konnte nicht wiederhergestellt werden: {1}")
-        catalog.Set("最后正常配置已恢复，正在自动应用。", "Die letzte funktionierende Konfiguration wurde wiederhergestellt und wird automatisch angewendet.")
         catalog.Set("仅勾选的规则会被导入。", "Nur ausgewählte Regeln werden importiert.")
         catalog.Set("三、规则与生效范围", "3. Regeln und Geltungsbereich")
         catalog.Set("• 所有规则属于同一全局规则集；生效范围和条件可在 @mapping 编辑器中精确调整，保存后会立即重新选择生效规则。", "• Alle Regeln gehören zu einem globalen Regelsatz. Geltungsbereich und Bedingungen lassen sich im @mapping-Editor genau festlegen; nach dem Speichern werden die aktiven Regeln sofort neu ausgewählt.")

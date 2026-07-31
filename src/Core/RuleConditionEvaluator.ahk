@@ -269,6 +269,9 @@ class RuleConditionEvaluator {
             ? JsonCodec.Stringify(actual, false, true) : String(actual)
         expectedText := IsObject(expected)
             ? JsonCodec.Stringify(expected, false, true) : String(expected)
+        if operatorName == "regex"
+            return RegExMatch(actualText,
+                this.PrepareRegex(expectedText, caseSensitive)) > 0
         if !caseSensitive {
             actualText := StrLower(actualText)
             expectedText := StrLower(expectedText)
@@ -281,8 +284,6 @@ class RuleConditionEvaluator {
             case "ends_with": return expectedText == ""
                 || (StrLen(expectedText) <= StrLen(actualText)
                     && SubStr(actualText, -StrLen(expectedText)) == expectedText)
-            case "regex": return RegExMatch(String(actual),
-                this.PrepareRegex(String(expected), caseSensitive)) > 0
         }
         return false
     }

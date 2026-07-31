@@ -35,7 +35,7 @@ class MappingUiInteractions {
             OnMessage(Win32.WM_LBUTTONDOWN, this.PointerDownCallback)
             OnMessage(Win32.WM_LBUTTONDBLCLK, this.PointerDownCallback)
         } catch as registrationError {
-            this.Dispose()
+            try this.Dispose()
             throw registrationError
         }
     }
@@ -94,6 +94,32 @@ class MappingUiInteractions {
                     || this.Tooltip.PendingHwnd == hwnd
                     || this.Tooltip.VisibleHwnd == hwnd)
             this.HideTooltip()
+        return true
+    }
+
+    ; Keep the visual icon column stable while preserving the complete button
+    ; text for localization, keyboard interaction, and accessibility.
+    SetButtonLeadingTextSlot(control, slotDip := 20, gapDip := 4,
+            visualSizeDip := 10) {
+        try hwnd := control.Hwnd
+        catch
+            return false
+        if !this.Controls.Has(hwnd)
+            return false
+        state := this.Controls[hwnd]
+        if state.Kind != "button"
+            return false
+        try {
+            slotDip := Max(1, slotDip + 0)
+            gapDip := Max(0, gapDip + 0)
+            visualSizeDip := Max(6, visualSizeDip + 0)
+        } catch {
+            return false
+        }
+        state.LeadingTextSlotDip := slotDip
+        state.LeadingTextGapDip := gapDip
+        state.LeadingTextVisualSizeDip := visualSizeDip
+        this.Redraw(hwnd)
         return true
     }
 
@@ -534,17 +560,33 @@ class MappingUiInteractions {
             return
         rootHwnd := DllCall("user32\GetAncestor", "Ptr", hwnd,
             "UInt", 2, "Ptr") ; GA_ROOT
-        if rootHwnd != this.Gui.Hwnd || this.IsTextInputTarget(hwnd)
+        if rootHwnd != this.Gui.Hwnd
+            return
+        ; Clicking the real client background must remove keyboard focus from
+        ; child controls even when the focused child is not an Edit control.
+        if hwnd == this.Gui.Hwnd {
+            this.HideTooltip()
+            focusTarget := this.GetFocusSinkHwnd(this.Gui.Hwnd)
+            this.MoveKeyboardFocus(focusTarget)
+            return
+        }
+        if this.IsTextInputTarget(hwnd)
             return
         focusedHwnd := DllCall("user32\GetFocus", "Ptr")
         if !this.IsTextInputTarget(focusedHwnd)
             return
+        focusTarget := this.GetFocusSinkHwnd(
+            hwnd != this.Gui.Hwnd ? hwnd : this.Gui.Hwnd)
+        DllCall("user32\SetFocus", "Ptr", focusTarget, "Ptr")
+    }
+
+    GetFocusSinkHwnd(fallbackHwnd) {
         focusTarget := this.FocusSinkHwnd
         if !focusTarget || !DllCall("user32\IsWindow", "Ptr", focusTarget,
                 "Int") || !DllCall("user32\IsWindowEnabled", "Ptr",
                 focusTarget, "Int")
-            focusTarget := hwnd != this.Gui.Hwnd ? hwnd : this.Gui.Hwnd
-        DllCall("user32\SetFocus", "Ptr", focusTarget, "Ptr")
+            return fallbackHwnd
+        return focusTarget
     }
 
     IsTextInputTarget(hwnd) {
@@ -1079,39 +1121,62 @@ class MappingUiInteractions {
     }
 
     Dispose() {
+        cleanup := CleanupCollector("界面交互服务")
         if !this.Disposed {
             this.Disposed := true
-            this.CancelPress()
-            try OnMessage(0x002B, this.DrawCallback, 0)
-            try OnMessage(MappingUiInteractions.ClickMessage, this.ClickCallback, 0)
-            try OnMessage(Win32.WM_LBUTTONDOWN, this.PointerDownCallback, 0)
-            try OnMessage(Win32.WM_LBUTTONDBLCLK, this.PointerDownCallback, 0)
-            this.DrawCallback := ""
-            this.ClickCallback := ""
-            this.PointerDownCallback := ""
+            cleanup.Run("取消按压状态", () => this.CancelPress())
+            drawReleased := cleanup.Run("注销绘制消息",
+                () => OnMessage(0x002B, this.DrawCallback, 0))
+            clickReleased := cleanup.Run("注销点击消息", () => OnMessage(
+                MappingUiInteractions.ClickMessage, this.ClickCallback, 0))
+            pointerDownReleased := cleanup.Run("注销按下消息", () =>
+                OnMessage(Win32.WM_LBUTTONDOWN,
+                    this.PointerDownCallback, 0))
+            pointerDoubleReleased := cleanup.Run("注销双击消息", () =>
+                OnMessage(Win32.WM_LBUTTONDBLCLK,
+                    this.PointerDownCallback, 0))
+            if drawReleased
+                this.DrawCallback := ""
+            if clickReleased
+                this.ClickCallback := ""
+            if pointerDownReleased && pointerDoubleReleased
+                this.PointerDownCallback := ""
             if IsObject(this.Tooltip)
-                this.Tooltip.Dispose()
-            this.Tooltip := ""
+                    && cleanup.Run("释放工具提示",
+                        () => this.Tooltip.Dispose())
+                this.Tooltip := ""
             for controlHwnd, state in this.Controls {
                 if state.Kind == "button"
-                    ControlAccessibilityService.ClearButton(controlHwnd)
+                    cleanup.Run("清理按钮辅助功能", ObjBindMethod(
+                        ControlAccessibilityService, "ClearButton",
+                        controlHwnd))
             }
             this.Controls.Clear()
             this.TextInputTargets.Clear()
             this.PendingButtonClicks.Clear()
             this.FocusSinkHwnd := 0
-            this.Painter.Shutdown()
-            this.Painter := ""
+            if IsObject(this.Painter)
+                    && cleanup.Run("关闭按钮绘制器",
+                        () => this.Painter.Shutdown())
+                this.Painter := ""
             this.SvgRenderer := ""
             this.Gui := ""
         }
         attachedHwnds := []
         for hwnd, attachmentState in this.AttachedHwnds
             attachedHwnds.Push(hwnd)
-        for hwnd in attachedHwnds
-            this.Detach(hwnd)
-        this.ReleaseSubclassCallbackIfUnused()
-        return !this.AttachedHwnds.Count
+        for hwnd in attachedHwnds {
+            if !this.Detach(hwnd)
+                cleanup.Failures.Push("移除控件子类：Win32 " A_LastError)
+        }
+        if !this.AttachedHwnds.Count
+            cleanup.Run("释放子类回调",
+                () => this.ReleaseSubclassCallbackIfUnused())
+        else
+            cleanup.Failures.Push("仍有 " this.AttachedHwnds.Count
+                " 个控件子类未移除")
+        cleanup.Complete()
+        return true
     }
 
     ReleaseSubclassCallbackIfUnused(*) {

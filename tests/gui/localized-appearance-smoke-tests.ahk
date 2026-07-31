@@ -47,6 +47,7 @@
 #Include ..\..\src\Core\OutputLedger.ahk
 #Include ..\..\src\Core\InputBackend.ahk
 #Include ..\..\src\Platform\Win32.ahk
+#Include ..\..\src\Input\RawInputObservationPolicy.ahk
 #Include ..\..\src\Input\RawInputService.ahk
 #Include ..\..\src\Core\RawInputBackend.ahk
 #Include ..\..\src\Core\ManagedRuleRuntime.ahk
@@ -59,6 +60,7 @@
 #Include ..\..\src\UI\ThemeHelpers.ahk
 #Include ..\..\src\UI\ApplicationIcon.ahk
 #Include ..\..\src\Core\ApplicationVersionInfo.ahk
+#Include ..\..\src\UI\CleanupCollector.ahk
 #Include ..\..\src\UI\SvgRenderLibrary.ahk
 #Include ..\..\src\UI\RoundedButtonPainter.ahk
 #Include ..\..\src\UI\ControlAccessibilityService.ahk
@@ -201,6 +203,18 @@ try {
             languageCode " 帮助按钮没有热切换")
         AssertEqual(Tr("捐赠"), app.Window.DonateButton.Text,
             languageCode " 捐赠按钮没有热切换")
+        AssertEqual(Tr("配置外观、规则包、事件`n以及关于选项"),
+            app.Window.Interactions.Controls[
+                app.Window.SettingsButton.Hwnd].TooltipText,
+            languageCode " 设置按钮悬浮提示没有热切换")
+        AssertEqual(Tr("打开帮助信息`n可选择查看使用说明、运行日志或提交反馈"),
+            app.Window.Interactions.Controls[
+                app.Window.SupportButton.Hwnd].TooltipText,
+            languageCode " 帮助按钮悬浮提示没有热切换")
+        AssertEqual(Tr("快揭不开锅了（≥Д≤）"),
+            app.Window.Interactions.Controls[
+                app.Window.DonateButton.Hwnd].TooltipText,
+            languageCode " 捐赠按钮悬浮提示没有热切换")
         AssertTrue(InStr(app.Window.ListHeader.Cells[2].Text,
                 Tr("来源按键"))
             && InStr(app.Window.ListHeader.Cells[5].Text,
@@ -304,19 +318,25 @@ try {
         "字体标签没有采用小助手字段格式")
     AssertEqual("Theme:", settingsDialog.ThemeLabel.Text,
         "主题标签没有采用小助手字段格式")
+    AssertTrue(!settingsDialog.HasOwnProp("EscapeCancelsCheck"),
+        "外观页仍保留 Esc 取消录制选项")
+    AssertEqual("Appearance", settingsDialog.TabButtons[1].Text,
+        "外观页签没有本地化")
+    AssertEqual("Rule packages", settingsDialog.TabButtons[2].Text,
+        "规则包页签没有本地化")
     AssertSettingsFieldAligned(settingsDialog.LanguageLabel,
         settingsDialog.LanguageDropDown, "语言")
     AssertSettingsFieldAligned(settingsDialog.FontLabel,
         settingsDialog.FontDropDown, "字体")
     AssertSettingsFieldAligned(settingsDialog.ThemeLabel,
         settingsDialog.ThemeDropDown, "主题")
-    settingsDialog.LanguageLabel.GetPos(&generalLeft)
-    settingsDialog.LanguageDropDown.GetPos(&generalInputX, ,
-        &generalInputWidth)
-    AssertTrue(generalLeft == settingsDialog.Layout.ContentX
-            && generalInputX + generalInputWidth
+    settingsDialog.LanguageLabel.GetPos(&appearanceLeft)
+    settingsDialog.LanguageDropDown.GetPos(&appearanceInputX, ,
+        &appearanceInputWidth)
+    AssertTrue(appearanceLeft == settingsDialog.Layout.ContentX
+            && appearanceInputX + appearanceInputWidth
                 == settingsDialog.Layout.ContentRight,
-        "设置通用页没有使用左右对称的完整内容区")
+        "设置外观页没有使用左右对称的完整内容区")
 
     comboPadding := GetComboBoxDisplayPadding()
     AssertEqual("English", Trim(settingsDialog.LanguageDropDown.Text,
@@ -344,6 +364,15 @@ try {
             "设置下拉框弹出列表没有注册主题着色")
     }
 
+    settingsDialog.SwitchTab(2)
+    AssertTrue(settingsDialog.ImportRulePackageButton.Text
+            == "Import rule package"
+        && settingsDialog.ExportRulePackageButton.Text
+            == "Export rule package"
+        && !settingsDialog.SaveButton.Visible
+        && !settingsDialog.CancelButton.Visible
+        && !settingsDialog.ValidationStatus.Visible,
+        "英文规则包页没有显示独立导入导出操作或仍显示设置提交区")
     settingsDialog.SwitchTab(3)
     AssertButtonTextFits(settingsDialog.EventCapacityLabel, 0,
         "事件缓冲区容量标签")

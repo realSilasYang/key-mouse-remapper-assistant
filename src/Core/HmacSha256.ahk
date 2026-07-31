@@ -2,23 +2,39 @@ class HmacSha256 {
     static BlockSize := 64
 
     static HexText(secret, message) {
-        keyBytes := this.Utf8Bytes(String(secret))
-        messageBytes := this.Utf8Bytes(String(message))
-        if keyBytes.Size > HmacSha256.BlockSize
-            keyBytes := this.HexToBuffer(Sha256.HexBuffer(keyBytes))
+        keyBytes := ""
+        messageBytes := ""
+        inner := ""
+        outer := ""
+        innerDigest := ""
+        try {
+            keyBytes := this.Utf8Bytes(String(secret))
+            messageBytes := this.Utf8Bytes(String(message))
+            if keyBytes.Size > HmacSha256.BlockSize {
+                shortenedKey := this.HexToBuffer(Sha256.HexBuffer(keyBytes))
+                this.ZeroBuffer(keyBytes)
+                keyBytes := shortenedKey
+            }
 
-        inner := Buffer(HmacSha256.BlockSize + messageBytes.Size, 0)
-        outer := Buffer(HmacSha256.BlockSize + 32, 0)
-        Loop HmacSha256.BlockSize {
-            keyByte := A_Index <= keyBytes.Size
-                ? NumGet(keyBytes, A_Index - 1, "UChar") : 0
-            NumPut("UChar", keyByte ^ 0x36, inner, A_Index - 1)
-            NumPut("UChar", keyByte ^ 0x5C, outer, A_Index - 1)
+            inner := Buffer(HmacSha256.BlockSize + messageBytes.Size, 0)
+            outer := Buffer(HmacSha256.BlockSize + 32, 0)
+            Loop HmacSha256.BlockSize {
+                keyByte := A_Index <= keyBytes.Size
+                    ? NumGet(keyBytes, A_Index - 1, "UChar") : 0
+                NumPut("UChar", keyByte ^ 0x36, inner, A_Index - 1)
+                NumPut("UChar", keyByte ^ 0x5C, outer, A_Index - 1)
+            }
+            this.CopyBytes(messageBytes, inner, HmacSha256.BlockSize)
+            innerDigest := this.HexToBuffer(Sha256.HexBuffer(inner))
+            this.CopyBytes(innerDigest, outer, HmacSha256.BlockSize)
+            return Sha256.HexBuffer(outer)
+        } finally {
+            for byteBuffer in [keyBytes, messageBytes, inner, outer,
+                    innerDigest] {
+                if byteBuffer is Buffer
+                    this.ZeroBuffer(byteBuffer)
+            }
         }
-        this.CopyBytes(messageBytes, inner, HmacSha256.BlockSize)
-        innerDigest := this.HexToBuffer(Sha256.HexBuffer(inner))
-        this.CopyBytes(innerDigest, outer, HmacSha256.BlockSize)
-        return Sha256.HexBuffer(outer)
     }
 
     static RandomHex(byteCount := 32) {
@@ -32,7 +48,8 @@ class HmacSha256 {
         if status != 0
             throw Error(Format("无法生成加密随机数（NTSTATUS 0x{:08X}）。",
                 status))
-        return this.BufferToHex(randomBytes)
+        try return this.BufferToHex(randomBytes)
+        finally this.ZeroBuffer(randomBytes)
     }
 
     static ConstantTimeEquals(left, right) {
@@ -53,13 +70,15 @@ class HmacSha256 {
     static Utf8Bytes(text) {
         byteCount := StrPut(text, "UTF-8") - 1
         encoded := Buffer(byteCount + 1, 0)
-        if byteCount
-            StrPut(text, encoded, byteCount + 1, "UTF-8")
-        result := Buffer(byteCount, 0)
-        if byteCount
-            DllCall("kernel32\RtlMoveMemory", "Ptr", result,
-                "Ptr", encoded, "UPtr", byteCount)
-        return result
+        try {
+            if byteCount
+                StrPut(text, encoded, byteCount + 1, "UTF-8")
+            result := Buffer(byteCount, 0)
+            if byteCount
+                DllCall("kernel32\RtlMoveMemory", "Ptr", result,
+                    "Ptr", encoded, "UPtr", byteCount)
+            return result
+        } finally this.ZeroBuffer(encoded)
     }
 
     static HexToBuffer(hexText) {
@@ -88,5 +107,12 @@ class HmacSha256 {
             DllCall("kernel32\RtlMoveMemory", "Ptr",
                 destination.Ptr + destinationOffset, "Ptr", source.Ptr,
                 "UPtr", source.Size)
+    }
+
+    static ZeroBuffer(byteBuffer) {
+        if byteBuffer.Size
+            DllCall("ntdll\RtlZeroMemory", "Ptr", byteBuffer.Ptr,
+                "UPtr", byteBuffer.Size)
+        return true
     }
 }
