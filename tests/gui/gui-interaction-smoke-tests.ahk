@@ -1130,8 +1130,6 @@ try {
     for iconContract in [
         {Control: app.Window.SettingsButton, Icon: "settings.svg",
             Tint: StrLower(MappingWindow.ToolbarIconColor)},
-        {Control: app.Window.SaveButton, Icon: "save.svg",
-            Tint: StrLower(MappingWindow.ToolbarIconColor)},
         {Control: app.Window.ClearButton, Icon: "eraser.svg",
             Tint: StrLower(MappingWindow.ToolbarIconColor)}
     ] {
@@ -1144,6 +1142,17 @@ try {
             && RegExMatch(iconState.ButtonImage.SourcePath,
                 "i)\\" iconContract.Icon "$"),
             "按钮图标或颜色没有符合小助手规范：" iconContract.Icon)
+    }
+    AssertTrue(!app.Window.Interactions.Controls[
+            app.Window.SaveButton.Hwnd].HasOwnProp("ButtonImage"),
+        "保存映射作为表单提交动作不应附加图标")
+    for button in [app.Window.AddButton, app.Window.PauseResumeButton,
+            app.Window.DeleteButton, app.Window.SettingsButton,
+            app.Window.SupportButton, app.Window.DonateButton,
+            app.Window.SaveButton, app.Window.ClearButton] {
+        AssertTrue(app.Window.Interactions.Controls[button.Hwnd]
+                .TooltipText == "",
+            "主窗口按钮不应显示基准项目不存在的悬浮文案")
     }
     arrowState := app.Window.Interactions.Controls[app.Window.ArrowText.Hwnd]
     AssertTrue(arrowState.Kind == "icon"
@@ -1877,6 +1886,11 @@ try {
     try {
         fontEditor.Show()
         AssertTestWindowOffscreen(fontEditor.Gui.Hwnd, "字体与高亮编辑器")
+        AssertTrue(!fontEditor.Interactions.Controls[
+                fontEditor.SaveButton.Hwnd].HasOwnProp("ButtonImage")
+            && !fontEditor.Interactions.Controls[
+                fontEditor.CancelButton.Hwnd].HasOwnProp("ButtonImage"),
+            "映射编辑器保存/取消按钮不应附加图标")
         SetTimer(fontEditor.FormatTimer, 0)
         fontEditor.ApplyEditorFonts(true)
         editorText := fontEditor.Canonicalize(fontEditor.GetCodeText())
@@ -1954,6 +1968,17 @@ try {
             && !DllCall("user32\IsWindowEnabled", "Ptr",
                 app.Window.Gui.Hwnd, "Int"),
         "规则包预览缺少逐规则选择、权限摘要或窗口层级")
+    AssertTrue(!importPreview.Interactions.Controls[
+            importPreview.ImportButton.Hwnd].HasOwnProp("ButtonImage")
+        && !importPreview.Interactions.Controls[
+            importPreview.CancelButton.Hwnd].HasOwnProp("ButtonImage")
+        && RegExMatch(importPreview.Interactions.Controls[
+            importPreview.SelectAllButton.Hwnd].ButtonImage.SourcePath,
+            "i)\\circle-check-big\.svg$")
+        && RegExMatch(importPreview.Interactions.Controls[
+            importPreview.ClearButton.Hwnd].ButtonImage.SourcePath,
+            "i)\\x\.svg$"),
+        "规则包表单动作和选择工具的图标边界不正确")
     importPreview.ClearSelection()
     AssertTrue(importPreview.GetSelectedIds().Length == 0,
         "规则包预览无法取消全部规则选择")

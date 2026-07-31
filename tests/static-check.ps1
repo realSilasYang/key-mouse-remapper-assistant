@@ -51,7 +51,7 @@ foreach ($required in @(
     'assets\ui-icons\lucide\keyboard.svg',
     'assets\ui-icons\lucide\mouse.svg',
     'assets\ui-icons\lucide\arrow-right.svg',
-    'assets\ui-icons\lucide\save.svg',
+    'assets\ui-icons\lucide\refresh-cw-action.svg',
     'assets\ui-icons\lucide\eraser.svg',
     'assets\ui-icons\lucide\x.svg',
     'assets\ui-icons\lucide\pencil.svg',
@@ -158,6 +158,8 @@ $helpWindow = Get-Content -LiteralPath (Join-Path $projectRoot `
     'app\Windows\HelpWindow.ahk') -Raw -Encoding UTF8
 $donationWindow = Get-Content -LiteralPath (Join-Path $projectRoot `
     'app\Windows\DonationWindow.ahk') -Raw -Encoding UTF8
+$rulePackageImportWindow = Get-Content -LiteralPath (Join-Path $projectRoot `
+    'app\Windows\RulePackageImportWindow.ahk') -Raw -Encoding UTF8
 $contextPopupWindow = Get-Content -LiteralPath (Join-Path $projectRoot `
     'app\Windows\MappingContextPopupWindow.ahk') -Raw -Encoding UTF8
 $applicationIcon = Get-Content -LiteralPath (Join-Path $projectRoot `
@@ -332,11 +334,12 @@ if ($runtimeSourceText -match '💾|🧹|✖|✏|→') {
     $failures.Add('Runtime controls must use Lucide assets except for the assistant-style main Add/Pause/Delete Emoji commands.')
 }
 $lucideContracts = [ordered]@{
-    'main window' = @($mappingWindow, 'settings.svg|keyboard.svg|mouse.svg|arrow-right.svg|save.svg|eraser.svg')
-    'mapping editor' = @($mappingEditor, 'save.svg|x.svg')
+    'main window' = @($mappingWindow, 'settings.svg|keyboard.svg|mouse.svg|arrow-right.svg|eraser.svg')
     'event viewer' = @($eventViewerWindow, 'circle-pause.svg|play.svg|eraser.svg|file-output.svg')
-    'settings window' = @($settingsWindow, 'save.svg|x.svg')
+    'settings window' = @($settingsWindow, 'refresh-cw-action.svg|external-link.svg')
     'mapping context popup' = @($contextPopupWindow, 'pencil.svg')
+    'support information' = @($supportInfoWindow, 'book-open.svg|logs.svg|message-square-text.svg')
+    'rule package selection' = @($rulePackageImportWindow, 'circle-check-big.svg|x.svg')
 }
 if ($mappingWindow -match 'square-plus\.svg|circle-pause\.svg|play\.svg|trash-2\.svg') {
     $failures.Add('Main Add/Pause/Delete commands must use the same Emoji text treatment as the assistant, not Lucide images.')
@@ -352,6 +355,38 @@ foreach ($contractName in $lucideContracts.Keys) {
             $failures.Add("Missing semantic Lucide icon in ${contractName}: $iconName")
         }
     }
+}
+$formIconContracts = @(
+    @{Source = $mappingWindow; Pattern =
+        'SetButton(?:Lucide|Svg)Icon\(this\.SaveButton'; Name = 'mapping save'},
+    @{Source = $mappingEditor; Pattern =
+        'SetButton(?:Lucide|Svg)Icon\(this\.(?:Save|Cancel)Button';
+        Name = 'mapping editor save/cancel'},
+    @{Source = $settingsWindow; Pattern =
+        'SetButton(?:Lucide|Svg)Icon\(this\.(?:Save|Cancel)Button';
+        Name = 'settings save/cancel'},
+    @{Source = $rulePackageImportWindow; Pattern =
+        'SetButton(?:Lucide|Svg)Icon\(this\.(?:Import|Cancel)Button';
+        Name = 'rule import/cancel'}
+)
+foreach ($contract in $formIconContracts) {
+    if ($contract.Source -match $contract.Pattern) {
+        $failures.Add("Form action must remain text-only: $($contract.Name)")
+    }
+}
+if (Test-Path -LiteralPath (Join-Path $projectRoot `
+        'assets\ui-icons\lucide\save.svg')) {
+    $failures.Add('Unused save.svg must not return after form actions became text-only.')
+}
+if ($mappingWindow -match 'SetButtonTooltip\(' -or
+    $settingsWindow -match 'SetButtonTooltip\(this\.ReleasesButton' -or
+    $settingsWindow -notmatch
+        'SetButtonLucideIcon\(this\.ReleasesButton,[\s\S]{0,100}refresh-cw-action\.svg' -or
+    $settingsWindow -notmatch
+        'SetButtonSvgIcon\(this\.ProjectButton,[\s\S]{0,160}ui-icons\\external-link\.svg' -or
+    $settingsWindow -notmatch
+        'SetButtonTooltip\(this\.ProjectButton,\s*SettingsWindow\.ProjectHomeUrl\)') {
+    $failures.Add('Button tooltips and About actions must match the assistant UI contract.')
 }
 $mappingWindowConstructor = [regex]::Match($mappingWindow,
     '__New\(app\)\s*\{(?<body>[\s\S]*?)\r?\n    BuildControls\(\)')
@@ -511,6 +546,7 @@ if ($supportInfoWindow -notmatch [regex]::Escape(
     $donationWindow -notmatch '微信个人收款码-界面\.png' -or
     $donationWindow -notmatch '支付宝个人收款码-界面\.png' -or
     $donationWindow -notmatch 'MissingQrTexts' -or
+    -not $donationWindow.Contains('Tr("如果小助手为您节省了排查问题和恢复程序的时间，欢迎通过下方二维码打赏作者！`n请选择扶贫方式：")') -or
     $appController -notmatch 'OpenHelpInfo\(' -or
     $appController -notmatch 'OpenHelp\(' -or
     $appController -notmatch 'OpenDonation\(' -or

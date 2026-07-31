@@ -260,7 +260,7 @@ AssertSemanticLucideColors() {
         "mouse.svg", "60A5FA",
         "pencil.svg", "B9A3FF",
         "play.svg", "69D19A",
-        "save.svg", "03C078",
+        "refresh-cw-action.svg", "DCEBFF",
         "settings.svg", "BABABC",
         "square-plus.svg", "93A8EA",
         "target.svg", "60A5FA",

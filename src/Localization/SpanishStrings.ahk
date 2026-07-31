@@ -585,7 +585,7 @@ class SpanishStrings {
         catalog.Set("微信支付", "WeChat Pay")
         catalog.Set("支付宝", "Alipay")
         catalog.Set("二维码图片未找到", "No se encontró la imagen del código QR")
-        catalog.Set("如果这个项目为您带来了帮助，欢迎通过下方二维码支持作者！`n键鼠重映射小助手将持续保持开源，项目的长期维护有赖于您的支持和鼓励。", "Si este proyecto le ha resultado útil, puede apoyar al autor mediante los códigos QR de abajo.`nEl asistente de reasignación de teclado y ratón seguirá siendo de código abierto; su apoyo ayuda a mantener el proyecto a largo plazo.")
+        catalog.Set("如果小助手为您节省了排查问题和恢复程序的时间，欢迎通过下方二维码打赏作者！`n请选择扶贫方式：", "Si el asistente le ha ahorrado tiempo al diagnosticar problemas y restablecer programas, puede apoyar al autor mediante los códigos QR de abajo.`nElija cómo desea colaborar:")
         catalog.Set("无法打开帮助信息：{1}", "No se pudo abrir Ayuda: {1}")
         catalog.Set("无法打开使用说明：{1}", "No se pudo abrir la guía de uso: {1}")
         catalog.Set("无法打开捐赠窗口：{1}", "No se pudo abrir la ventana de donación: {1}")

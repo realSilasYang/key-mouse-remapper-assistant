@@ -584,7 +584,7 @@ class VietnameseStrings {
         catalog.Set("微信支付", "WeChat Pay")
         catalog.Set("支付宝", "Alipay")
         catalog.Set("二维码图片未找到", "Không tìm thấy ảnh mã QR")
-        catalog.Set("如果这个项目为您带来了帮助，欢迎通过下方二维码支持作者！`n键鼠重映射小助手将持续保持开源，项目的长期维护有赖于您的支持和鼓励。", "Nếu dự án này hữu ích với bạn, bạn có thể ủng hộ tác giả qua các mã QR bên dưới.`nTrợ lý ánh xạ lại bàn phím và chuột sẽ tiếp tục là phần mềm mã nguồn mở; sự ủng hộ của bạn giúp duy trì dự án lâu dài.")
+        catalog.Set("如果小助手为您节省了排查问题和恢复程序的时间，欢迎通过下方二维码打赏作者！`n请选择扶贫方式：", "Nếu trợ lý đã giúp bạn tiết kiệm thời gian tìm nguyên nhân sự cố và khôi phục chương trình, hãy ủng hộ tác giả qua mã QR bên dưới!`nVui lòng chọn cách ủng hộ:")
         catalog.Set("无法打开帮助信息：{1}", "Không thể mở Trợ giúp: {1}")
         catalog.Set("无法打开使用说明：{1}", "Không thể mở hướng dẫn sử dụng: {1}")
         catalog.Set("无法打开捐赠窗口：{1}", "Không thể mở cửa sổ ủng hộ: {1}")

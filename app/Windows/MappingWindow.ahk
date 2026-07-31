@@ -161,7 +161,6 @@ class MappingWindow {
             ObjBindMethod(this.App, "OpenDonation"), "",
             MappingWindow.SettingsButtonHeight)
         this.ApplyCommandIcons()
-        this.ApplyButtonTooltips()
 
         this.HeaderLabels := [Tr("序号"), Tr("来源按键"), Tr("映射结果"),
             Tr("生效范围"), Tr("设计目的")]
@@ -273,8 +272,6 @@ class MappingWindow {
             MappingWindow.ClearButtonWidth,
             Tr("清空"), colors.Toolbar,
             ObjBindMethod(this, "ClearEditor"))
-        this.Interactions.SetButtonLucideIcon(this.SaveButton,
-            "save.svg", 16, 7, MappingWindow.ToolbarIconColor)
         this.Interactions.SetButtonLucideIcon(this.ClearButton,
             "eraser.svg", 16, 7, MappingWindow.ToolbarIconColor)
         this.Status := this.Gui.Add("Text", "x10 y554 w700 h24 +Wrap Background" colors.Window " c" colors.Muted,
@@ -310,20 +307,6 @@ class MappingWindow {
                 item.Icon, 15, 6,
                 item.HasOwnProp("Tint") ? item.Tint : "none")
         }
-    }
-
-    ApplyButtonTooltips() {
-        this.Interactions.SetButtonTooltip(this.AddButton, Tr("新增映射"))
-        this.Interactions.SetButtonTooltip(this.PauseResumeButton,
-            Tr("暂停") " / " Tr("恢复") "`nSpace")
-        this.Interactions.SetButtonTooltip(this.DeleteButton,
-            Tr("删除") "`nDelete")
-        this.Interactions.SetButtonTooltip(this.SettingsButton,
-            Tr("键鼠重映射小助手设置"))
-        this.Interactions.SetButtonTooltip(this.SupportButton,
-            Tr("帮助信息"))
-        this.Interactions.SetButtonTooltip(this.DonateButton,
-            Tr("支持开源项目"))
     }
 
     GetAddButtonText() => "➕ " Tr("新增")
@@ -808,10 +791,7 @@ class MappingWindow {
             this.Interactions.SetButtonAppearance(this.ClearButton,
                 colors.Toolbar, colors.ToolbarText, true)
             this.ApplyCommandIcons()
-            this.ApplyButtonTooltips()
             this.RefreshCaptureButtonIcons()
-            this.Interactions.SetButtonLucideIcon(this.SaveButton,
-                "save.svg", 16, 7, MappingWindow.ToolbarIconColor)
             this.Interactions.SetButtonLucideIcon(this.ClearButton,
                 "eraser.svg", 16, 7, MappingWindow.ToolbarIconColor)
             this.Interactions.SetIconSurfaceAppearance(this.ArrowText,

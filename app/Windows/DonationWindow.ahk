@@ -49,7 +49,7 @@ class DonationWindow {
         this.MessageText := this.Gui.Add("Text", "x" contentMargin
             " y22 w" (this.WindowWidth - contentMargin * 2)
             " Center +0x80 BackgroundTrans c" colors.Text,
-            Tr("如果这个项目为您带来了帮助，欢迎通过下方二维码支持作者！`n键鼠重映射小助手将持续保持开源，项目的长期维护有赖于您的支持和鼓励。"))
+            Tr("如果小助手为您节省了排查问题和恢复程序的时间，欢迎通过下方二维码打赏作者！`n请选择扶贫方式："))
         this.MessageText.GetPos(, &messageY, , &messageHeight)
         dividerY := messageY + messageHeight + 17
         this.Divider := this.Gui.Add("Text", "x" contentMargin
@@ -117,7 +117,7 @@ class DonationWindow {
             fontName := LocalizationService.GetUiFontName()
             this.Gui.Title := Tr("支持开源项目")
             this.Gui.BackColor := colors.Window
-            this.MessageText.Text := Tr("如果这个项目为您带来了帮助，欢迎通过下方二维码支持作者！`n键鼠重映射小助手将持续保持开源，项目的长期维护有赖于您的支持和鼓励。")
+            this.MessageText.Text := Tr("如果小助手为您节省了排查问题和恢复程序的时间，欢迎通过下方二维码打赏作者！`n请选择扶贫方式：")
             this.MessageText.SetFont("norm s10 c" colors.Text, fontName)
             this.Divider.Opt("Background" colors.Divider)
             labels := [Tr("微信支付"), Tr("支付宝")]

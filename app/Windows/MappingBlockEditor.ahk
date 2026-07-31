@@ -146,7 +146,6 @@ class MappingBlockEditor {
             Tr("保存"), colors.Primary, ObjBindMethod(this, "Save"))
         this.CancelButton := this.AddCommandButton(654, 512, 112,
             Tr("取消"), colors.Toolbar, ObjBindMethod(this, "RequestClose"))
-        this.ApplyCommandIcons()
         this.Interactions.SetFocusSink(this.SaveButton)
     }
 
@@ -202,13 +201,6 @@ class MappingBlockEditor {
         if !this.Interactions.RegisterButton(button, color, callback)
             button.OnEvent("Click", callback)
         return button
-    }
-
-    ApplyCommandIcons() {
-        this.Interactions.SetButtonLucideIcon(this.SaveButton,
-            "save.svg", 15, 7)
-        this.Interactions.SetButtonLucideIcon(this.CancelButton,
-            "x.svg", 15, 7)
     }
 
     Show() {
@@ -274,7 +266,6 @@ class MappingBlockEditor {
             colors.Primary, colors.ButtonText, true)
         this.Interactions.SetButtonAppearance(this.CancelButton,
             colors.Toolbar, colors.ToolbarText, true)
-        this.ApplyCommandIcons()
         this.Status.SetFont("s10 c" (this.StatusIsError
             ? colors.Error : colors.Muted),
             LocalizationService.GetUiFontName())

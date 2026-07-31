@@ -370,7 +370,7 @@ try {
     AssertTrue(saveWidth == 80 && saveHeight == 28
         && cancelWidth == 80 && cancelHeight == 28
         && cancelX - (saveX + saveWidth) == 10,
-        "设置操作按钮没有采用容纳图标的 80x28 尺寸与 10px 间距")
+        "设置操作按钮没有采用 80x28 尺寸与 10px 间距")
     AssertTrue(saveY + saveHeight <= settingsClientHeight
             && cancelY + cancelHeight <= settingsClientHeight
             && validationY + validationHeight <= settingsClientHeight,
@@ -381,6 +381,17 @@ try {
     AssertTrue(releasesY + releasesHeight <= settingsClientHeight
             && projectY + projectHeight <= settingsClientHeight,
         "设置关于页按钮超出窗口客户区")
+    releasesState := settingsDialog.Interactions.Controls[
+        settingsDialog.ReleasesButton.Hwnd]
+    projectState := settingsDialog.Interactions.Controls[
+        settingsDialog.ProjectButton.Hwnd]
+    AssertTrue(RegExMatch(releasesState.ButtonImage.SourcePath,
+            "i)\\refresh-cw-action\.svg$")
+        && releasesState.TooltipText == ""
+        && RegExMatch(projectState.ButtonImage.SourcePath,
+            "i)\\external-link\.svg$")
+        && projectState.TooltipText == SettingsWindow.ProjectHomeUrl,
+        "关于页更新图标、项目外链图标或悬浮提示与基准不一致")
     settingsDialog.SwitchTab(1)
     centeredPosition := SettingsWindow.CalculateCenteredPosition(680, 330,
         100, 100, 900, 700, 0, 0, 1920, 1040)
@@ -397,11 +408,9 @@ try {
         settingsDialog.SaveButton.Hwnd]
     cancelState := settingsDialog.Interactions.Controls[
         settingsDialog.CancelButton.Hwnd]
-    AssertTrue(RegExMatch(saveState.ButtonImage.SourcePath,
-            "i)\\save\.svg$")
-        && RegExMatch(cancelState.ButtonImage.SourcePath,
-            "i)\\x\.svg$"),
-        "设置操作按钮没有使用语义化 Lucide 图标")
+    AssertTrue(!saveState.HasOwnProp("ButtonImage")
+        && !cancelState.HasOwnProp("ButtonImage"),
+        "设置保存/取消按钮不应附加装饰图标")
     AssertEqual(UiThemeService.GetPalette().ButtonText, saveState.TextColor,
         "浅色主题主按钮文字没有保持白色对比度")
     AssertEqual(UiThemeService.GetPalette().ToolbarText, cancelState.TextColor,
@@ -500,6 +509,8 @@ try {
         "微信支付标签错误")
     AssertEqual(Tr("支付宝"), donationDialog.QrLabels[2].Text,
         "支付宝标签错误")
+    AssertEqual(Tr("如果小助手为您节省了排查问题和恢复程序的时间，欢迎通过下方二维码打赏作者！`n请选择扶贫方式："),
+        donationDialog.MessageText.Text, "捐赠窗口文案未与基准保持一致")
     AssertTrue((ControlGetStyle(donationDialog.MessageText) & 0x80) != 0,
         "捐赠说明没有禁止原生助记前缀，英文 & 会被吞掉")
     AssertTrue(!DllCall("user32\IsWindowEnabled", "Ptr",

@@ -95,10 +95,6 @@ class RulePackageImportWindow {
             "circle-check-big.svg", 15, 6)
         this.Interactions.SetButtonLucideIcon(this.ClearButton,
             "x.svg", 15, 6)
-        this.Interactions.SetButtonLucideIcon(this.ImportButton,
-            "file-output.svg", 15, 6)
-        this.Interactions.SetButtonLucideIcon(this.CancelButton,
-            "x.svg", 15, 6)
         this.Status := this.Gui.Add("Text",
             "x16 y478 w718 h36 +Wrap Background" colors.Window
             " c" colors.Muted, Tr("仅勾选的规则会被导入。"))

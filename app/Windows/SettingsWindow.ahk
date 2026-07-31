@@ -95,10 +95,6 @@ class SettingsWindow {
         this.CancelButton := this.AddActionButton(actionGroupX + 90, 286,
             Tr("取消"), colors.Toolbar, colors.ToolbarText,
             ObjBindMethod(this, "RequestClose"))
-        this.Interactions.SetButtonLucideIcon(this.SaveButton,
-            "save.svg", 14, 6)
-        this.Interactions.SetButtonLucideIcon(this.CancelButton,
-            "x.svg", 14, 6)
         this.Gui.OnEvent("Close", ObjBindMethod(this, "RequestClose"))
         this.Gui.OnEvent("Escape", ObjBindMethod(this, "RequestClose"))
         this.SwitchTab(1)
@@ -292,10 +288,8 @@ class SettingsWindow {
             this.AddActionButton(actionX + releasesWidth + actionGap, 279,
                 Tr("开源地址"), colors.Toolbar, colors.ToolbarText,
                 ObjBindMethod(this, "OpenProjectHomepage"), projectWidth, 36))
-        this.Interactions.SetButtonSvgIcon(this.ReleasesButton,
-            GetApplicationAssetPath("ui-icons\external-link.svg"), 14, 7)
-        this.Interactions.SetButtonTooltip(this.ReleasesButton,
-            SettingsWindow.ReleasesUrl)
+        this.Interactions.SetButtonLucideIcon(this.ReleasesButton,
+            "refresh-cw-action.svg", 15, 7)
         this.Interactions.SetButtonSvgIcon(this.ProjectButton,
             GetApplicationAssetPath("ui-icons\external-link.svg"), 14, 7)
         this.Interactions.SetButtonTooltip(this.ProjectButton,
