@@ -5,9 +5,11 @@ class ListViewSelectionPresenter {
     static VerticalInsetDip := 2
     static RadiusDip := 7
 
-    __New(listView, painter) {
+    __New(listView, painter, subItemDrawCallback := "") {
         this.ListView := listView
         this.Painter := painter
+        this.SubItemDrawCallback := IsObject(subItemDrawCallback)
+            ? subItemDrawCallback : ""
         this.NotifyCallback := ObjBindMethod(this, "HandleCustomDraw")
         this.Attached := false
         if IsObject(listView) && listView.Hwnd && IsObject(painter) {
@@ -24,6 +26,7 @@ class ListViewSelectionPresenter {
         this.Attached := false
         this.ListView := ""
         this.Painter := ""
+        this.SubItemDrawCallback := ""
         this.NotifyCallback := ""
         return true
     }
@@ -53,23 +56,56 @@ class ListViewSelectionPresenter {
         stage := NumGet(lParam, stageOffset, "UInt")
         if stage == Win32.CDDS_PREPAINT
             return Win32.CDRF_NOTIFYITEMDRAW
+        if stage == (Win32.CDDS_ITEMPREPAINT | Win32.CDDS_SUBITEM) {
+            if IsObject(this.SubItemDrawCallback) {
+                result := this.SubItemDrawCallback.Call(listView, lParam)
+                if result != "" {
+                    stateOffset := A_PtrSize == 8 ? 64 : 40
+                    itemState := NumGet(lParam, stateOffset, "UInt")
+                    if this.IsSelected(listView, lParam, itemState)
+                        this.MaskSelectedRow(listView, lParam)
+                }
+                return result
+            }
+            return
+        }
         if stage != Win32.CDDS_ITEMPREPAINT
-            && stage != Win32.CDDS_ITEMPOSTPAINT
+                && stage != Win32.CDDS_ITEMPOSTPAINT
             return
         stateOffset := A_PtrSize == 8 ? 64 : 40
         itemState := NumGet(lParam, stateOffset, "UInt")
-        if !this.IsSelected(listView, lParam, itemState)
-            return
         if stage == Win32.CDDS_ITEMPREPAINT
-            return Win32.CDRF_NOTIFYPOSTPAINT
+                && itemState & Win32.CDIS_FOCUS {
+            itemState &= ~Win32.CDIS_FOCUS
+            NumPut("UInt", itemState, lParam, stateOffset)
+        }
+        selected := this.IsSelected(listView, lParam, itemState)
+        if stage == Win32.CDDS_ITEMPREPAINT {
+            flags := IsObject(this.SubItemDrawCallback)
+                ? Win32.CDRF_NOTIFYITEMDRAW : Win32.CDRF_DODEFAULT
+            return selected && !IsObject(this.SubItemDrawCallback)
+                ? flags | Win32.CDRF_NOTIFYPOSTPAINT : flags
+        }
+        if !selected
+            return
+        this.MaskSelectedRow(listView, lParam)
+        return Win32.CDRF_DODEFAULT
+    }
 
+    MaskSelectedRow(listView, lParam) {
+        itemSpecOffset := A_PtrSize == 8 ? 56 : 36
+        itemIndex := NumGet(lParam, itemSpecOffset, "UPtr")
+        rowRect := Buffer(16, 0)
+        NumPut("Int", Win32.LVIR_BOUNDS, rowRect, 0)
+        if !SendMessage(Win32.LVM_GETITEMRECT, itemIndex, rowRect.Ptr, ,
+                listView.Hwnd)
+            return false
         hdcOffset := A_PtrSize == 8 ? 32 : 16
-        rectOffset := A_PtrSize == 8 ? 40 : 20
         hdc := NumGet(lParam, hdcOffset, "Ptr")
-        left := NumGet(lParam, rectOffset, "Int")
-        top := NumGet(lParam, rectOffset + 4, "Int")
-        right := NumGet(lParam, rectOffset + 8, "Int")
-        bottom := NumGet(lParam, rectOffset + 12, "Int")
+        left := NumGet(rowRect, 0, "Int")
+        top := NumGet(rowRect, 4, "Int")
+        right := NumGet(rowRect, 8, "Int")
+        bottom := NumGet(rowRect, 12, "Int")
         windowDpi := DllCall("user32\GetDpiForWindow", "Ptr", listView.Hwnd,
             "UInt")
         if !windowDpi
@@ -80,11 +116,10 @@ class ListViewSelectionPresenter {
             ListViewSelectionPresenter.VerticalInsetDip * windowDpi / 96))
         radius := Max(3, Round(
             ListViewSelectionPresenter.RadiusDip * windowDpi / 96))
-        this.Painter.MaskOutsideRoundedRectangle(hdc,
+        return this.Painter.MaskOutsideRoundedRectangle(hdc,
             left, top, right, bottom,
             left + horizontalInset, top + verticalInset,
             right - horizontalInset, bottom - verticalInset,
             UiThemeService.Color("Surface"), radius)
-        return Win32.CDRF_DODEFAULT
     }
 }

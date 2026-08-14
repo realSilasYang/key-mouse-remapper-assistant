@@ -1,4 +1,8 @@
 class KeyCaptureSession {
+    static AppCommandCorrelationMs := 30
+    static PointerCancellationTimeoutMs := 2000
+    static InputDrainRetryMs := 15
+    static InputDrainTimeoutMs := 2000
     static ModifierOrder := [
         "LCtrl", "RCtrl", "LShift", "RShift",
         "LAlt", "RAlt", "LWin", "RWin"]
@@ -10,77 +14,174 @@ class KeyCaptureSession {
         13, "Media_Stop", 14, "Media_Play_Pause", 15, "Launch_Mail",
         16, "Launch_Media", 17, "Launch_App1", 18, "Launch_App2")
 
-    __New(app) {
+    __New(app, inputGuard := "") {
         this.App := app
+        this.InputGuard := IsObject(inputGuard)
+            ? inputGuard : CaptureInputGuardProcess("", "",
+                ObjBindMethod(this, "ObserveGuardInputEvent"))
         this.Active := false
         this.Role := ""
         this.SuspensionOwned := false
+        this.InputGuardOwned := false
+        this.LastStartError := ""
         this.HeldKeys := Map()
         this.RecordedKeys := Map()
         this.RecordedOrder := []
         this.PendingCapture := ""
-        this.CaptureDeviceId := ""
+        this.CaptureFrozen := false
         this.ObservedHeld := Map()
+        this.Draining := false
+        this.DrainCapture := ""
+        this.DrainCancelled := false
+        this.DrainCancelReason := ""
+        this.DrainRole := ""
+        this.InputDrainDeadline := 0
+        this.InputDrainTimer := ObjBindMethod(this, "FinalizeInputDrain")
         this.PointerButtonCancelPending := false
-        this.PointerButtonCancelTick := 0
+        this.PointerCancelTimer := ObjBindMethod(this,
+            "FinalizePointerCancellationTimeout")
+        this.PendingAppCommand := ""
+        this.AppCommandTimer := ObjBindMethod(this,
+            "FinalizePendingAppCommand")
     }
 
     Start(role) {
         this.Stop(false)
-        if role != "source" && role != "target"
+        this.LastStartError := ""
+        if this.SuspensionOwned || this.InputGuardOwned {
+            this.LastStartError := "上一次按键录制尚未完成清理。"
             return false
+        }
+        if role != "source" && role != "target" {
+            this.LastStartError := "按键录制类型无效。"
+            return false
+        }
         this.Role := role
         this.HeldKeys.Clear()
         this.RecordedKeys.Clear()
         this.RecordedOrder := []
         this.PendingCapture := ""
-        this.CaptureDeviceId := ""
+        this.CaptureFrozen := false
         this.PointerButtonCancelPending := false
-        this.PointerButtonCancelTick := 0
+        this.Draining := false
+        this.DrainCapture := ""
+        this.DrainCancelled := false
+        this.DrainCancelReason := ""
+        this.DrainRole := ""
+        this.InputDrainDeadline := 0
+        SetTimer(this.PointerCancelTimer, 0)
+        SetTimer(this.AppCommandTimer, 0)
+        SetTimer(this.InputDrainTimer, 0)
+        this.PendingAppCommand := ""
         try {
-            this.SuspensionOwned := !this.App.Runtime.Backend.Suspended
-            if this.SuspensionOwned
-                this.App.Runtime.Backend.Suspend()
+            this.InputGuardOwned := true
+            if !this.InputGuard.Start()
+                throw Error("无法取得录制期间的独占输入状态。")
+            ; The helper can already consume and forward input while script
+            ; workers acknowledge suspension, so recording must be live before
+            ; that wait begins.
             this.Active := true
+            this.SuspensionOwned := this.App.SuspendRemappingForCapture()
+            if !this.SuspensionOwned
+                throw Error("无法取得录制期间的重映射暂停状态。")
             this.SeedObservedModifiers()
             this.Trace("capture_started", {Outcome: role})
             return true
-        } catch {
+        } catch as startError {
+            this.LastStartError := startError.Message
+            this.Trace("capture_start_failed", {Outcome: "error",
+                Detail: startError.Message})
             this.Stop(false)
             return false
         }
     }
 
-    Stop(notifyCancelled := false) {
-        wasActive := this.Active
+    Stop(notifyCancelled := false, resumeRemapping := true) {
+        wasActive := this.Active || this.Draining || this.SuspensionOwned
+            || this.InputGuardOwned
         pointerCancellationPending := this.PointerButtonCancelPending
+        inputGuardError := ""
+        resumeError := ""
         this.Active := false
         this.PendingCapture := ""
-        this.CaptureDeviceId := ""
+        this.CaptureFrozen := false
+        this.Draining := false
+        this.DrainCapture := ""
+        this.DrainCancelled := false
+        this.DrainCancelReason := ""
+        this.DrainRole := ""
+        this.InputDrainDeadline := 0
         this.PointerButtonCancelPending := false
-        this.PointerButtonCancelTick := 0
+        SetTimer(this.PointerCancelTimer, 0)
+        SetTimer(this.AppCommandTimer, 0)
+        SetTimer(this.InputDrainTimer, 0)
+        this.PendingAppCommand := ""
         this.HeldKeys.Clear()
         this.RecordedKeys.Clear()
         this.RecordedOrder := []
         if this.SuspensionOwned {
             this.SuspensionOwned := false
-            try this.App.Runtime.Backend.Resume()
+            if resumeRemapping {
+                try this.App.ResumeRemappingAfterCapture(true)
+                catch as caughtResumeError {
+                    resumeError := caughtResumeError
+                    try this.App.OnCaptureResumeFailed(caughtResumeError.Message)
+                }
+            }
+        }
+        ; 恢复运行时期间仍保持全局拦截，避免重新注册热键的短暂窗口把
+        ; 本次录制末尾或取消按键泄露给规则和其它全局快捷键。
+        if this.InputGuardOwned {
+            try this.InputGuard.Stop()
+            catch as caughtInputGuardError
+                inputGuardError := caughtInputGuardError
+            this.InputGuardOwned := this.InputGuardHasResources()
         }
         if pointerCancellationPending
             try this.App.FinalizeCapturePointerCancellation()
-        if notifyCancelled && wasActive
+        if IsObject(inputGuardError) && wasActive {
+            try this.App.OnCaptureRejected(inputGuardError.Message)
+        } else if notifyCancelled && wasActive {
             this.App.OnCaptureCancelled()
-        return wasActive
+        }
+        if IsObject(inputGuardError)
+            this.Trace("capture_input_guard_failed", {Outcome: "error",
+                Detail: inputGuardError.Message})
+        if IsObject(resumeError)
+            this.Trace("capture_resume_failed", {Outcome: "error",
+                Detail: resumeError.Message})
+        return wasActive && !IsObject(inputGuardError)
+            && !IsObject(resumeError)
     }
 
-    Cancel(*) => this.Stop(true)
+    InputGuardHasResources() {
+        try return !!this.InputGuard.HasResources()
+        catch
+            return false
+    }
+
+    Cancel(reason := "generic", *) {
+        return this.BeginInputDrain("", true, reason)
+    }
+
+    IsInputBlocked() => this.Active || this.Draining || this.InputGuardOwned
+
+    DispatchRawInputEvent(unifiedEvent, runtime) {
+        try this.ObserveRawInputEvent(unifiedEvent)
+        if this.IsInputBlocked()
+            return true
+        try runtime.ObserveInputEvent(unifiedEvent)
+        return false
+    }
 
     ObserveRawInputEvent(unifiedEvent) {
         if Type(unifiedEvent) != "Map" || !unifiedEvent.Has("identity")
                 || !unifiedEvent.Has("phase")
             return false
         if unifiedEvent["origin"] == "raw-input-device" {
-            if unifiedEvent["phase"] == "removal"
+            lifecycle := unifiedEvent.Has("metadata")
+                ? unifiedEvent["metadata"].Get("lifecycle", "") : ""
+            if (unifiedEvent["phase"] == "removal" || lifecycle == "rebound")
                     && unifiedEvent.Has("metadata")
                     && unifiedEvent["metadata"].Has("device")
                 this.HandleDeviceRemoval(
@@ -95,11 +196,96 @@ class KeyCaptureSession {
         if deviceId == ""
             return false
         stateKey := deviceId "|" KeyIdentity.Signature(identity)
-        if unifiedEvent["phase"] == "down"
+        tracksPhysicalInput := (identity["kind"] == "keyboard"
+                || identity["kind"] == "mouse")
+            && unifiedEvent["phase"] != "wheel"
+            && unifiedEvent["phase"] != "move"
+        if tracksPhysicalInput && unifiedEvent["phase"] == "down"
             this.ObservedHeld[stateKey] := RuleSpec.Clone(unifiedEvent)
-        else if unifiedEvent["phase"] == "up" && this.ObservedHeld.Has(stateKey)
+        else if tracksPhysicalInput && unifiedEvent["phase"] == "up"
+                && this.ObservedHeld.Has(stateKey)
             this.ObservedHeld.Delete(stateKey)
-        return this.Active ? this.HandleRawInputEvent(unifiedEvent) : false
+        if this.Active
+            return this.HandleRawInputEvent(unifiedEvent)
+        if this.Draining
+            return this.HandleInputDrainEvent(unifiedEvent)
+        return false
+    }
+
+    ObserveGuardInputEvent(packet) {
+        if !IsObject(packet) || !packet.HasOwnProp("Kind")
+            return false
+        if packet.Kind == "keyboard"
+            return this.ObserveGuardKeyboardEvent(packet)
+        if packet.Kind == "mouse"
+            return this.ObserveGuardMouseEvent(packet)
+        return false
+    }
+
+    ObserveGuardKeyboardEvent(packet) {
+        flags := Integer(packet.Flags)
+        ; The guard must consume injected output as well, but remapping output
+        ; racing the pause boundary must never become the user's recording.
+        if flags & 0x10 ; LLKHF_INJECTED
+            return true
+        isUp := packet.Message == 0x0101 || packet.Message == 0x0105
+            || (flags & 0x80) ; LLKHF_UP
+        rawFlags := (isUp ? 0x0001 : 0)
+            | ((flags & 0x01) ? 0x0002 : 0) ; LLKHF_EXTENDED -> RI_KEY_E0
+        device := Map("id", "capture-guard-keyboard",
+            "handle", "capture-guard-keyboard", "usage_page", 1,
+            "usage", 6)
+        identity := KeyIdentity.FromRawKeyboard(packet.VK, packet.SC,
+            rawFlags, device)
+        metadata := Map("raw_type", "keyboard", "message", packet.Message,
+            "make_code", packet.SC, "hook_flags", flags,
+            "injected_known", JsonBoolean(true),
+            "hook_correlation", JsonBoolean(true))
+        unifiedEvent := InputEvent.Create(identity, isUp ? "up" : "down",
+            false, false, "raw-input", "", metadata)
+        return this.ObserveRawInputEvent(unifiedEvent)
+    }
+
+    ObserveGuardMouseEvent(packet) {
+        flags := Integer(packet.Flags)
+        if flags & 0x01 ; LLMHF_INJECTED
+            return true
+        name := ""
+        phase := ""
+        switch packet.Message {
+            case 0x0201: name := "LButton", phase := "down"
+            case 0x0202: name := "LButton", phase := "up"
+            case 0x0204: name := "RButton", phase := "down"
+            case 0x0205: name := "RButton", phase := "up"
+            case 0x0207: name := "MButton", phase := "down"
+            case 0x0208: name := "MButton", phase := "up"
+            case 0x020B:
+                name := packet.MouseData == 2 ? "XButton2" : "XButton1"
+                phase := "down"
+            case 0x020C:
+                name := packet.MouseData == 2 ? "XButton2" : "XButton1"
+                phase := "up"
+            case 0x020A:
+                name := packet.MouseData > 0 ? "WheelUp" : "WheelDown"
+                phase := "wheel"
+            case 0x020E:
+                name := packet.MouseData > 0 ? "WheelRight" : "WheelLeft"
+                phase := "wheel"
+        }
+        if name == ""
+            return false
+        device := Map("id", "capture-guard-mouse",
+            "handle", "capture-guard-mouse", "usage_page", 1,
+            "usage", 2)
+        identity := KeyIdentity.FromRawPointer(name, device)
+        metadata := Map("raw_type", "mouse", "message", packet.Message,
+            "button_data", packet.MouseData, "hook_flags", flags,
+            "x", packet.X, "y", packet.Y,
+            "injected_known", JsonBoolean(true),
+            "hook_correlation", JsonBoolean(true))
+        unifiedEvent := InputEvent.Create(identity, phase, false, false,
+            "raw-input", "", metadata)
+        return this.ObserveRawInputEvent(unifiedEvent)
     }
 
     SeedObservedModifiers() {
@@ -135,46 +321,12 @@ class KeyCaptureSession {
         }
         for identityKey in staleHeld
             this.HeldKeys.Delete(identityKey)
-        if this.CaptureDeviceId == deviceId && !this.HeldKeys.Count
-                && IsObject(this.PendingCapture)
-            this.CompletePendingCapture()
+        if staleHeld.Length {
+            this.Trace("capture_device_lost", {Outcome: "cancelled",
+                Detail: String(deviceId)})
+            this.Cancel()
+        }
         return removed + staleHeld.Length
-    }
-
-    SelectCaptureDevice(deviceId) {
-        if this.Role != "source"
-            return true
-        deviceId := String(deviceId)
-        if deviceId == ""
-            return false
-        if this.CaptureDeviceId != ""
-            return this.CaptureDeviceId == deviceId
-        this.CaptureDeviceId := deviceId
-        staleHeld := []
-        for identityKey, capturedKey in this.HeldKeys {
-            if capturedKey.HasOwnProp("DeviceId")
-                    && capturedKey.DeviceId != deviceId
-                staleHeld.Push(identityKey)
-        }
-        for identityKey in staleHeld
-            this.HeldKeys.Delete(identityKey)
-        filteredOrder := []
-        for identityKey in this.RecordedOrder {
-            if !this.RecordedKeys.Has(identityKey)
-                continue
-            capturedKey := this.RecordedKeys[identityKey]
-            if capturedKey.HasOwnProp("DeviceId")
-                    && capturedKey.DeviceId == deviceId
-                filteredOrder.Push(identityKey)
-            else
-                this.RecordedKeys.Delete(identityKey)
-        }
-        this.RecordedOrder := filteredOrder
-        if this.RecordedOrder.Length
-            this.RebuildPendingCapture()
-        else
-            this.PendingCapture := ""
-        return true
     }
 
     HandleRawInputEvent(unifiedEvent) {
@@ -185,6 +337,8 @@ class KeyCaptureSession {
         if !identity.Has("device_id") || identity["device_id"] == ""
                 || unifiedEvent["phase"] == "move"
             return false
+        if unifiedEvent["phase"] == "down"
+            this.CorrelatePendingAppCommand(identity["name"])
         capturedKey := this.CreateRawKeyInfo(identity)
         switch unifiedEvent["phase"] {
             case "wheel": return this.HandleRawWheel(capturedKey, unifiedEvent)
@@ -192,6 +346,17 @@ class KeyCaptureSession {
             case "up": return this.HandleRawUp(capturedKey, unifiedEvent)
         }
         return false
+    }
+
+    HandleInputDrainEvent(unifiedEvent) {
+        if !this.Draining || Type(unifiedEvent) != "Map"
+                || unifiedEvent["origin"] != "raw-input"
+            return false
+        ; The low-level guard remains installed during this phase. We only need
+        ; Raw Input to learn when every physical key/button has been released.
+        if !this.ObservedHeld.Count
+            this.ScheduleInputDrainFinalization()
+        return true
     }
 
     CreateRawKeyInfo(identity) {
@@ -203,73 +368,62 @@ class KeyCaptureSession {
             identity["vk"], identity["sc"], keySpec)
         if capturedKey.Kind == "keyboard"
             this.EnrichKeyboardKeyInfo(capturedKey)
-        capturedKey.DeviceId := String(identity["device_id"])
-        capturedKey.DeviceHandle := String(identity["device_handle"])
-        capturedKey.UsagePage := identity["usage_page"]
-        capturedKey.Usage := identity["usage"]
-        try {
-            for device in this.App.GetInputDevices() {
-                if device.Has("id") && device["id"] == capturedKey.DeviceId {
-                    capturedKey.DeviceDisplayName := device["display_name"]
-                    capturedKey.Device := RuleSpec.Clone(device)
-                    break
-                }
-            }
+        if identity.Get("app_command", 0) {
+            capturedKey.Kind := "app-command"
+            capturedKey.AppCommand := identity["app_command"]
+            capturedKey.KeySpec := identity["name"]
         }
-        if !capturedKey.HasOwnProp("DeviceDisplayName")
-            capturedKey.DeviceDisplayName := capturedKey.DeviceId
+        capturedKey.DeviceId := String(identity["device_id"])
         return capturedKey
     }
 
     HandleRawDown(capturedKey, unifiedEvent) {
         if this.PointerButtonCancelPending
             return false
-        if this.Role == "source" {
-            if this.CaptureDeviceId != ""
-                    && capturedKey.DeviceId != this.CaptureDeviceId
-                return false
-            if !this.IsModifierKey(capturedKey.KeyName)
-                    && !this.SelectCaptureDevice(capturedKey.DeviceId)
-                return false
-        }
         identityKey := this.GetKeyIdentity(capturedKey)
         this.Trace("raw_key_down", {Source: capturedKey.KeyName,
             Detail: capturedKey.DeviceId, Data: unifiedEvent})
-        if capturedKey.KeyName == "Escape" && !this.HeldKeys.Count
+        if capturedKey.KeyName == "Escape"
                 && this.EscapeCancelsRecording() {
-            this.Cancel()
+            ; Arm the GUI Escape consumer immediately. Finalization may be
+            ; delayed until every physical key has been released, so waiting
+            ; for OnCaptureCancelled would reintroduce a timing race.
+            try this.App.PrepareCaptureEscapeCancellation()
+            this.Cancel("escape")
             return true
         }
         if capturedKey.KeyName == "LButton"
                 && this.ShouldCancelForPointerButton() {
             this.PointerButtonCancelPending := true
-            this.PointerButtonCancelTick := A_TickCount
             try this.App.PrepareCapturePointerCancellation()
+            SetTimer(this.PointerCancelTimer,
+                -KeyCaptureSession.PointerCancellationTimeoutMs)
             return true
         }
         if this.HeldKeys.Has(identityKey)
             return true
         this.HeldKeys[identityKey] := capturedKey
-        this.AddRecordedKey(capturedKey)
-        this.RebuildPendingCapture()
-        this.NotifyPreview(this.PendingCapture)
+        if !this.CaptureFrozen {
+            this.AddRecordedKey(capturedKey)
+            this.RebuildPendingCapture()
+            this.NotifyPreview(this.PendingCapture)
+        }
         return true
     }
 
     HandleRawUp(capturedKey, unifiedEvent) {
-        if this.Role == "source"
-                && !this.SelectCaptureDevice(capturedKey.DeviceId)
-            return false
         this.Trace("raw_key_up", {Source: capturedKey.KeyName,
             Detail: capturedKey.DeviceId, Data: unifiedEvent})
         if this.PointerButtonCancelPending {
             if capturedKey.KeyName == "LButton"
-                this.Cancel()
+                this.Cancel("pointer")
             return true
         }
         identityKey := this.FindHeldKeyIdentity(capturedKey)
         if identityKey == ""
             return false
+        if !this.CaptureFrozen
+            this.FreezeCapture()
         this.HeldKeys.Delete(identityKey)
         if this.HeldKeys.Count
             this.NotifyPreview(this.PendingCapture)
@@ -281,13 +435,13 @@ class KeyCaptureSession {
     HandleRawWheel(capturedKey, unifiedEvent) {
         if this.PointerButtonCancelPending
             return false
-        if !this.SelectCaptureDevice(capturedKey.DeviceId)
-            return false
         this.Trace("raw_wheel", {Source: capturedKey.KeyName,
             Detail: capturedKey.DeviceId, Data: unifiedEvent})
-        this.AddRecordedKey(capturedKey)
-        this.RebuildPendingCapture()
-        this.NotifyPreview(this.PendingCapture)
+        if !this.CaptureFrozen {
+            this.AddRecordedKey(capturedKey)
+            this.FreezeCapture(true)
+            this.NotifyPreview(this.PendingCapture)
+        }
         if !this.HeldKeys.Count
             this.CompletePendingCapture()
         return true
@@ -295,12 +449,12 @@ class KeyCaptureSession {
 
     CompletePendingCapture() {
         if !this.Active || this.PointerButtonCancelPending
+                || IsObject(this.PendingAppCommand)
                 || this.HeldKeys.Count || !IsObject(this.PendingCapture)
             return false
         capture := this.PendingCapture
         this.PendingCapture := ""
-        this.Complete(capture)
-        return true
+        return this.Complete(capture)
     }
 
     ShouldCancelForPointerButton() {
@@ -309,29 +463,167 @@ class KeyCaptureSession {
             return false
     }
 
+    FinalizePointerCancellationTimeout(*) {
+        if !this.Active || !this.PointerButtonCancelPending
+            return false
+        return this.Cancel()
+    }
+
     CompleteAppCommand(command) {
-        if !this.Active || this.Role != "target"
-                || !KeyCaptureSession.AppCommandNames.Has(command)
+        if !this.Active || !KeyCaptureSession.AppCommandNames.Has(command)
             return false
         keyName := KeyCaptureSession.AppCommandNames[command]
+        if this.HasRecordedAppCommand(command, keyName)
+            return true
+        if IsObject(this.PendingAppCommand)
+            return true
+        this.PendingAppCommand := {Command: command, KeyName: keyName}
+        SetTimer(this.AppCommandTimer,
+            -KeyCaptureSession.AppCommandCorrelationMs)
+        return true
+    }
+
+    CorrelatePendingAppCommand(keyName) {
+        if !IsObject(this.PendingAppCommand)
+                || StrLower(this.PendingAppCommand.KeyName)
+                    != StrLower(String(keyName))
+            return false
+        SetTimer(this.AppCommandTimer, 0)
+        this.PendingAppCommand := ""
+        return true
+    }
+
+    FinalizePendingAppCommand(*) {
+        if !this.Active || !IsObject(this.PendingAppCommand)
+            return false
+        pending := this.PendingAppCommand
+        this.PendingAppCommand := ""
+        command := pending.Command
+        keyName := pending.KeyName
         capturedKey := this.CreateKeyInfo("app-command", keyName,
-            this.SafeGetKeyVK(keyName), this.SafeGetKeySC(keyName), keyName)
+            this.SafeGetKeyVK(keyName), 0, keyName)
         capturedKey.AppCommand := command
+        this.Trace("app_command", {Source: keyName,
+            Outcome: this.Role, Detail: command})
         this.AddRecordedKey(capturedKey)
-        this.RebuildPendingCapture()
+        this.FreezeCapture(true)
         this.NotifyPreview(this.PendingCapture)
         if !this.HeldKeys.Count
             this.CompletePendingCapture()
         return true
     }
 
+    HasRecordedAppCommand(command, keyName) {
+        for identityKey in this.RecordedOrder {
+            if !this.RecordedKeys.Has(identityKey)
+                continue
+            capturedKey := this.RecordedKeys[identityKey]
+            if capturedKey.HasOwnProp("AppCommand")
+                    && capturedKey.AppCommand == command
+                return true
+            if StrLower(capturedKey.KeyName) == StrLower(keyName)
+                return true
+        }
+        return false
+    }
+
     Complete(capture) {
         if !this.Active || this.PointerButtonCancelPending
             return false
-        role := this.Role
-        this.Stop(false)
-        this.App.OnCaptureCompleted(role, capture)
+        if !IsObject(capture)
+            return false
+        this.BeginInputDrain(capture)
         return true
+    }
+
+    BeginInputDrain(capture := "", notifyCancelled := false,
+            cancelReason := "") {
+        if !this.Active
+            return this.Draining
+        this.Active := false
+        this.CaptureFrozen := true
+        this.PendingCapture := ""
+        this.PendingAppCommand := ""
+        SetTimer(this.AppCommandTimer, 0)
+        SetTimer(this.PointerCancelTimer, 0)
+        this.Draining := true
+        this.DrainCapture := IsObject(capture) ? capture : ""
+        this.DrainCancelled := !!notifyCancelled
+        this.DrainCancelReason := this.DrainCancelled
+            ? String(cancelReason) : ""
+        this.DrainRole := this.Role
+        this.InputDrainDeadline := A_TickCount
+            + KeyCaptureSession.InputDrainTimeoutMs
+        this.Trace("capture_input_draining", {
+            Outcome: this.DrainCancelled ? "cancelled" : "completed",
+            Detail: this.ObservedHeld.Count
+        })
+        this.ScheduleInputDrainFinalization()
+        return true
+    }
+
+    ScheduleInputDrainFinalization() {
+        if this.Draining
+            SetTimer(this.InputDrainTimer, -1)
+        return this.Draining
+    }
+
+    FinalizeInputDrain(*) {
+        if !this.Draining
+            return false
+        if this.ObservedHeld.Count {
+            if A_TickCount >= this.InputDrainDeadline {
+                removed := this.ReconcileObservedHeld()
+                if removed
+                    this.Trace("capture_input_drain_reconciled", {
+                        Outcome: "recovered", Detail: removed
+                    })
+                this.InputDrainDeadline := A_TickCount
+                    + KeyCaptureSession.InputDrainTimeoutMs
+            }
+            if this.ObservedHeld.Count {
+                SetTimer(this.InputDrainTimer,
+                    -KeyCaptureSession.InputDrainRetryMs)
+                return false
+            }
+        }
+        capture := this.DrainCapture
+        cancelled := this.DrainCancelled
+        role := this.DrainRole
+        this.Draining := false
+        this.DrainCapture := ""
+        this.DrainCancelled := false
+        cancelReason := this.DrainCancelReason
+        this.DrainCancelReason := ""
+        this.DrainRole := ""
+        this.InputDrainDeadline := 0
+        if !this.Stop(false)
+            return false
+        if IsObject(capture)
+            this.App.OnCaptureCompleted(role, capture)
+        else if cancelled
+            this.App.OnCaptureCancelled(cancelReason)
+        return true
+    }
+
+    ReconcileObservedHeld() {
+        released := []
+        for stateKey, unifiedEvent in this.ObservedHeld {
+            identity := unifiedEvent["identity"]
+            virtualKey := identity.Has("vk") ? identity["vk"] : 0
+            if !virtualKey {
+                try virtualKey := GetKeyVK(identity["name"])
+            }
+            ; Unknown keys remain guarded until Raw Input or device removal
+            ; proves their release. GetAsyncKeyState repairs only a genuinely
+            ; missing release packet and never overrides a physically held key.
+            if virtualKey && !(DllCall("user32\GetAsyncKeyState", "Int",
+                    virtualKey, "Short") & 0x8000)
+                released.Push(stateKey)
+        }
+        for stateKey in released
+            this.ObservedHeld.Delete(stateKey)
+        return released.Length
     }
 
     PreviewHeldModifiers() {
@@ -343,11 +635,20 @@ class KeyCaptureSession {
     }
 
     AddRecordedKey(capturedKey) {
-        identityKey := this.GetKeyIdentity(capturedKey)
+        identityKey := this.GetRecordedKeyIdentity(capturedKey)
         if this.RecordedKeys.Has(identityKey)
             return false
         this.RecordedKeys[identityKey] := capturedKey
         this.RecordedOrder.Push(identityKey)
+        return true
+    }
+
+    FreezeCapture(forceRebuild := false) {
+        if this.CaptureFrozen && !forceRebuild
+            return false
+        this.CaptureFrozen := true
+        if forceRebuild || !IsObject(this.PendingCapture)
+            this.RebuildPendingCapture()
         return true
     }
 
@@ -401,23 +702,36 @@ class KeyCaptureSession {
     BuildCaptureFromInfos(keyInfos) {
         if Type(keyInfos) != "Array" || !keyInfos.Length
             throw ValueError("按键录制缺少按键信息")
+        keyInfos := this.CreatePublicKeyInfos(keyInfos)
         if keyInfos.Length == 1
             return this.BuildCaptureFromInfo(keyInfos[1], [])
+        modifiers := [], primaryInfo := ""
+        nonModifierCount := 0
+        for keyInfo in keyInfos {
+            if this.IsModifierKey(keyInfo.KeyName)
+                modifiers.Push(keyInfo)
+            else {
+                nonModifierCount++
+                primaryInfo := keyInfo
+            }
+        }
+        if nonModifierCount == 1
+            return this.BuildCaptureFromInfo(primaryInfo, modifiers)
 
         rawDisplayParts := [], displayParts := []
         vkParts := [], scParts := [], keyInfoTextParts := []
         sourceKeys := [], modifiers := []
-        for index, capturedKey in keyInfos {
+        for capturedKey in keyInfos {
             rawDisplayParts.Push(capturedKey.KeyName)
             displayParts.Push(capturedKey.DisplayName)
             vkParts.Push(this.FormatCodeValue("VK", capturedKey.VKHex))
             scParts.Push(this.FormatCodeValue("SC", capturedKey.SCHex))
             keyInfoTextParts.Push(this.FormatKeyInfo(capturedKey))
             sourceKeys.Push(capturedKey.KeySpec)
-            if index < keyInfos.Length && this.IsModifierKey(capturedKey.KeyName)
+            if this.IsModifierKey(capturedKey.KeyName)
                 modifiers.Push(capturedKey)
         }
-        primaryInfo := keyInfos[keyInfos.Length]
+        primaryInfo := this.GetSimultaneousPrimaryInfo(keyInfos)
         display := this.Join(displayParts, " + ")
         capture := {
             Kind: "simultaneous",
@@ -441,7 +755,7 @@ class KeyCaptureSession {
                 this.Join(scParts, " + ")),
             KeyInfo: this.Join(keyInfoTextParts, " + ")
         }
-        return this.CopyCaptureDevice(capture, primaryInfo)
+        return capture
     }
 
     BuildCaptureFromInfo(capturedKey, heldModifiers) {
@@ -490,19 +804,22 @@ class KeyCaptureSession {
         }
         if capturedKey.HasOwnProp("AppCommand")
             capture.AppCommand := capturedKey.AppCommand
-        return this.CopyCaptureDevice(capture, capturedKey)
+        return capture
     }
 
-    CopyCaptureDevice(capture, primaryInfo) {
-        if !primaryInfo.HasOwnProp("DeviceId")
-            return capture
-        capture.DeviceId := String(primaryInfo.DeviceId)
-        capture.DeviceDisplayName := primaryInfo.HasOwnProp(
-            "DeviceDisplayName") ? primaryInfo.DeviceDisplayName
-            : capture.DeviceId
-        if primaryInfo.HasOwnProp("Device")
-            capture.Device := RuleSpec.Clone(primaryInfo.Device)
-        return capture
+    CreatePublicKeyInfos(keyInfos) {
+        result := []
+        for keyInfo in keyInfos
+            result.Push(this.CreatePublicKeyInfo(keyInfo))
+        return result
+    }
+
+    CreatePublicKeyInfo(keyInfo) {
+        publicInfo := this.CreateKeyInfo(keyInfo.Kind, keyInfo.KeyName,
+            keyInfo.VK, keyInfo.SC, keyInfo.KeySpec)
+        if keyInfo.HasOwnProp("AppCommand")
+            publicInfo.AppCommand := keyInfo.AppCommand
+        return publicInfo
     }
 
     NotifyPreview(capture) {
@@ -596,6 +913,23 @@ class KeyCaptureSession {
                 ? capturedKey.DeviceId : ""))
     }
 
+    GetRecordedKeyIdentity(capturedKey) {
+        kind := capturedKey.Kind == "app-command" ? "keyboard"
+            : capturedKey.Kind
+        return StrLower(kind "|" capturedKey.KeyName "|" capturedKey.VK
+            "|" capturedKey.SC)
+    }
+
+    GetSimultaneousPrimaryInfo(keyInfos) {
+        index := keyInfos.Length
+        while index >= 1 {
+            if !this.IsModifierKey(keyInfos[index].KeyName)
+                return keyInfos[index]
+            index--
+        }
+        return keyInfos[keyInfos.Length]
+    }
+
     GetModifierHotkeyPrefix(keyName) {
         switch keyName {
             case "LCtrl": return "<^"
@@ -647,8 +981,6 @@ class KeyCaptureSession {
         parts := [this.GetKindLabel(capturedKey.Kind)]
         parts.Push("VK " (capturedKey.VKHex == "" ? "--" : capturedKey.VKHex))
         parts.Push("SC " (capturedKey.SCHex == "" ? "---" : capturedKey.SCHex))
-        if capturedKey.HasOwnProp("DeviceDisplayName")
-            parts.Push(capturedKey.DeviceDisplayName)
         if capturedKey.HasOwnProp("AppCommand")
             parts.Push("CMD " capturedKey.AppCommand)
         return this.Join(parts, " · ")
@@ -657,8 +989,6 @@ class KeyCaptureSession {
     FormatKeyInfo(capturedKey) {
         codes := ["VK " (capturedKey.VKHex == "" ? "--" : capturedKey.VKHex),
             "SC " (capturedKey.SCHex == "" ? "---" : capturedKey.SCHex)]
-        if capturedKey.HasOwnProp("DeviceDisplayName")
-            codes.Push(capturedKey.DeviceDisplayName)
         if capturedKey.HasOwnProp("AppCommand")
             codes.Push("CMD " capturedKey.AppCommand)
         return capturedKey.DisplayName " [" this.Join(codes, " / ") "]"

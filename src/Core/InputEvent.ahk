@@ -37,11 +37,8 @@ class KeyIdentity {
         extended := key.Has("extended")
             && this.ReadBoolean(key["extended"])
         return this.Create(key.Has("kind") ? key["kind"] : "keyboard",
-            key["name"], vk, sc, extended, key.Has("device_id")
-                ? key["device_id"] : "", key.Has("device_handle")
-                ? key["device_handle"] : "", key.Has("usage_page")
-                ? key["usage_page"] : 0, key.Has("usage")
-                ? key["usage"] : 0, key.Has("command") ? key["command"] : 0)
+            key["name"], vk, sc, extended, "", "", 0, 0,
+            key.Has("command") ? key["command"] : 0)
     }
 
     static FromKeyInfo(keyInfo) {
@@ -50,18 +47,29 @@ class KeyIdentity {
         command := keyInfo.HasOwnProp("AppCommand") ? keyInfo.AppCommand : 0
         return this.Create(keyInfo.Kind, keyInfo.KeyName,
             keyInfo.VK, keyInfo.SC, (keyInfo.SC & 0x100) != 0,
-            keyInfo.HasOwnProp("DeviceId") ? keyInfo.DeviceId : "",
-            keyInfo.HasOwnProp("DeviceHandle") ? keyInfo.DeviceHandle : "",
-            keyInfo.HasOwnProp("UsagePage") ? keyInfo.UsagePage : 0,
-            keyInfo.HasOwnProp("Usage") ? keyInfo.Usage : 0, command)
+            "", "", 0, 0, command)
     }
 
     static FromRawKeyboard(vk, makeCode, flags, device := "") {
-        extended := (flags & 0x0006) != 0
+        vk := this.NormalizeRawKeyboardVirtualKey(vk, makeCode, flags)
+        ; AHK encodes the E0 prefix in bit 0x100 of a scan code. E1 is a
+        ; different Raw Input prefix (notably Pause) and must not be folded
+        ; into the E0 namespace, where it would collide with NumLock.
+        extended := (flags & 0x0002) != 0
         resolvedScanCode := Max(0, Integer(makeCode)) | (extended ? 0x100 : 0)
         keyName := ""
-        try keyName := GetKeyName(Format("vk{:02X}sc{:03X}", vk,
-            resolvedScanCode))
+        ; Browser, media and launch keys have dedicated virtual keys. Some
+        ; drivers attach a legacy or zero scan code which otherwise resolves
+        ; to an unrelated function key, so their VK identity is authoritative.
+        if vk >= 0xA6 && vk <= 0xB7
+            try keyName := GetKeyName(Format("vk{:02X}", vk))
+        if keyName == ""
+            try keyName := GetKeyName(Format("vk{:02X}sc{:03X}", vk,
+                resolvedScanCode))
+        if keyName == "" && vk
+            try keyName := GetKeyName(Format("vk{:02X}", vk))
+        if keyName == "" && resolvedScanCode
+            try keyName := GetKeyName(Format("sc{:03X}", resolvedScanCode))
         if keyName == ""
             keyName := Format("vk{:02X}sc{:03X}", vk, resolvedScanCode)
         deviceId := "", deviceHandle := "", usagePage := 0, usage := 0
@@ -73,6 +81,25 @@ class KeyIdentity {
         }
         return this.Create("keyboard", keyName, vk, resolvedScanCode, extended,
             deviceId, deviceHandle, usagePage, usage)
+    }
+
+    static NormalizeRawKeyboardVirtualKey(vk, makeCode, flags) {
+        vk := Max(0, Integer(vk))
+        makeCode := Max(0, Integer(makeCode)) & 0xFF
+        isExtended := (flags & 0x0002) != 0
+        switch vk {
+            case 0x10:
+                mapped := DllCall("user32\MapVirtualKeyW", "UInt", makeCode,
+                    "UInt", 3, "UInt")
+                if mapped == 0xA0 || mapped == 0xA1
+                    return mapped
+                return makeCode == 0x36 ? 0xA1 : 0xA0
+            case 0x11:
+                return isExtended ? 0xA3 : 0xA2
+            case 0x12:
+                return isExtended ? 0xA5 : 0xA4
+        }
+        return vk
     }
 
     static FromRawPointer(name, device := "") {
@@ -160,5 +187,61 @@ class InputEvent {
             origin := "rule-simulation") {
         return this.Create(KeyIdentity.FromRuleKey(key), phase,
             repeat, false, origin)
+    }
+
+    static FormatDiagnosticDetail(event, devices := []) {
+        if Type(event) != "Map" || !event.Has("identity")
+            return ""
+        identity := event["identity"]
+        parts := []
+        if identity.Get("vk_hex", "") != ""
+            parts.Push("VK " identity["vk_hex"])
+        if identity.Get("sc_hex", "") != ""
+            parts.Push("SC " identity["sc_hex"])
+        deviceId := String(identity.Get("device_id", ""))
+        if deviceId != ""
+            parts.Push("来源设备：" this.FormatDeviceDiagnostic(
+                this.FindDevice(devices, deviceId), deviceId))
+        return this.JoinDiagnosticParts(parts)
+    }
+
+    static FindDevice(devices, deviceId) {
+        if Type(devices) != "Array"
+            return ""
+        for device in devices {
+            if Type(device) != "Map"
+                continue
+            if String(device.Get("id", "")) == deviceId
+                    || String(device.Get("stable_id", "")) == deviceId
+                return device
+        }
+        return ""
+    }
+
+    static FormatDeviceDiagnostic(device, fallbackId) {
+        if Type(device) != "Map"
+            return String(fallbackId)
+        label := Trim(String(device.Get("display_name", "")))
+        if label == ""
+            label := String(fallbackId)
+        identifiers := []
+        vendorId := Trim(String(device.Get("vendor_id", "")))
+        productId := Trim(String(device.Get("product_id", "")))
+        if vendorId != ""
+            identifiers.Push("VID " vendorId)
+        if productId != ""
+            identifiers.Push("PID " productId)
+        stableId := Trim(String(device.Get("stable_id", fallbackId)))
+        if stableId != ""
+            identifiers.Push("设备 ID " stableId)
+        return label (identifiers.Length
+            ? "（" this.JoinDiagnosticParts(identifiers) "）" : "")
+    }
+
+    static JoinDiagnosticParts(parts) {
+        result := ""
+        for index, part in parts
+            result .= (index == 1 ? "" : "；") part
+        return result
     }
 }

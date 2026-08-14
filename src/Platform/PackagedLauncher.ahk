@@ -22,9 +22,10 @@ LaunchPackagedSource() {
             "发行包运行时的 SHA-256 与构建时锁定值不一致。请重新下载或重新构建完整发行包。",
             validationOnly)
 
-    parameters := QuoteCommandLineArgument(sourcePath) " --packaged"
+    readyPath := GetApplicationUpdateReadyPath()
+    parameters := BuildPackagedSourceParameters(sourcePath,
+        validationOnly, readyPath)
     if validationOnly {
-        parameters .= " --startup-validation"
         try exitCode := RunWait(QuoteCommandLineArgument(runtimePath) " "
             parameters, A_ScriptDir, "Hide")
         catch as validationError
@@ -35,6 +36,17 @@ LaunchPackagedSource() {
                 "包内源码启动验证返回错误代码 " exitCode "。", true)
         return true
     }
+    if readyPath {
+        ; 更新助手监视的是顶层 EXE。握手期间保持启动器存活，直到可编辑
+        ; 源码进程退出，避免启动器先结束而被误判为更新后的程序崩溃。
+        try exitCode := RunWait(QuoteCommandLineArgument(runtimePath) " "
+            parameters, A_ScriptDir)
+        catch as updateLaunchError
+            return ReportPackagedLaunchFailure(
+                "更新后无法启动发行包中的程序：" updateLaunchError.Message,
+                false)
+        return exitCode == 0
+    }
     result := DllCall("shell32\ShellExecuteW", "Ptr", 0, "WStr", "open",
         "WStr", runtimePath, "WStr", parameters, "WStr", A_ScriptDir,
         "Int", 1, "Ptr")
@@ -43,6 +55,16 @@ LaunchPackagedSource() {
     return ReportPackagedLaunchFailure(
         "无法启动发行包中的程序（ShellExecuteW 错误代码 " result "）。",
         false)
+}
+
+BuildPackagedSourceParameters(sourcePath, validationOnly := false,
+        readyPath := "") {
+    parameters := QuoteCommandLineArgument(sourcePath) " --packaged"
+    if validationOnly
+        parameters .= " --startup-validation"
+    if readyPath != ""
+        parameters .= " --update-ready " QuoteCommandLineArgument(readyPath)
+    return parameters
 }
 
 ReportPackagedLaunchFailure(message, validationOnly := false) {

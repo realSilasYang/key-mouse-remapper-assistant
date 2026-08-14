@@ -1,4 +1,4 @@
-; 开源项目捐赠窗口。
+; 开源项目打赏窗口。
 ; 二维码直接读取发行包内的 PNG 资源，不创建临时文件或外部进程；缺少
 ; 单张资源时仍保留另一种支付方式，并在原位置显示明确的缺失提示。
 
@@ -10,9 +10,9 @@ class DonationWindow {
         this.OwnerLease := ""
         this.IconHandles := []
         this.MessageText := ""
-        this.Divider := ""
         this.QrLabels := []
         this.QrPictures := []
+        this.QrPictureSpecs := []
         this.MissingQrTexts := []
         this.Disposed := false
         try this.Build()
@@ -39,7 +39,7 @@ class DonationWindow {
         this.OwnerLease := WindowHierarchy.Acquire(this.OwnerWindow.Gui,
             this.Gui.Hwnd)
         if !this.OwnerLease
-            throw Error("无法建立捐赠窗口层级。")
+            throw Error("无法建立打赏窗口层级。")
         this.Gui.BackColor := colors.Window
         this.Gui.MarginX := 0
         this.Gui.MarginY := 0
@@ -49,30 +49,29 @@ class DonationWindow {
         this.MessageText := this.Gui.Add("Text", "x" contentMargin
             " y22 w" (this.WindowWidth - contentMargin * 2)
             " Center +0x80 BackgroundTrans c" colors.Text,
-            Tr("如果小助手为您节省了排查问题和恢复程序的时间，欢迎通过下方二维码打赏作者！`n请选择扶贫方式："))
+            Tr("如果小助手为您节省了配置键鼠映射的时间，欢迎通过下方二维码打赏作者！`n请选择扶贫方式（≥Д≤）"))
         this.MessageText.GetPos(, &messageY, , &messageHeight)
-        dividerY := messageY + messageHeight + 17
-        this.Divider := this.Gui.Add("Text", "x" contentMargin
-            " y" dividerY " w" (this.WindowWidth - contentMargin * 2)
-            " h1 Background" colors.Divider)
-        qrLabelY := dividerY + 15
+        qrLabelY := messageY + messageHeight + 10
 
         this.AddQrCode(firstQrX, qrLabelY, Tr("微信支付"),
-            GetApplicationAssetPath("donate\微信个人收款码-界面.png"))
+            "微信个人收款码")
         this.AddQrCode(secondQrX, qrLabelY, Tr("支付宝"),
-            GetApplicationAssetPath("donate\支付宝个人收款码-界面.png"))
+            "支付宝个人收款码")
         this.WindowHeight := qrLabelY + 24 + this.QrSize + 22
 
         this.Gui.OnEvent("Close", ObjBindMethod(this, "RequestClose"))
         this.Gui.OnEvent("Escape", ObjBindMethod(this, "RequestClose"))
     }
 
-    AddQrCode(x, y, label, imagePath) {
+    AddQrCode(x, y, label, assetStem) {
         colors := UiThemeService.GetPalette()
+        imagePath := this.ResolveQrImagePath(assetStem)
         if FileExist(imagePath) {
             picture := this.Gui.Add("Picture", "x" x " y" (y + 24)
                 " w" this.QrSize " h" this.QrSize, imagePath)
             this.QrPictures.Push(picture)
+            this.QrPictureSpecs.Push({Control: picture,
+                AssetStem: assetStem, CurrentPath: imagePath})
         } else {
             missingText := this.Gui.Add("Text", "x" x " y" (y + 24)
                 " w" this.QrSize " h" this.QrSize
@@ -86,6 +85,31 @@ class DonationWindow {
         labelControl.SetFont("s10 c" colors.Muted,
             LocalizationService.GetUiFontName())
         this.QrLabels.Push(labelControl)
+    }
+
+    ResolveQrImagePath(assetStem) {
+        preferredSuffix := UiThemeService.IsDark()
+            ? "-界面.png" : "-浅色界面.png"
+        fallbackSuffix := UiThemeService.IsDark()
+            ? "-浅色界面.png" : "-界面.png"
+        preferredPath := GetApplicationAssetPath(
+            "donate\" assetStem preferredSuffix)
+        if FileExist(preferredPath)
+            return preferredPath
+        fallbackPath := GetApplicationAssetPath(
+            "donate\" assetStem fallbackSuffix)
+        return FileExist(fallbackPath) ? fallbackPath : preferredPath
+    }
+
+    ApplyQrAppearance() {
+        for spec in this.QrPictureSpecs {
+            imagePath := this.ResolveQrImagePath(spec.AssetStem)
+            if imagePath == spec.CurrentPath || !FileExist(imagePath)
+                continue
+            spec.Control.Value := imagePath
+            spec.CurrentPath := imagePath
+        }
+        return true
     }
 
     Show() {
@@ -117,9 +141,9 @@ class DonationWindow {
             fontName := LocalizationService.GetUiFontName()
             this.Gui.Title := Tr("支持开源项目")
             this.Gui.BackColor := colors.Window
-            this.MessageText.Text := Tr("如果小助手为您节省了排查问题和恢复程序的时间，欢迎通过下方二维码打赏作者！`n请选择扶贫方式：")
+            this.MessageText.Text := Tr("如果小助手为您节省了配置键鼠映射的时间，欢迎通过下方二维码打赏作者！`n请选择扶贫方式（≥Д≤）")
             this.MessageText.SetFont("norm s10 c" colors.Text, fontName)
-            this.Divider.Opt("Background" colors.Divider)
+            this.ApplyQrAppearance()
             labels := [Tr("微信支付"), Tr("支付宝")]
             for index, labelControl in this.QrLabels {
                 labelControl.Text := labels[index]
@@ -141,7 +165,7 @@ class DonationWindow {
         if this.Disposed
             return
         this.Disposed := true
-        cleanup := CleanupCollector("捐赠窗口")
+        cleanup := CleanupCollector("打赏窗口")
         closeContext := ""
         if this.OwnerLease {
             try {
@@ -160,6 +184,7 @@ class DonationWindow {
         this.MessageText := ""
         this.QrLabels := []
         this.QrPictures := []
+        this.QrPictureSpecs := []
         this.MissingQrTexts := []
         cleanup.Run("通知父窗口",
             () => this.OwnerWindow.OnDonationClosed(this))

@@ -1,5 +1,5 @@
-; Raw Input always remains available to the rule engine. This policy only
-; controls which observation events cross into the GUI and event trace.
+; Raw Input always remains available to recording. This policy only controls
+; which observation events cross into the GUI event trace.
 class RawInputObservationPolicy {
     static ShouldForwardToGui(unifiedEvent, fullObservation := false) {
         return !!fullObservation || !this.IsMouseMove(unifiedEvent)

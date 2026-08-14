@@ -1,6 +1,7 @@
 class RulePackageService {
-    static Schema := 3
-    static PreviousSchema := 2
+    static Schema := 4
+    static PreviousSchema := 3
+    static ProfileSchema := 2
     static LegacySchema := 1
     static Kind := "key-mouse-remapper-assistant-rule-package"
     static LegacyKinds := ["key-mouse-remapper-rule-package",
@@ -8,10 +9,13 @@ class RulePackageService {
     static MaximumPackageCharacters := 5 * 1024 * 1024
     static MaximumPackageBytes := 20 * 1024 * 1024 + 4
     static MaximumRules := 1000
-    static ManifestCapabilities := ["complex_gestures", "conditions",
-        "managed_rules", "run_actions", "variables"]
-    static ManifestPermissions := ["elevation", "execute_process",
-        "generated_input"]
+    static ManifestCapabilities := ["conditions", "managed_rules",
+        "script_rules"]
+    static ManifestPermissions := ["generated_input", "system_control",
+        "window_control", "arbitrary_code"]
+    static PreviousManifestCapabilities := ["conditions", "managed_rules"]
+    static PreviousManifestPermissions := ["generated_input",
+        "system_control", "window_control"]
 
     Build(mappings) {
         if Type(mappings) != "Array"
@@ -20,10 +24,16 @@ class RulePackageService {
             throw Error("导出规则数量超过上限。")
         rules := []
         for mapping in mappings {
-            if !mapping.HasOwnProp("Mode") || mapping.Mode != "managed"
-                throw Error("只能导出 managed RuleSpec 规则。")
-            rules.Push(Map("mode", "managed",
-                "spec", RuleSpec.Normalize(mapping.Spec)))
+            if !mapping.HasOwnProp("Mode")
+                throw Error("导出规则缺少模式。")
+            if mapping.Mode == "managed"
+                rules.Push(Map("mode", "managed",
+                    "spec", RuleSpec.Normalize(mapping.Spec)))
+            else if mapping.Mode == "script"
+                rules.Push(Map("mode", "script",
+                    "spec", ScriptRuleSpec.Normalize(mapping.Spec)))
+            else
+                throw Error("不能导出未知模式的规则：" mapping.Mode)
         }
         manifest := this.AnalyzeManifest(rules)
         version := this.ReadApplicationVersion()
@@ -67,14 +77,16 @@ class RulePackageService {
         schema := Integer(document["schema"])
         if schema != RulePackageService.Schema
                 && schema != RulePackageService.PreviousSchema
+                && schema != RulePackageService.ProfileSchema
                 && schema != RulePackageService.LegacySchema
             throw Error("不支持的规则包版本。")
-        if schema == RulePackageService.Schema {
+        if schema == RulePackageService.Schema
+                || schema == RulePackageService.PreviousSchema {
             this.ValidateExactFields(document, ["schema", "kind", "version",
                 "source", "tags", "capabilities", "permissions",
                 "exported_at", "rules", "integrity"],
                 "规则包")
-        } else if schema == RulePackageService.PreviousSchema {
+        } else if schema == RulePackageService.ProfileSchema {
             this.ValidateExactFields(document, ["schema", "kind", "version",
                 "source", "tags", "capabilities", "permissions",
                 "exported_at", "profiles", "rules", "integrity"],
@@ -116,44 +128,59 @@ class RulePackageService {
                     || Type(ruleValue["mode"]) != "String"
                 throw Error("规则包包含无效规则条目。")
             mode := StrLower(ruleValue["mode"])
-            if mode != "managed"
-                throw Error("规则包只支持 managed RuleSpec 规则。")
             if !ruleValue.Has("spec")
-                throw Error("托管规则缺少 spec。")
+                throw Error("规则条目缺少 spec。")
             if schema == RulePackageService.Schema
                 this.ValidateExactFields(ruleValue, ["mode", "spec"],
-                    "托管规则")
-            spec := RuleSpecMigrationService.MigrateToCurrent(
-                ruleValue["spec"])
+                    "规则条目")
+            if mode == "managed"
+                spec := RuleSpec.Normalize(ruleValue["spec"])
+            else if mode == "script" {
+                if schema != RulePackageService.Schema
+                    throw Error("旧版规则包不能包含 script 规则。")
+                spec := ScriptRuleSpec.Normalize(ruleValue["spec"])
+            } else
+                throw Error("规则包包含未知规则模式：" mode)
             ruleId := spec["id"]
             normalizedRules.Push(Map("mode", mode, "id", ruleId,
                 "spec", spec))
             if seenIds.Has(ruleId)
-                throw Error("规则包包含重复编号：" ruleId)
+                throw Error("规则包包含重复名称：" ruleId)
             seenIds[ruleId] := true
         }
-        if schema == RulePackageService.PreviousSchema
+        if schema == RulePackageService.ProfileSchema
                 && Type(document["profiles"]) != "Array"
             throw TypeError("旧规则包 profiles 必须是数组。")
         inferredManifest := this.AnalyzeManifest(normalizedRules)
         if schema == RulePackageService.Schema
-                || schema == RulePackageService.PreviousSchema {
+                || schema == RulePackageService.PreviousSchema
+                || schema == RulePackageService.ProfileSchema {
             version := this.ReadRequiredManifestString(document, "version")
             source := this.NormalizeSource(document)
             tags := this.NormalizeStringArray(document, "tags")
             capabilities := this.NormalizeStringArray(document,
                 "capabilities", schema == RulePackageService.Schema
-                    ? RulePackageService.ManifestCapabilities : "")
+                    ? RulePackageService.ManifestCapabilities
+                    : (schema == RulePackageService.PreviousSchema
+                        ? RulePackageService.PreviousManifestCapabilities
+                        : ""))
             permissions := this.NormalizeStringArray(document,
                 "permissions", schema == RulePackageService.Schema
-                    ? RulePackageService.ManifestPermissions : "")
-            if schema == RulePackageService.PreviousSchema {
+                    ? RulePackageService.ManifestPermissions
+                    : (schema == RulePackageService.PreviousSchema
+                        ? RulePackageService.PreviousManifestPermissions
+                        : ""))
+            if schema == RulePackageService.ProfileSchema {
                 capabilities := this.RemoveLegacyManifestValue(capabilities,
                     "profiles")
                 permissions := this.RemoveLegacyManifestValue(permissions,
                     "profile_write")
             }
             this.ValidateExportedAt(document)
+            for requiredCapability in inferredManifest["capabilities"] {
+                if !this.ArrayContains(capabilities, requiredCapability)
+                    throw Error("规则包能力声明不足：" requiredCapability)
+            }
             for requiredPermission in inferredManifest["permissions"] {
                 if !this.ArrayContains(permissions, requiredPermission)
                     throw Error("规则包权限声明不足：" requiredPermission)
@@ -195,11 +222,6 @@ class RulePackageService {
             RulePackageService.MaximumPackageCharacters, "规则包"))
     }
 
-    ImportFrom(filePath, repository, collisionPolicy := "skip") {
-        package := this.Read(filePath)
-        return this.ImportPackage(package, repository, collisionPolicy)
-    }
-
     ImportPackage(package, repository, collisionPolicy := "skip",
             selectedRuleIds := "") {
         collisionPolicy := StrLower(Trim(String(collisionPolicy)))
@@ -230,7 +252,7 @@ class RulePackageService {
                 continue
             }
             if collision && collisionPolicy == "rename" {
-                newId := repository.CreateMappingId(mappings)
+                newId := repository.CreateMappingName(mappings)
                 rule := this.RenameRule(rule, newId, repository)
                 ruleId := newId
                 collision := false
@@ -286,17 +308,19 @@ class RulePackageService {
     }
 
     ValidateRuleId(ruleId) {
-        ruleId := String(ruleId)
-        if !RegExMatch(ruleId, "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
-            throw Error("规则包规则 id 格式无效。")
-        return ruleId
+        return RuleSpec.NormalizeId(ruleId, "规则包规则名称")
     }
 
     BuildMapping(rule, repository, eol) {
-        block := RuleCompiler.BuildManagedBlock(rule["spec"], eol)
+        if rule["mode"] == "managed"
+            block := RuleCompiler.BuildManagedBlock(rule["spec"], eol)
+        else if rule["mode"] == "script"
+            block := ScriptRuleCompiler.BuildBlock(rule["spec"], eol)
+        else
+            throw Error("无法构建未知模式的导入规则。")
         mapping := repository.ParseMappings(block)[1]
-        if mapping.Mode != "managed"
-            throw Error("导入托管规则解析模式错误。")
+        if mapping.Mode != rule["mode"]
+            throw Error("导入规则解析模式错误。")
         return mapping
     }
 
@@ -304,40 +328,40 @@ class RulePackageService {
         renamedRule := RuleSpec.Clone(rule)
         renamedRule["id"] := newId
         renamedRule["spec"]["id"] := newId
-        renamedRule["spec"] := RuleSpec.Normalize(renamedRule["spec"])
+        renamedRule["spec"] := renamedRule["mode"] == "managed"
+            ? RuleSpec.Normalize(renamedRule["spec"])
+            : ScriptRuleSpec.Normalize(renamedRule["spec"])
         return renamedRule
     }
 
     AnalyzeManifest(rules) {
         capabilities := Map()
         permissions := Map()
-        if rules.Length
-            permissions["generated_input"] := true
         for rule in rules {
             mode := rule.Has("mode") ? rule["mode"] : ""
-            if mode != "managed" || !rule.Has("spec")
+            if !rule.Has("spec")
+                continue
+            if mode == "script" {
+                capabilities["script_rules"] := true
+                permissions["arbitrary_code"] := true
+                continue
+            }
+            if mode != "managed"
                 continue
             capabilities["managed_rules"] := true
             spec := rule["spec"]
-            if spec["conditions"].Length
+            if spec.Get("conditions", []).Length
                 capabilities["conditions"] := true
-            if spec["from"]["simultaneous"].Length
-                    || spec["from"]["sequence"].Length
-                capabilities["complex_gestures"] := true
-            for actionField in RuleSpec.ActionFields {
-                for action in spec[actionField] {
+            for fieldName in RuleSpec.ActionFields {
+                for action in spec.Get(fieldName, []) {
                     actionType := action["type"]
-                    if actionType == "set_variable"
-                            || actionType == "unset_variable"
-                            || actionType == "switch_layer"
-                        capabilities["variables"] := true
-                    if actionType == "run" {
-                        capabilities["run_actions"] := true
-                        permissions["execute_process"] := true
-                        if RegExMatch(String(action["value"]),
-                                "i)(?:\*RunAs|\brunas\b)")
-                            permissions["elevation"] := true
-                    }
+                    if actionType == "window_minimize"
+                            || actionType == "window_close"
+                        permissions["window_control"] := true
+                    else if actionType == "lock_workstation"
+                        permissions["system_control"] := true
+                    else if actionType != "sleep"
+                        permissions["generated_input"] := true
                 }
             }
         }
@@ -367,8 +391,8 @@ class RulePackageService {
             return ""
         selected := Map()
         for ruleId in selectedRuleIds {
-            this.ValidateRuleId(ruleId)
-            selected[String(ruleId)] := true
+            ruleId := this.ValidateRuleId(ruleId)
+            selected[ruleId] := true
         }
         return selected
     }

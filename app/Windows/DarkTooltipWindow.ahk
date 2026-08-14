@@ -76,16 +76,16 @@ class DarkTooltipWindow {
     }
 
     EnsureWindow(text) {
-        colors := UiThemeService.GetPalette()
+        style := UiThemeService.GetTooltipStyle()
         if !IsObject(this.Gui) {
             this.Gui := Gui("-Caption +ToolWindow +AlwaysOnTop +E0x08000020")
-            this.Gui.BackColor := colors.Tooltip
-            this.Gui.MarginX := 12
-            this.Gui.MarginY := 8
-            this.Gui.SetFont("s9 c" colors.TooltipText,
+            this.Gui.BackColor := style.Background
+            this.Gui.MarginX := style.MarginX
+            this.Gui.MarginY := style.MarginY
+            this.Gui.SetFont("s" style.FontSize " c" style.Text,
                 LocalizationService.GetUiFontName())
             this.TextControl := this.Gui.Add("Text", "Background"
-                colors.Tooltip " c" colors.TooltipText " +Wrap", text)
+                style.Background " c" style.Text " +Wrap", text)
             if VerCompare(A_OSVersion, "10.0.22000") >= 0
                 try DllCall("dwmapi\DwmSetWindowAttribute", "Ptr",
                     this.Gui.Hwnd, "Int", 33, "Int*", 2, "Int", 4)

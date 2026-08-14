@@ -5,5 +5,7 @@ dist/
 *.tmp
 *.codex-*.ahk
 .syntax-check-*.ahk
+.syntax-check-*.ahk.active
+/.tmp-*.png
 Thumbs.db
 .DS_Store

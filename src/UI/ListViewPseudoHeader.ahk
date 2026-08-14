@@ -97,22 +97,24 @@ class ListViewPseudoHeader {
                 throw ValueError("伪表头列索引无效")
             alignment := columnSpec.HasOwnProp("Align")
                 ? String(columnSpec.Align) : "Left"
+            headerAlignment := columnSpec.HasOwnProp("HeaderAlign")
+                ? String(columnSpec.HeaderAlign) : "Center"
             padding := columnSpec.HasOwnProp("Padding")
-                ? String(columnSpec.Padding)
-                : (StrLower(alignment) == "left" ? "  " : "")
+                ? String(columnSpec.Padding) : ""
             this.Columns.Push({
                 Column: columnIndex,
                 Label: columnSpec.HasOwnProp("Label")
                     ? String(columnSpec.Label) : "",
                 Align: alignment,
+                HeaderAlign: headerAlignment,
                 Padding: padding,
                 SortOptions: columnSpec.HasOwnProp("SortOptions")
                     ? Trim(String(columnSpec.SortOptions)) : "",
                 SkipAscending: columnSpec.HasOwnProp("SkipAscending")
                     && !!columnSpec.SkipAscending
             })
-            alignOption := StrLower(alignment) == "center" ? " Center"
-                : (StrLower(alignment) == "right" ? " Right" : "")
+            alignOption := StrLower(headerAlignment) == "center" ? " Center"
+                : (StrLower(headerAlignment) == "right" ? " Right" : "")
             cell := guiObj.Add("Text", "x0 y0 w1 h" this.Height
                 " -Tabstop 0x200" alignOption " Background"
                 this.BackgroundColor " c" this.TextColor, "")
@@ -141,8 +143,22 @@ class ListViewPseudoHeader {
     }
 
     SetBounds(x, y, columnWidths, totalWidth := "") {
+        entries := this.BuildLayoutEntries(x, y, columnWidths, totalWidth)
+        if Type(entries) != "Array"
+            return false
+        result := AtomicControlLayout.Apply(this.Gui, entries, {
+            ParentColor: this.Gui.BackColor
+        })
+        applied := result.Status == AtomicControlLayout.Applied
+            || result.Status == AtomicControlLayout.Unchanged
+        if applied
+            this.RefreshSurface()
+        return applied
+    }
+
+    BuildLayoutEntries(x, y, columnWidths, totalWidth := "") {
         if Type(columnWidths) != "Array"
-            || columnWidths.Length != this.Cells.Length
+                || columnWidths.Length != this.Cells.Length
             return false
         widths := []
         summedWidth := 0
@@ -158,13 +174,15 @@ class ListViewPseudoHeader {
         try totalWidth := Max(summedWidth, Integer(totalWidth))
         catch
             return false
-        this.Background.Move(x, y, totalWidth, this.Height)
+        entries := [{Control: this.Background, X: x, Y: y,
+            Width: totalWidth, Height: this.Height}]
         cellX := x
         for displayColumn, cell in this.Cells {
-            cell.Move(cellX, y, widths[displayColumn], this.Height)
+            entries.Push({Control: cell, X: cellX, Y: y,
+                Width: widths[displayColumn], Height: this.Height})
             cellX += widths[displayColumn]
         }
-        return true
+        return entries
     }
 
     SetLabels(labels) {
@@ -177,7 +195,7 @@ class ListViewPseudoHeader {
     }
 
     ApplyAppearance(backgroundColor, textColor, fontName := "",
-        fontSize := "") {
+            fontSize := "") {
         this.BackgroundColor := String(backgroundColor)
         this.TextColor := String(textColor)
         if fontName != ""
@@ -193,6 +211,30 @@ class ListViewPseudoHeader {
         this.Background.Redraw()
         for cell in this.Cells
             cell.Redraw()
+    }
+
+    ; The parent can invalidate an unchanged header cell during a live resize.
+    ; Refresh each surface explicitly without erasing so the labels cannot be
+    ; left behind the parent background transaction.
+    RefreshSurface() {
+        if this.Disposed
+            return false
+        refreshed := false
+        controls := [this.Background]
+        for cell in this.Cells
+            controls.Push(cell)
+        for control in controls {
+            try hwnd := control.Hwnd
+            catch
+                continue
+            if !hwnd || !DllCall("user32\IsWindow", "Ptr", hwnd, "Int")
+                continue
+            DllCall("user32\RedrawWindow", "Ptr", hwnd,
+                "Ptr", 0, "Ptr", 0, "UInt", Win32.RDW_BUTTON_REFRESH,
+                "Int")
+            refreshed := true
+        }
+        return refreshed
     }
 
     SortByDisplayColumn(displayColumn, *) {

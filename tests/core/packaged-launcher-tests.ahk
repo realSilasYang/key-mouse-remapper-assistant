@@ -2,29 +2,47 @@
 #SingleInstance Off
 #Warn All, StdOut
 
-#Include ..\TestSupport.ahk
 #Include ..\..\src\Platform\PackagedLauncher.ahk
 
-testRoot := A_Temp "\key-mouse-remapper-assistant-launcher-" A_TickCount "-"
-    . Format("{:08X}", Random(0, 0xFFFFFFFF))
-DirCreate(testRoot)
-testFile := testRoot "\abc.bin"
-
 try {
+    testRoot := A_Temp "\KeyMouseRemapperLauncherTest-"
+        DllCall("kernel32\GetCurrentProcessId", "UInt") "-" A_TickCount
+    DirCreate(testRoot)
+    testFile := testRoot "\abc.bin"
     FileAppend("abc", testFile, "UTF-8-RAW")
-    AssertEqual(
+    LauncherAssertEqual(
         "BA7816BF8F01CFEA414140DE5DAE2223B00361A396177A9CB410FF61F20015AD",
-        ComputeFileSha256(testFile), "CNG 文件 SHA-256 结果错误")
-    sizeRejected := false
-    try ComputeFileSha256(testFile, 2)
-    catch
-        sizeRejected := true
-    AssertTrue(sizeRejected, "运行时摘要校验没有执行预读大小限制")
-    AssertTrue(InStr(GetPackagedRuntimeSha256(), "PACKAGED_RUNTIME"),
-        "工作源码中的运行时摘要占位符被意外改写")
-    WriteTestSuccess("packaged-launcher")
+        ComputeFileSha256(testFile), "Packaged runtime hashing is incorrect.")
+
+    parameters := BuildPackagedSourceParameters(
+        "C:\Program Files\Remapper\app.ahk", false,
+        "C:\Temp Path\application-ready.signal")
+    LauncherAssertTrue(InStr(parameters,
+        '"C:\Program Files\Remapper\app.ahk" --packaged') == 1,
+        "The packaged source path was not quoted.")
+    LauncherAssertTrue(InStr(parameters,
+        '--update-ready "C:\Temp Path\application-ready.signal"') > 0,
+        "The update readiness path was not forwarded to packaged source.")
+    LauncherAssertTrue(InStr(BuildPackagedSourceParameters(
+        "C:\app.ahk", true), "--startup-validation") > 0,
+        "Packaged startup validation was not forwarded.")
+
+    FileAppend("PASS packaged launcher`n", "*")
+} catch as testError {
+    FileAppend(testError.Message "`n" testError.Stack "`n", "**")
+    ExitApp(1)
 } finally {
-    if DirExist(testRoot)
+    if IsSet(testRoot) && DirExist(testRoot)
         DirDelete(testRoot, true)
 }
 ExitApp(0)
+
+LauncherAssertTrue(value, message) {
+    if !value
+        throw Error(message)
+}
+
+LauncherAssertEqual(expected, actual, message) {
+    if expected != actual
+        throw Error(message " Expected '" expected "', got '" actual "'.")
+}

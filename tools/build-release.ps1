@@ -16,6 +16,139 @@ $version = (Get-Content -LiteralPath (Join-Path $projectRoot 'VERSION') `
 if ($version -notmatch '^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)$') {
     throw "VERSION is not semantic: $version"
 }
+$entrySourcePath = Join-Path $projectRoot '键鼠重映射小助手.ahk'
+$entrySourceText = Get-Content -LiteralPath $entrySourcePath -Raw `
+    -Encoding UTF8
+$builtInRuleCount = [regex]::Matches($entrySourceText,
+    '(?m)^; @mapping-begin\r?$').Count
+$builtInRuleEndCount = [regex]::Matches($entrySourceText,
+    '(?m)^; @mapping-end\r?$').Count
+$builtInManagedRuleCount = [regex]::Matches($entrySourceText,
+    '(?m)^; @spec-begin\r?$').Count
+$builtInScriptRuleCount = [regex]::Matches($entrySourceText,
+    '(?m)^; @script-code-begin\r?$').Count
+if ($builtInRuleCount -ne 18 -or
+        $builtInRuleEndCount -ne $builtInRuleCount -or
+        ($builtInManagedRuleCount + $builtInScriptRuleCount) -ne
+            $builtInRuleCount) {
+    throw ('The application entry must contain exactly 18 complete ' +
+        'built-in mappings.')
+}
+$entrySourceHash = (Get-FileHash -Algorithm SHA256 `
+    -LiteralPath $entrySourcePath).Hash
+
+function Get-BuiltInSingleLineAiPromptValues {
+    $sourcePath = Join-Path $projectRoot 'src\Core\AIService.ahk'
+    $sourceText = Get-Content -LiteralPath $sourcePath -Raw -Encoding UTF8
+    $values = @{}
+    $promptNames = [ordered]@{
+        PromptEscaped = 'DefaultGeneratePrompt'
+        OptimizePromptEscaped = 'DefaultOptimizePrompt'
+    }
+    foreach ($settingName in $promptNames.Keys) {
+        $memberName = $promptNames[$settingName]
+        $match = [regex]::Match($sourceText,
+            '(?m)^\s*static\s+' + [regex]::Escape($memberName) +
+            '\s*:=\s*"((?:""|[^"])*)"\s*$')
+        if (-not $match.Success) {
+            throw "Unable to identify the built-in AI prompt: $memberName"
+        }
+        $literal = $match.Groups[1].Value.Replace('""', '"')
+        $values[$settingName] = $literal.Replace('\', '\\')
+    }
+    return $values
+}
+
+$builtInSingleLineAiPrompts = Get-BuiltInSingleLineAiPromptValues
+
+function Get-LocalAiParameterValues {
+    $settingsPath = Join-Path `
+        ([Environment]::GetFolderPath('ApplicationData')) `
+        'KeyMouseRemapperAssistant\settings.ini'
+    if (-not (Test-Path -LiteralPath $settingsPath -PathType Leaf)) {
+        return @()
+    }
+    try {
+        $settingsText = Get-Content -LiteralPath $settingsPath -Raw `
+            -Encoding UTF8
+    } catch {
+        throw 'Unable to inspect the local AI settings privacy boundary.'
+    }
+    $section = [regex]::Match($settingsText,
+        '(?ms)^\[AI\]\s*\r?\n(.*?)(?=^\[|\z)')
+    if (-not $section.Success) { return @() }
+    $parameters = [Collections.Generic.List[object]]::new()
+    foreach ($name in @('Address', 'Key', 'Model', 'PromptEscaped',
+            'OptimizePromptEscaped', 'SystemPromptEscaped')) {
+        $match = [regex]::Match($section.Groups[1].Value,
+            '(?m)^' + [regex]::Escape($name) + '=(.*)$')
+        if (-not $match.Success) { continue }
+        $value = $match.Groups[1].Value.Trim()
+        if ($value.Length -lt 4) { continue }
+        if ($builtInSingleLineAiPrompts.ContainsKey($name) -and
+                $value -ceq $builtInSingleLineAiPrompts[$name]) {
+            continue
+        }
+        $parameters.Add([pscustomobject]@{ Name = $name; Value = $value })
+    }
+    return @($parameters)
+}
+
+function Assert-ReleaseContent {
+    param(
+        [Parameter(Mandatory = $true)][string]$Directory,
+        [Parameter(Mandatory = $true)][string]$Label
+    )
+
+    $entryPath = Join-Path $Directory '键鼠重映射小助手.ahk'
+    if (-not (Test-Path -LiteralPath $entryPath -PathType Leaf)) {
+        throw "$Label does not contain the editable application entry."
+    }
+    $packagedEntryHash = (Get-FileHash -Algorithm SHA256 `
+        -LiteralPath $entryPath).Hash
+    if ($packagedEntryHash -cne $entrySourceHash) {
+        throw "$Label does not contain the current built-in rules."
+    }
+    $packagedEntryText = Get-Content -LiteralPath $entryPath -Raw `
+        -Encoding UTF8
+    $packagedRuleCount = [regex]::Matches($packagedEntryText,
+        '(?m)^; @mapping-begin\r?$').Count
+    if ($packagedRuleCount -ne $builtInRuleCount) {
+        throw "$Label changed the built-in rule count."
+    }
+
+    $files = @(Get-ChildItem -LiteralPath $Directory -Recurse -File -Force)
+    $forbiddenStateNames = @(
+        'settings.ini', 'runtime.ini', 'rule-appearance.json',
+        'window-layout.ini'
+    )
+    foreach ($file in $files) {
+        if ($file.Name.ToLowerInvariant() -in $forbiddenStateNames) {
+            throw "$Label contains forbidden user state: $($file.Name)"
+        }
+    }
+
+    $localAiParameters = @(Get-LocalAiParameterValues)
+    if ($localAiParameters.Count -eq 0) { return }
+    $textExtensions = @(
+        '.ahk', '.json', '.md', '.ps1', '.psm1', '.svg', '.txt'
+    )
+    foreach ($file in $files) {
+        if ([IO.Path]::GetExtension($file.Name).ToLowerInvariant() `
+                -notin $textExtensions) {
+            continue
+        }
+        try { $content = [IO.File]::ReadAllText($file.FullName) }
+        catch { continue }
+        foreach ($parameter in $localAiParameters) {
+            if ($content.IndexOf($parameter.Value,
+                    [StringComparison]::Ordinal) -ge 0) {
+                throw "$Label contains the local AI $($parameter.Name)."
+            }
+        }
+    }
+}
+
 $usingDefaultOutputRoot = -not $OutputRoot
 if ($usingDefaultOutputRoot) {
     $OutputRoot = Join-Path $projectRoot 'dist'
@@ -308,7 +441,7 @@ foreach ($output in $outputsToBackup) {
 }
 $stageRoot = Join-Path $scratchRoot 'stage'
 New-Item -ItemType Directory -Force -Path $stageRoot | Out-Null
-foreach ($directory in @('app', 'assets', 'src', 'third_party', 'workers')) {
+foreach ($directory in @('app', 'assets', 'src', 'third_party')) {
     $sourceDirectory = Join-Path $projectRoot $directory
     Assert-NoReparsePointTree $sourceDirectory `
         "Release source directory $directory" | Out-Null
@@ -329,7 +462,7 @@ $packagedLauncherText = $packagedLauncherText.Replace(
 [System.IO.File]::WriteAllText($packagedLauncherPath,
     $packagedLauncherText, [System.Text.UTF8Encoding]::new($false))
 $stageSource = Join-Path $stageRoot 'KeyMouseRemapperAssistantLauncher.ahk'
-Copy-Item -LiteralPath (Join-Path $projectRoot '键鼠重映射小助手.ahk') `
+Copy-Item -LiteralPath $entrySourcePath `
     -Destination $stageSource
 $stageToolDirectory = Join-Path $scratchRoot 'toolchain'
 New-Item -ItemType Directory -Force -Path $stageToolDirectory | Out-Null
@@ -466,22 +599,16 @@ New-Item -ItemType Directory -Force -Path $packageDirectory | Out-Null
 Assert-SafeBuildRoot $packageDirectory 'Release package directory' | Out-Null
 Copy-Item -LiteralPath $stageExecutable `
     -Destination (Join-Path $packageDirectory '键鼠重映射小助手.exe')
-Copy-Item -LiteralPath (Join-Path $projectRoot '键鼠重映射小助手.ahk') `
+Copy-Item -LiteralPath $entrySourcePath `
     -Destination $packageDirectory
-foreach ($cliFile in @('key-mouse-remapper-assistant-cli.ahk', '键鼠重映射小助手-CLI.ps1')) {
-    Copy-Item -LiteralPath (Join-Path $projectRoot $cliFile) `
-        -Destination $packageDirectory
-}
-foreach ($directory in @('app', 'assets', 'docs', 'src', 'third_party',
-        'workers')) {
+foreach ($directory in @('app', 'assets', 'src', 'third_party')) {
     $sourceDirectory = Join-Path $projectRoot $directory
     Assert-NoReparsePointTree $sourceDirectory `
         "Release source directory $directory" | Out-Null
     Copy-Item -LiteralPath $sourceDirectory `
         -Destination $packageDirectory -Recurse
 }
-foreach ($file in @('README.md', 'CHANGELOG.md', 'CONTRIBUTING.md',
-        'CODE_OF_CONDUCT.md', 'SECURITY.md', 'LICENSE', 'VERSION',
+foreach ($file in @('README.md', 'LICENSE', 'VERSION',
         'THIRD_PARTY_NOTICES.md')) {
     Copy-Item -LiteralPath (Join-Path $projectRoot $file) `
         -Destination $packageDirectory
@@ -495,6 +622,11 @@ foreach ($toolFile in @('toolchain.lock.json',
 }
 $runtimeDirectory = Join-Path $packageDirectory 'runtime'
 New-Item -ItemType Directory -Force -Path $runtimeDirectory | Out-Null
+Copy-Item -LiteralPath (Join-Path $projectRoot 'runtime\application-update.ps1') `
+    -Destination $runtimeDirectory
+Copy-Item -LiteralPath (Join-Path $projectRoot `
+        'runtime\application-update.strings.json') `
+    -Destination $runtimeDirectory
 Copy-Item -LiteralPath $AutoHotkeyPath `
     -Destination (Join-Path $runtimeDirectory 'AutoHotkey64.exe')
 Copy-Item -LiteralPath $licensePath `
@@ -538,7 +670,8 @@ $manifestJson = (@(
     '  "platform": "windows-x64",'
     '  "entry": "键鼠重映射小助手.exe",'
     '  "editableSource": "键鼠重映射小助手.ahk",'
-    '  "cli": "键鼠重映射小助手-CLI.ps1",'
+    ('  "builtInRuleCount": ' + $builtInRuleCount + ',')
+    '  "bundlesUserSettings": false,'
     ('  "autoHotkey": ' +
         (ConvertTo-StableJsonString $lock.tools.autoHotkey.version) + ',')
     ('  "autoHotkeySha256": ' +
@@ -554,14 +687,44 @@ $manifestJson = (@(
         (ConvertTo-StableJsonString $lock.tools.ahk2Exe.version) + ',')
     ('  "ahk2ExeSha256": ' +
         (ConvertTo-StableJsonString $lock.tools.ahk2Exe.executableSha256) + ',')
-    '  "inputBackend": "raw-input",'
+    '  "inputBackend": "direct-ahk-hotkeys",'
+    '  "inputRecording": "raw-input",'
     '  "requiresDriver": false,'
-    '  "suppressesOriginalInput": false'
+    '  "suppressesOriginalInput": true'
     '}'
 ) -join "`n") + "`n"
 [System.IO.File]::WriteAllText(
     (Join-Path $packageDirectory 'build-manifest.json'), $manifestJson,
     [System.Text.UTF8Encoding]::new($false))
+$updateManifestJson = (@(
+    '{'
+    '  "schemaVersion": 1,'
+    '  "packageKind": "compiled",'
+    ('  "version": ' + (ConvertTo-StableJsonString $version) + ',')
+    '  "entry": "键鼠重映射小助手.exe",'
+    ('  "builtInRuleCount": ' + $builtInRuleCount + ',')
+    '  "bundlesUserSettings": false,'
+    '  "managedPaths": ['
+    '    "键鼠重映射小助手.exe",'
+    '    "键鼠重映射小助手.ahk",'
+    '    "app",'
+    '    "assets",'
+    '    "src",'
+    '    "third_party",'
+    '    "tools",'
+    '    "runtime",'
+    '    "README.md",'
+    '    "LICENSE",'
+    '    "VERSION",'
+    '    "THIRD_PARTY_NOTICES.md",'
+    '    "build-manifest.json",'
+    '    "update-manifest.json"'
+    '  ]'
+    '}'
+) -join "`n") + "`n"
+[System.IO.File]::WriteAllText(
+    (Join-Path $packageDirectory 'update-manifest.json'),
+    $updateManifestJson, [System.Text.UTF8Encoding]::new($false))
 
 # 源码版保持仓库的可运行布局，但不夹带本机工具链、编译 EXE、便携运行时或构建产物。
 # 它与便携版分别归档，避免用户为审阅源码下载重复的运行时副本。
@@ -571,10 +734,8 @@ Assert-SafeBuildRoot $sourcePackageDirectory `
     'Release source package directory' | Out-Null
 $sourcePackageFiles = @(
     '.editorconfig', '.gitattributes', '.gitignore',
-    'CHANGELOG.md', 'CODE_OF_CONDUCT.md', 'CONTRIBUTING.md',
-    'key-mouse-remapper-assistant-cli.ahk', 'LICENSE', 'README.md',
-    'SECURITY.md', 'THIRD_PARTY_NOTICES.md', 'VERSION',
-    '键鼠重映射小助手-CLI.ps1', '键鼠重映射小助手.ahk'
+    'LICENSE', 'README.md', 'THIRD_PARTY_NOTICES.md', 'VERSION',
+    '键鼠重映射小助手.ahk'
 )
 foreach ($relativePath in $sourcePackageFiles) {
     $sourcePath = Join-Path $projectRoot $relativePath
@@ -582,23 +743,57 @@ foreach ($relativePath in $sourcePackageFiles) {
         "Release source file $relativePath" | Out-Null
     Copy-Item -LiteralPath $sourcePath -Destination $sourcePackageDirectory
 }
-foreach ($directory in @('.github', 'app', 'assets', 'docs', 'src',
-        'tests', 'third_party', 'tools', 'workers')) {
+foreach ($directory in @('app', 'assets', 'src',
+        'third_party', 'tools', 'runtime')) {
     $sourceDirectory = Join-Path $projectRoot $directory
     Assert-NoReparsePointTree $sourceDirectory `
         "Release source directory $directory" | Out-Null
     Copy-Item -LiteralPath $sourceDirectory `
         -Destination $sourcePackageDirectory -Recurse
 }
+$sourceUpdateManifestJson = (@(
+    '{'
+    '  "schemaVersion": 1,'
+    '  "packageKind": "source",'
+    ('  "version": ' + (ConvertTo-StableJsonString $version) + ',')
+    '  "entry": "键鼠重映射小助手.ahk",'
+    ('  "builtInRuleCount": ' + $builtInRuleCount + ',')
+    '  "bundlesUserSettings": false,'
+    '  "managedPaths": ['
+    '    ".editorconfig",'
+    '    ".gitattributes",'
+    '    ".gitignore",'
+    '    "键鼠重映射小助手.ahk",'
+    '    "app",'
+    '    "assets",'
+    '    "src",'
+    '    "third_party",'
+    '    "tools",'
+    '    "runtime",'
+    '    "README.md",'
+    '    "LICENSE",'
+    '    "VERSION",'
+    '    "THIRD_PARTY_NOTICES.md",'
+    '    "update-manifest.json"'
+    '  ]'
+    '}'
+) -join "`n") + "`n"
+[System.IO.File]::WriteAllText(
+    (Join-Path $sourcePackageDirectory 'update-manifest.json'),
+    $sourceUpdateManifestJson, [System.Text.UTF8Encoding]::new($false))
 
-if (-not ('KeyMouseRemapperAssistant.Build.Crc32' -as [type])) {
+Assert-ReleaseContent $packageDirectory 'Portable release package'
+Assert-ReleaseContent $sourcePackageDirectory 'Source release package'
+
+if (-not ('KeyMouseRemapperAssistant.Build.DeterministicZipCrc32V2' `
+        -as [type])) {
     Add-Type -TypeDefinition @'
 using System;
 using System.IO;
 
 namespace KeyMouseRemapperAssistant.Build
 {
-    public static class Crc32
+    public static class DeterministicZipCrc32V2
     {
         private static readonly uint[] Table = CreateTable();
 
@@ -625,10 +820,25 @@ namespace KeyMouseRemapperAssistant.Build
             {
                 int count;
                 while ((count = stream.Read(buffer, 0, buffer.Length)) > 0)
-                    for (int index = 0; index < count; index++)
-                        crc = Table[(int)((crc ^ buffer[index]) & 0xFFU)] ^
-                            (crc >> 8);
+                    crc = Update(crc, buffer, count);
             }
+            return Complete(crc);
+        }
+
+        public static uint Update(uint crc, byte[] buffer, int count)
+        {
+            if (buffer == null)
+                throw new ArgumentNullException("buffer");
+            if (count < 0 || count > buffer.Length)
+                throw new ArgumentOutOfRangeException("count");
+            for (int index = 0; index < count; index++)
+                crc = Table[(int)((crc ^ buffer[index]) & 0xFFU)] ^
+                    (crc >> 8);
+            return crc;
+        }
+
+        public static uint Complete(uint crc)
+        {
             return ~crc;
         }
     }
@@ -641,7 +851,7 @@ function New-DeterministicArchive {
     $utf8 = [Text.UTF8Encoding]::new($false, $true)
     $files = [Collections.Generic.List[object]]::new()
     foreach ($file in @(Get-ChildItem -LiteralPath $SourceDirectory `
-            -Recurse -File)) {
+            -Recurse -File -Force)) {
         $files.Add([pscustomobject]@{
             File = $file
             RelativePath = $file.FullName.Substring(
@@ -675,8 +885,9 @@ function New-DeterministicArchive {
             }
             $entry = [pscustomobject]@{
                 NameBytes = $nameBytes
-                Crc32 = [KeyMouseRemapperAssistant.Build.Crc32]::ComputeFile(
-                    $file.FullName)
+                Crc32 = `
+                    [KeyMouseRemapperAssistant.Build.DeterministicZipCrc32V2]::ComputeFile(
+                        $file.FullName)
                 Size = [uint32]$file.Length
                 Offset = [uint32]$stream.Position
             }
@@ -699,12 +910,20 @@ function New-DeterministicArchive {
             try {
                 $buffer = [byte[]]::new(1024 * 1024)
                 $written = [long]0
+                $writtenCrc = [uint32]::MaxValue
                 while (($count = $input.Read($buffer, 0, $buffer.Length)) `
                         -gt 0) {
+                    $writtenCrc = `
+                        [KeyMouseRemapperAssistant.Build.DeterministicZipCrc32V2]::Update(
+                            $writtenCrc, $buffer, $count)
                     $writer.Write($buffer, 0, $count)
                     $written += $count
                 }
-                if ($written -ne $entry.Size) {
+                $writtenCrc = `
+                    [KeyMouseRemapperAssistant.Build.DeterministicZipCrc32V2]::Complete(
+                        $writtenCrc)
+                if ($written -ne $entry.Size -or
+                        $writtenCrc -ne $entry.Crc32) {
                     throw "ZIP source changed during build: $($file.FullName)"
                 }
             } finally { $input.Dispose() }

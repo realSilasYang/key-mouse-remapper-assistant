@@ -1,145 +1,112 @@
-# 键鼠重映射小助手
+# Key Mouse Remapper Assistant
 
-Windows 10/11 上的 AutoHotkey v2 键鼠映射管理器。项目只使用 Windows Raw Input
-区分实体键盘和鼠标，不需要内核驱动、驱动签名或低级输入钩子。
+A Windows AutoHotkey v2 application for two things only:
 
-## 关键边界
+- maintaining keyboard and mouse remapping rules through the existing GUI;
+- recording keyboard and mouse input for rule capture and the event viewer.
 
-- Raw Input 能识别事件来自哪一个实体设备。
-- 程序不会阻止原按键或鼠标事件；规则产生的是附加输出。
-- 规则只能保存为 `@mode=managed` 的 RuleSpec v2 注释块。
-- 映射区域禁止任何可执行 AHK 代码，因此不会暗中注册热键或钩子。
-- 设备条件使用 Raw Input 设备的 `stable_id`。设备移除、重绑和系统唤醒都会清理该设备的
-  修饰键、长按、组合、重复和输出所有权状态。
-- GUI 默认把输入处理放在一个经过认证 IPC 监督的 `input-worker` 中；
-  `--single-process` 仅供诊断和测试。
+The normal remapping backend runs in the application process. Each enabled
+RuleSpec is compiled into an AutoHotkey `Hotkey()` callback. A `script` rule
+stores complete AutoHotkey v2 source in the same comment-only mapping region
+and runs it in an isolated managed process. Ordinary keyboard and mouse Raw
+Input is observation-only and is used for device diagnostics and the event
+viewer. During exclusive key capture, the input-guard process forwards a
+private copy of each consumed low-level event to `KeyCaptureSession`.
+Consumer Control HID reports supplement that path for browser, media, volume
+and launch keys which some devices do not expose as ordinary keyboard packets.
+Device identity never enters RuleSpec
+or a completed key-capture result.
 
-Raw Input 适合“识别是哪把键盘/哪只鼠标，并据此追加动作”。如果需求是吞掉、替换或阻止
-原始物理输入，Raw Input 本身做不到，本项目也不宣称支持。
+## Runtime model
 
-## 使用
+```text
+RuleSpec blocks -> DirectHotkeyRuntime -> AutoHotkey Hotkey() -> actions
+Script blocks -> ScriptRuleRuntime -> isolated AutoHotkey v2 process
+Raw Input -> EventTraceService
+Capture guard -> consumed low-level event copy -> KeyCaptureSession
+Consumer Control HID -> browser/media key event -> KeyCaptureSession
+```
 
-要求 64 位 Windows 和 AutoHotkey `2.0.26`。
+Key capture starts a dedicated input-guard process before remapping is
+suspended. Its low-level keyboard and mouse hooks consume keyboard, system-key,
+mouse-button, and wheel input without passthrough. The helper does no runtime
+or GUI work and starts from a minimal worker entry, so hook acquisition does
+not parse the application or its mapping blocks. Script-rule pause/resume
+signals are broadcast before acknowledgements are collected, keeping the hook
+message loop responsive without accumulating one polling interval per rule.
+Each consumed event is posted back to the recorder through a private
+application message, because suppressed input is no longer available through
+ordinary keyboard or mouse Raw Input. Consumer Control Usage Page `0x0C` is
+decoded separately so all 18 standard Windows browser/media/launch commands
+remain recordable. The guard stays installed through the final physical
+release drain and remapping resume, preventing active rules and ordinary
+desktop global shortcuts from racing the recorder. Windows secure attention
+sequences and the secure desktop remain outside every user-mode input hook by
+design.
+
+Script workers use named stop, pause, and readiness signals. Their generated
+runtime files live in the application data directory and are removed when the
+rule stops. User source remains persisted only in the SHA-256 protected,
+comment-encoded script rule block.
+
+Remapping hotkeys suppress their source input by default, so an application
+cannot race the remapped action with its own shortcut handling. A rule can set
+`passthrough: true` when the original input must also be preserved. Passthrough
+with a `to_if_held_down` action defers the source input: a short press is
+replayed on release, while a recognized long press consumes it. One-shot held
+actions such as `send`, mouse, text, application-command, and window actions
+also wait for the physical source release before they execute. Stateful
+`key_down`/`key_up` batches still execute at the held threshold so their output
+remains pressed for the rest of the source-key cycle. Pressing another physical
+key cancels `to_if_alone` without cancelling deferred passthrough.
+Sequences, multi-tap triggers, persistent variables, and process-launch
+actions remain outside the declarative RuleSpec runtime. Complete AutoHotkey
+v2 scripts can implement those behaviors in script mode without sharing state
+or directives with the main UI process. Script-rule packages declare the
+`arbitrary_code` permission
+and require explicit confirmation before import and execution.
+The current built-in mappings are the `@mapping` blocks in
+`键鼠重映射小助手.ahk`. They remain the single source of truth.
+
+All mapping-region mutations are transactional and retained in a bounded
+in-memory history. Add, delete, pause/resume, block editing, drag reordering,
+and package import can be undone with `Ctrl+Z` and redone with
+`Ctrl+Shift+Z` or `Ctrl+Y`. History replay uses compare-and-swap writes so it
+will not overwrite an external script edit.
+
+## Run
+
+AutoHotkey v2 x64 is required.
 
 ```powershell
-# 源码运行
 & .\.tools\autoHotkey-2.0.26\AutoHotkey64.exe .\键鼠重映射小助手.ahk
-
-# CLI
-.\键鼠重映射小助手-CLI.ps1 capabilities --pretty
-.\键鼠重映射小助手-CLI.ps1 devices --pretty
-.\键鼠重映射小助手-CLI.ps1 list --pretty
 ```
 
-GUI 中录制来源按键时，捕获会固定到第一个产生事件的实体设备。保存的规则自动加入该设备
-的 `stable_id` 条件。换一把键盘或一只鼠标录制，会得到不同的设备条件。
-
-程序保留当前入口中的 15 条 managed 映射。由于不抑制物理输入，例如 `F1` 的短按仍由
-Windows 正常接收；长按规则只额外发送录屏组合键。
-
-## RuleSpec
-
-映射区域是源码中的唯一规则事实来源：
-
-```ahk
-; @mapping-begin
-; @schema=2
-; @mode=managed
-; @id=example
-; @spec-begin
-; { ... RuleSpec v2 JSON ... }
-; @spec-end
-; @generated-sha256=...
-; @generated-begin
-; 此规则由托管运行时注册；此区域不包含可手工编辑的 AHK 代码。
-; @generated-end
-; @mapping-end
-```
-
-仓储在写入前执行并发快照检查、RuleSpec 规范化、SHA-256 校验和完整脚本语法检查。
-规则包也只接受 managed RuleSpec，并对整个 JSON 包做 SHA-256 完整性校验。
-所有规则属于同一个全局规则集，不存在规则分组或自动切换机制。
-
-规则字段、动作、条件和设备匹配见 [RuleSpec v2](docs/rulespec-v2.md)。旧 managed schema
-的升级方式见[迁移指南](docs/migration.md)。
-
-## CLI
-
-主要命令：
-
-```text
-list
-validate <package-path>
-export <package-path>
-import <package-path> [skip|replace|rename]
-enable|disable <rule-id>
-conflicts
-simulate <event-json> [context-json]
-capabilities
-devices
-lint | format | migrate
-diagnose [output-path]
-variables ...
-version
-```
-
-完整参数见 [CLI](docs/cli.md)。CLI 修改规则后会通知正在运行的 GUI 直接热应用，不会重载
-脚本。
-
-## 架构
-
-```text
-Raw Input -> RawInputService -> RawInputBackend -> ManagedRuleRuntime -> Send/Run/窗口动作
-                    |                    |
-                 stable_id          按设备隔离状态
-```
-
-GUI 进程负责界面、编辑和历史；唯一的无托盘 input worker 负责 Raw Input、规则状态机与输出。
-worker 作为受主程序监督的独立后台进程运行，但不会创建第二个托盘入口。
-命名管道使用当前用户 SID、随机会话密钥、PID 校验和认证消息。详细设计见
-[架构](docs/architecture.md)，安全边界见[安全和限制](docs/security-and-limits.md)。
-
-## 验证
-
-旧测试不是设计依据；实现契约来自源码和 Windows Raw Input 行为。当前自动化用于回归这些
-已确认的契约：
+## Verify
 
 ```powershell
-# 非侵入完整门禁
-.\tests\verify.ps1 -SkipGui `
-  -AutoHotkeyPath .\.tools\autoHotkey-2.0.26\AutoHotkey64.exe
-
-# 包含 GUI 冒烟
 .\tests\verify.ps1 `
   -AutoHotkeyPath .\.tools\autoHotkey-2.0.26\AutoHotkey64.exe
-
-# 可复现发行
-.\tests\reproducible-build.ps1
 ```
 
-物理设备验收需要实际操作至少两把键盘和两只鼠标；枚举到设备不等于已证明设备独立输入。
-验证范围见[验证矩阵](docs/validation-matrix.md)。
+GUI visual tests are non-interactive and opt-in:
 
-## 构建
+```powershell
+.\tests\verify.ps1 -IncludeGui
+```
+
+The verification reads the current RuleSpec blocks and checks that every
+built-in rule has a valid direct hotkey registration, including long-hold and
+key-release behavior.
+
+## Package
+
+Both release editions contain the current 18 `@mapping` blocks as their
+built-in rules. Personal state remains under
+`%APPDATA%\KeyMouseRemapperAssistant`; AI address, key, model, prompts, and
+other user settings are never copied into a release artifact.
 
 ```powershell
 .\tools\bootstrap-toolchain.ps1
 .\tools\build-release.ps1
 ```
-
-发行包 manifest 固定声明 `inputBackend: raw-input`、`requiresDriver: false` 和
-`suppressesOriginalInput: false`。构建只生成用于发布的两个 ZIP：集成 AutoHotkey
-最新稳定版和 EXE 的便携版，以及完整源码版；不再生成或发布 `SHA256SUMS.txt`。
-打包说明见[发行打包](docs/packaging.md)。
-
-## 版本与发布
-
-- [中文更新日志](CHANGELOG.md)与[英文更新日志](docs/CHANGELOG.en.md)
-- [各版本 Release Notes](docs/release-notes/)
-- [更新日志编写模板](docs/changelog-template.md)
-- [发行打包与制品说明](docs/packaging.md)
-
-## 许可证
-
-项目代码使用 [MIT License](LICENSE)。第三方组件与字体授权见
-[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) 和 `assets/fonts/` 下的授权文件。

@@ -25,7 +25,7 @@ GetApplicationIconPath() {
 
 GetApplicationUserModelId() {
     ; 不包含语言、版本或进程号，确保任务栏固定项和窗口分组跨升级稳定。
-    return "realSilasYang.KeyMouseRemapperAssistant"
+    return SystemIntegrationService.ApplicationUserModelId
 }
 
 ConfigureApplicationShellIdentity() {

@@ -2,16 +2,19 @@ class RawInputDecoder {
     static HeaderSize := A_PtrSize == 8 ? 24 : 16
     static KeyboardType := 1
     static MouseType := 0
+    static HidType := 2
 
     static Decode(packet, device := "") {
         if !(packet is Buffer) || packet.Size < this.HeaderSize
             throw ValueError("Raw Input 数据包过短。")
         packetType := NumGet(packet, 0, "UInt")
         packetSize := NumGet(packet, 4, "UInt")
-        if packetSize < this.HeaderSize || packetSize > packet.Size
+        if packetSize < this.HeaderSize || packetSize != packet.Size
             throw ValueError("Raw Input 数据包长度无效。")
-        if packetType == this.KeyboardType
-            return [this.DecodeKeyboard(packet, device, packetSize)]
+        if packetType == this.KeyboardType {
+            keyboardEvent := this.DecodeKeyboard(packet, device, packetSize)
+            return IsObject(keyboardEvent) ? [keyboardEvent] : []
+        }
         if packetType == this.MouseType
             return this.DecodeMouse(packet, device, packetSize)
         return []
@@ -26,6 +29,10 @@ class RawInputDecoder {
         makeCode := NumGet(packet, offset, "UShort")
         flags := NumGet(packet, offset + 2, "UShort")
         virtualKey := NumGet(packet, offset + 6, "UShort")
+        ; Windows uses VKey 255 for keyboard overrun/fake-key packets and
+        ; explicitly requires applications to discard them.
+        if virtualKey == 0xFF
+            return ""
         message := NumGet(packet, offset + 8, "UInt")
         phase := (flags & 0x0001) ? "up" : "down"
         identity := KeyIdentity.FromRawKeyboard(virtualKey, makeCode,
@@ -67,11 +74,11 @@ class RawInputDecoder {
                 events.Push(this.CreateMouseEvent(button[3], "up", device,
                     mouseFlags, buttonFlags, buttonData, deltaX, deltaY))
         }
-        if buttonFlags & 0x0400
+        if (buttonFlags & 0x0400) && buttonData
             events.Push(this.CreateMouseEvent(buttonData > 0
                 ? "WheelUp" : "WheelDown", "wheel", device, mouseFlags,
                 buttonFlags, buttonData, deltaX, deltaY))
-        if buttonFlags & 0x0800
+        if (buttonFlags & 0x0800) && buttonData
             events.Push(this.CreateMouseEvent(buttonData > 0
                 ? "WheelRight" : "WheelLeft", "wheel", device, mouseFlags,
                 buttonFlags, buttonData, deltaX, deltaY))
@@ -95,6 +102,216 @@ class RawInputDecoder {
         return InputEvent.Create(KeyIdentity.FromRawPointer(name, device),
             phase, false, false, "raw-input", "", metadata)
     }
+}
+
+class ConsumerControlUsage {
+    static UsagePage := 0x000C
+    static CollectionUsage := 0x0001
+
+    static Resolve(usage) {
+        static definitions := Map(
+            0x0224, ["Browser_Back", 1],
+            0x0225, ["Browser_Forward", 2],
+            0x0227, ["Browser_Refresh", 3],
+            0x0226, ["Browser_Stop", 4],
+            0x0221, ["Browser_Search", 5],
+            0x022A, ["Browser_Favorites", 6],
+            0x0223, ["Browser_Home", 7],
+            0x00E2, ["Volume_Mute", 8],
+            0x00EA, ["Volume_Down", 9],
+            0x00E9, ["Volume_Up", 10],
+            0x00B5, ["Media_Next", 11],
+            0x00B6, ["Media_Prev", 12],
+            0x00B7, ["Media_Stop", 13],
+            0x00CD, ["Media_Play_Pause", 14],
+            0x00B0, ["Media_Play_Pause", 14],
+            0x00B1, ["Media_Play_Pause", 14],
+            0x018A, ["Launch_Mail", 15],
+            0x0183, ["Launch_Media", 16],
+            0x0194, ["Launch_App1", 17],
+            0x0192, ["Launch_App2", 18])
+        usage := Max(0, Integer(usage))
+        if !definitions.Has(usage)
+            return ""
+        entry := definitions[usage]
+        name := entry[1]
+        virtualKey := 0
+        try virtualKey := Max(0, GetKeyVK(name))
+        return {Usage: usage, Name: name, AppCommand: entry[2],
+            VK: virtualKey, SC: 0}
+    }
+
+    static CreateEvent(usage, phase, device) {
+        definition := this.Resolve(usage)
+        if !IsObject(definition)
+            return ""
+        deviceId := "", deviceHandle := ""
+        usagePage := this.UsagePage, collectionUsage := this.CollectionUsage
+        if Type(device) == "Map" {
+            deviceId := device.Get("id", "")
+            deviceHandle := device.Get("handle", "")
+            usagePage := device.Get("usage_page", usagePage)
+            collectionUsage := device.Get("usage", collectionUsage)
+        }
+        identity := KeyIdentity.Create("keyboard", definition.Name,
+            definition.VK, definition.SC, definition.SC > 0xFF,
+            deviceId, deviceHandle, usagePage, collectionUsage,
+            definition.AppCommand)
+        metadata := Map("raw_type", "hid-consumer",
+            "usage_page", this.UsagePage,
+            "usage_id", definition.Usage,
+            "app_command", definition.AppCommand,
+            "injected_known", JsonBoolean(false),
+            "hook_correlation", JsonBoolean(false))
+        return InputEvent.Create(identity, phase, false, false,
+            "raw-input", "", metadata)
+    }
+}
+
+class RawHidConsumerDecoder {
+    static InputReportType := 0
+    static SuccessStatus := 0x00110000
+    static MaximumUsages := 4096
+    static PreparsedDataCommand := 0x20000005
+
+    __New() {
+        this.PreparsedData := Map()
+        this.HeldUsages := Map()
+    }
+
+    Decode(packet, device, handle) {
+        if !(packet is Buffer)
+                || packet.Size < RawInputDecoder.HeaderSize + 8
+            throw ValueError("Raw Input HID 数据包过短。")
+        packetType := NumGet(packet, 0, "UInt")
+        packetSize := NumGet(packet, 4, "UInt")
+        if packetType != RawInputDecoder.HidType
+                || packetSize != packet.Size
+            throw ValueError("Raw Input HID 数据包无效。")
+        offset := RawInputDecoder.HeaderSize
+        reportSize := NumGet(packet, offset, "UInt")
+        reportCount := NumGet(packet, offset + 4, "UInt")
+        dataOffset := offset + 8
+        availableBytes := packet.Size - dataOffset
+        if !reportSize || !reportCount || reportSize > availableBytes
+                || reportCount > availableBytes // reportSize
+            throw ValueError("Raw Input HID 报告长度无效。")
+        preparsedData := this.GetPreparsedData(handle)
+        deviceKey := this.HandleKey(handle)
+        events := []
+        Loop reportCount {
+            reportOffset := dataOffset + (A_Index - 1) * reportSize
+            activeUsages := this.ReadActiveUsages(preparsedData,
+                packet.Ptr + reportOffset, reportSize)
+            for event in this.UpdateHeldUsages(deviceKey, activeUsages,
+                    device)
+                events.Push(event)
+        }
+        return events
+    }
+
+    ReadActiveUsages(preparsedData, reportAddress, reportSize) {
+        maximumUsages := DllCall("hid\HidP_MaxUsageListLength", "Int",
+            RawHidConsumerDecoder.InputReportType, "UShort",
+            ConsumerControlUsage.UsagePage, "Ptr", preparsedData.Ptr,
+            "UInt")
+        if maximumUsages > RawHidConsumerDecoder.MaximumUsages
+            throw Error("HID Consumer Control Usage 数量超过安全上限。")
+        if !maximumUsages
+            return []
+        usageList := Buffer(maximumUsages * 2, 0)
+        usageCount := maximumUsages
+        status := DllCall("hid\HidP_GetUsages", "Int",
+            RawHidConsumerDecoder.InputReportType, "UShort",
+            ConsumerControlUsage.UsagePage, "UShort", 0,
+            "Ptr", usageList.Ptr, "UInt*", &usageCount,
+            "Ptr", preparsedData.Ptr, "Ptr", reportAddress,
+            "UInt", reportSize, "UInt")
+        if status != RawHidConsumerDecoder.SuccessStatus
+            throw Error("无法解析 HID Consumer Control 报告（状态 "
+                Format("0x{:08X}", status) "）。")
+        if usageCount > maximumUsages
+            throw Error("HID Consumer Control Usage 结果越界。")
+        usages := []
+        Loop usageCount
+            usages.Push(NumGet(usageList, (A_Index - 1) * 2, "UShort"))
+        return usages
+    }
+
+    UpdateHeldUsages(deviceKey, activeUsages, device) {
+        active := Map()
+        for usage in activeUsages {
+            if IsObject(ConsumerControlUsage.Resolve(usage))
+                active[Integer(usage)] := true
+        }
+        previous := this.HeldUsages.Has(deviceKey)
+            ? this.HeldUsages[deviceKey] : Map()
+        events := []
+        for usage in active {
+            if previous.Has(usage)
+                continue
+            event := ConsumerControlUsage.CreateEvent(usage, "down", device)
+            if IsObject(event)
+                events.Push(event)
+        }
+        for usage in previous {
+            if active.Has(usage)
+                continue
+            event := ConsumerControlUsage.CreateEvent(usage, "up", device)
+            if IsObject(event)
+                events.Push(event)
+        }
+        if active.Count
+            this.HeldUsages[deviceKey] := active
+        else if this.HeldUsages.Has(deviceKey)
+            this.HeldUsages.Delete(deviceKey)
+        return events
+    }
+
+    GetPreparsedData(handle) {
+        deviceKey := this.HandleKey(handle)
+        if this.PreparsedData.Has(deviceKey)
+            return this.PreparsedData[deviceKey]
+        byteCount := 0
+        result := DllCall("user32\GetRawInputDeviceInfoW", "Ptr", handle,
+            "UInt", RawHidConsumerDecoder.PreparsedDataCommand,
+            "Ptr", 0, "UInt*", &byteCount, "UInt")
+        if result == 0xFFFFFFFF || !byteCount
+            throw OSError(A_LastError, "无法读取 HID 预解析数据长度。")
+        if byteCount > RawInputService.MaximumPacketBytes
+            throw Error("HID 预解析数据超过安全上限。")
+        preparsedData := Buffer(byteCount, 0)
+        copiedBytes := byteCount
+        result := DllCall("user32\GetRawInputDeviceInfoW", "Ptr", handle,
+            "UInt", RawHidConsumerDecoder.PreparsedDataCommand,
+            "Ptr", preparsedData.Ptr, "UInt*", &copiedBytes, "UInt")
+        if result == 0xFFFFFFFF || result > byteCount
+                || copiedBytes > byteCount
+            throw OSError(A_LastError, "无法读取 HID 预解析数据。")
+        this.PreparsedData[deviceKey] := preparsedData
+        return preparsedData
+    }
+
+    DropDevice(handle) {
+        return this.DropDeviceKey(this.HandleKey(handle))
+    }
+
+    DropDeviceKey(deviceKey) {
+        deviceKey := String(deviceKey)
+        if this.PreparsedData.Has(deviceKey)
+            this.PreparsedData.Delete(deviceKey)
+        if this.HeldUsages.Has(deviceKey)
+            this.HeldUsages.Delete(deviceKey)
+        return true
+    }
+
+    Clear() {
+        this.PreparsedData := Map()
+        this.HeldUsages := Map()
+        return true
+    }
+
+    HandleKey(handle) => Format("0x{:0" (A_PtrSize * 2) "X}", handle)
 }
 
 class RawInputService {
@@ -123,6 +340,7 @@ class RawInputService {
         this.DeviceMessageRegistered := false
         this.Devices := Map()
         this.HeldKeys := Map()
+        this.ConsumerDecoder := RawHidConsumerDecoder()
         this.LastCallbackError := ""
         this.CallbackFailureCount := 0
         this.InputCallback := ObjBindMethod(this, "OnRawInput")
@@ -149,6 +367,7 @@ class RawInputService {
         } catch as startError {
             this.Started := false
             this.HeldKeys.Clear()
+            this.ConsumerDecoder.Clear()
             cleanupErrors := this.ReleaseRegistrationResources()
             if cleanupErrors.Length
                 throw Error(startError.Message "；启动回滚失败："
@@ -164,6 +383,7 @@ class RawInputService {
             return false
         this.Started := false
         this.HeldKeys.Clear()
+        this.ConsumerDecoder.Clear()
         cleanupErrors := this.ReleaseRegistrationResources()
         if cleanupErrors.Length
             throw Error("Raw Input 清理失败：" this.JoinErrors(cleanupErrors))
@@ -206,20 +426,22 @@ class RawInputService {
 
     RegisterDevices(remove) {
         entrySize := 8 + A_PtrSize
-        registrations := Buffer(entrySize * 2, 0)
+        deviceUsages := [[1, 6], [1, 2],
+            [ConsumerControlUsage.UsagePage,
+                ConsumerControlUsage.CollectionUsage]]
+        registrations := Buffer(entrySize * deviceUsages.Length, 0)
         flags := remove ? RawInputService.Remove
             : RawInputService.InputSink | RawInputService.DeviceNotify
-        Loop 2 {
-            offset := (A_Index - 1) * entrySize
-            NumPut("UShort", 1, registrations, offset)
-            NumPut("UShort", A_Index == 1 ? 6 : 2,
-                registrations, offset + 2)
+        for registrationIndex, deviceUsage in deviceUsages {
+            offset := (registrationIndex - 1) * entrySize
+            NumPut("UShort", deviceUsage[1], registrations, offset)
+            NumPut("UShort", deviceUsage[2], registrations, offset + 2)
             NumPut("UInt", flags, registrations, offset + 4)
             NumPut("Ptr", remove ? 0 : this.TargetHwnd,
                 registrations, offset + 8)
         }
         if !DllCall("user32\RegisterRawInputDevices", "Ptr", registrations,
-                "UInt", 2, "UInt", entrySize, "Int")
+                "UInt", deviceUsages.Length, "UInt", entrySize, "Int")
             throw OSError(A_LastError, "无法注册 Raw Input 设备。")
         return true
     }
@@ -227,12 +449,17 @@ class RawInputService {
     OnRawInput(wParam, lParam, *) {
         if !this.Started
             return
-        try return this.ProcessRawInput(lParam)
+        try this.ProcessRawInput(lParam)
         catch as inputError {
             this.HeldKeys.Clear()
-            return this.EmitError("raw_input_callback_failed", 0,
+            this.ConsumerDecoder.Clear()
+            this.EmitError("raw_input_callback_failed", 0,
                 inputError.Message)
         }
+        ; WM_INPUT in foreground mode requires DefWindowProc to perform its
+        ; packet cleanup. Leaving this callback without a value lets AHK run
+        ; that default path; returning the decoded-event count suppresses it
+        ; and can make later packets disappear under a dense key chord.
     }
 
     ProcessRawInput(lParam) {
@@ -241,7 +468,7 @@ class RawInputService {
         result := DllCall("user32\GetRawInputData", "Ptr", lParam,
             "UInt", 0x10000003, "Ptr", 0, "UInt*", &packetSize,
             "UInt", headerSize, "UInt")
-        if result == 0xFFFFFFFF || packetSize < headerSize
+        if result != 0 || packetSize < headerSize
                 || packetSize > RawInputService.MaximumPacketBytes
             return this.EmitError("raw_input_read_failed", A_LastError)
         packet := Buffer(packetSize, 0)
@@ -249,11 +476,19 @@ class RawInputService {
         result := DllCall("user32\GetRawInputData", "Ptr", lParam,
             "UInt", 0x10000003, "Ptr", packet, "UInt*", &copiedSize,
             "UInt", headerSize, "UInt")
-        if result == 0xFFFFFFFF || copiedSize != packetSize
+        if result == 0xFFFFFFFF || result != packetSize
+                || copiedSize != packetSize
             return this.EmitError("raw_input_read_failed", A_LastError)
         handle := NumGet(packet, 8, "Ptr")
         device := this.GetOrReadDevice(handle)
-        try events := RawInputDecoder.Decode(packet, device)
+        packetType := NumGet(packet, 0, "UInt")
+        try events := packetType == RawInputDecoder.HidType
+                && device.Get("usage_page", 0)
+                    == ConsumerControlUsage.UsagePage
+                && device.Get("usage", 0)
+                    == ConsumerControlUsage.CollectionUsage
+            ? this.ConsumerDecoder.Decode(packet, device, handle)
+            : RawInputDecoder.Decode(packet, device)
         catch as decodeError
             return this.EmitError("raw_input_decode_failed", 0,
                 decodeError.Message)
@@ -265,6 +500,7 @@ class RawInputService {
             try this.ApplyRepeatState(unifiedEvent)
             catch as stateError {
                 this.HeldKeys.Clear()
+                this.ConsumerDecoder.Clear()
                 this.EmitError("raw_input_state_failed", 0,
                     stateError.Message)
             }
@@ -292,6 +528,7 @@ class RawInputService {
         try return this.ProcessDeviceChange(wParam, lParam)
         catch as deviceError {
             this.HeldKeys.Clear()
+            this.ConsumerDecoder.Clear()
             return this.EmitError("raw_input_device_change_failed", 0,
                 deviceError.Message)
         }
@@ -306,6 +543,7 @@ class RawInputService {
                 if existingHandle != handleKey
                         && existingDevice["stable_id"] == device["stable_id"] {
                     this.Devices.Delete(existingHandle)
+                    this.ConsumerDecoder.DropDeviceKey(existingHandle)
                     this.ClearDeviceHeldKeys(existingDevice["id"])
                     this.Devices[handleKey] := device
                     this.EmitDeviceLifecycle(device, "rebound")
@@ -321,6 +559,7 @@ class RawInputService {
                 return false
             device := this.Devices[handleKey]
             this.Devices.Delete(handleKey)
+            this.ConsumerDecoder.DropDevice(handle)
             this.ClearDeviceHeldKeys(device["id"])
             this.EmitDeviceLifecycle(device, "removal")
         }
@@ -342,6 +581,7 @@ class RawInputService {
         try return this.EventCallback.Call(unifiedEvent)
         catch as callbackError {
             this.HeldKeys.Clear()
+            this.ConsumerDecoder.Clear()
             this.LastCallbackError := callbackError.Message
             this.CallbackFailureCount++
             return false
@@ -361,6 +601,7 @@ class RawInputService {
 
     RefreshDevices(emitLifecycle := false) {
         previousDevices := this.GetDevices()
+        this.ConsumerDecoder.Clear()
         devices := this.EnumerateDevices()
         refreshed := Map()
         for device in devices
@@ -384,8 +625,9 @@ class RawInputService {
         if !this.Started
             return false
         this.HeldKeys.Clear()
-        try this.RegisterDevices(true)
+        this.ConsumerDecoder.Clear()
         this.RegisterDevices(false)
+        this.DevicesRegistered := true
         return this.RefreshDevices(true)
     }
 
@@ -396,23 +638,12 @@ class RawInputService {
         return result
     }
 
-    FindDevice(deviceId) {
-        deviceId := String(deviceId)
-        if deviceId == ""
-            return ""
-        for handleKey, device in this.Devices {
-            if device.Has("id") && String(device["id"]) == deviceId
-                return RuleSpec.Clone(device)
-        }
-        return ""
-    }
-
     EnumerateDevices() {
         count := 0
         entrySize := A_PtrSize == 8 ? 16 : 8
         result := DllCall("user32\GetRawInputDeviceList", "Ptr", 0,
             "UInt*", &count, "UInt", entrySize, "Int")
-        if result == -1
+        if result != 0
             throw OSError(A_LastError, "无法读取 Raw Input 设备数量。")
         if count > RawInputService.MaximumDevices
             throw Error("Raw Input 设备数量超过安全上限。")
@@ -424,15 +655,26 @@ class RawInputService {
             "UInt*", &actualCount, "UInt", entrySize, "Int")
         if result == -1
             throw OSError(A_LastError, "无法枚举 Raw Input 设备。")
-        if actualCount > count || actualCount > RawInputService.MaximumDevices
+        returnedCount := result
+        if returnedCount > actualCount || returnedCount > count
+                || returnedCount > RawInputService.MaximumDevices
             throw Error("Raw Input 设备枚举结果超过已分配缓冲区。")
         devices := []
-        Loop actualCount {
+        Loop returnedCount {
             offset := (A_Index - 1) * entrySize
             handle := NumGet(listBuffer, offset, "Ptr")
             deviceType := NumGet(listBuffer, offset + A_PtrSize, "UInt")
-            if deviceType == 0 || deviceType == 1
+            if deviceType == 0 || deviceType == 1 {
                 devices.Push(this.ReadDevice(handle, deviceType))
+                continue
+            }
+            if deviceType == RawInputDecoder.HidType {
+                device := this.ReadDevice(handle, deviceType)
+                if device["usage_page"] == ConsumerControlUsage.UsagePage
+                        && device["usage"]
+                            == ConsumerControlUsage.CollectionUsage
+                    devices.Push(device)
+            }
         }
         return devices
     }
@@ -458,8 +700,8 @@ class RawInputService {
             usage := deviceType == 1 ? 6 : (deviceType == 0 ? 2 : 0)
         vendorId := this.ExtractHexIdentifier(path, "VID")
         productId := this.ExtractHexIdentifier(path, "PID")
-        displayName := typeName == "keyboard" ? "Keyboard"
-            : (typeName == "mouse" ? "Mouse" : "HID")
+        displayName := typeName == "keyboard" ? "键盘"
+            : (typeName == "mouse" ? "鼠标" : "HID 设备")
         if vendorId != "" || productId != ""
             displayName .= " " vendorId ":" productId
         device := Map(
@@ -486,12 +728,15 @@ class RawInputService {
             "UInt*", &characterCount, "UInt")
         if result == 0xFFFFFFFF || !characterCount
             return ""
-        nameBuffer := Buffer((characterCount + 1) * 2, 0)
+        capacity := characterCount
+        nameBuffer := Buffer((capacity + 1) * 2, 0)
         result := DllCall("user32\GetRawInputDeviceInfoW", "Ptr", handle,
             "UInt", RawInputService.DeviceNameCommand, "Ptr", nameBuffer,
             "UInt*", &characterCount, "UInt")
-        return result == 0xFFFFFFFF ? "" : StrGet(nameBuffer, characterCount,
-            "UTF-16")
+        if result == 0xFFFFFFFF || result > capacity
+                || characterCount > capacity
+            return ""
+        return RTrim(StrGet(nameBuffer, result, "UTF-16"), Chr(0))
     }
 
     ReadDeviceInfo(handle) {
@@ -501,30 +746,22 @@ class RawInputService {
         result := DllCall("user32\GetRawInputDeviceInfoW", "Ptr", handle,
             "UInt", RawInputService.DeviceInfoCommand, "Ptr", infoBuffer,
             "UInt*", &size, "UInt")
-        if result == 0xFFFFFFFF
+        if result == 0xFFFFFFFF || result < 8 || result > infoBuffer.Size
+                || size > infoBuffer.Size
             return Map("type", 2, "version", 0,
                 "usage_page", 0, "usage", 0)
         deviceType := NumGet(infoBuffer, 4, "UInt")
         if deviceType == 2
+                && result >= 24
             return Map("type", deviceType,
                 "version", NumGet(infoBuffer, 16, "UInt"),
                 "usage_page", NumGet(infoBuffer, 20, "UShort"),
                 "usage", NumGet(infoBuffer, 22, "UShort"))
+        if deviceType != 0 && deviceType != 1
+            return Map("type", 2, "version", 0,
+                "usage_page", 0, "usage", 0)
         return Map("type", deviceType, "version", 0,
             "usage_page", 1, "usage", deviceType == 1 ? 6 : 2)
-    }
-
-    CreateUnknownDevice(handle) {
-        device := Map(
-            "handle", this.FormatHandle(handle), "type", "unknown",
-            "display_name", "Input device", "path", "",
-            "vendor_id", "", "product_id", "", "version", 0,
-            "usage_page", 0, "usage", 0,
-            "observation_only", JsonBoolean(true))
-        identity := this.IdentityService.Build(device)
-        for fieldName, value in identity
-            device[fieldName] := value
-        return device
     }
 
     ExtractHexIdentifier(path, prefix) {

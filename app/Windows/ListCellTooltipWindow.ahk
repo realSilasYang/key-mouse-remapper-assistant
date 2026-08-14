@@ -1,17 +1,20 @@
 ; 只在 ListView 单元格文本确实被列宽截断时显示完整内容。
 
 class ListCellTooltipWindow {
-    __New(listView, minimumColumn := 1, maximumColumn := 0) {
+    __New(listView, minimumColumn := 1, maximumColumn := 0,
+            availableWidthProvider := "") {
         this.List := listView
         this.MinimumColumn := Max(1, Integer(minimumColumn))
         this.MaximumColumn := maximumColumn > 0
             ? Integer(maximumColumn) : listView.GetCount("Column")
+        this.AvailableWidthProvider := availableWidthProvider
         this.Gui := ""
         this.TextControl := ""
         this.PendingCell := ""
         this.VisibleCell := ""
         this.PendingText := ""
         this.WidthCache := Map()
+        this.TooltipSizeCache := Map()
         this.Disposed := false
         this.ShowTimer := ObjBindMethod(this, "ShowPending")
         this.MouseMoveCallback := ObjBindMethod(this, "OnMouseMove")
@@ -30,10 +33,8 @@ class ListCellTooltipWindow {
     OnMouseMove(wParam, lParam, msg, hwnd) {
         if this.Disposed
             return
-        if hwnd != this.List.Hwnd {
-            this.Hide()
+        if hwnd != this.List.Hwnd
             return
-        }
         this.TrackMouseLeave()
         cell := this.HitTestCell(lParam)
         if !IsObject(cell) || cell.Column < this.MinimumColumn
@@ -60,20 +61,33 @@ class ListCellTooltipWindow {
         NumPut("Int", this.SignedWord(lParam), hitTest, 0)
         NumPut("Int", this.SignedWord(lParam >> 16), hitTest, 4)
         itemIndex := SendMessage(0x1039, 0, hitTest.Ptr, , this.List.Hwnd)
-        flags := NumGet(hitTest, 8, "UInt")
-        if itemIndex < 0 || !(flags & 0x0E)
+        subItemIndex := NumGet(hitTest, 16, "Int")
+        if itemIndex < 0 || subItemIndex < 0
             return false
         return {Row: itemIndex + 1,
-            Column: NumGet(hitTest, 16, "Int") + 1}
+            Column: subItemIndex + 1}
     }
 
     IsCellClipped(row, column, text) {
+        if IsObject(this.AvailableWidthProvider) {
+            availableWidth := this.AvailableWidthProvider.Call(row, column)
+            if Type(availableWidth) == "Integer"
+                    || Type(availableWidth) == "Float"
+                return availableWidth > 0
+                    && this.MeasureTextWidth(text) > availableWidth
+        }
         rect := Buffer(16, 0)
         NumPut("Int", 2, rect, 0) ; LVIR_LABEL
         NumPut("Int", column - 1, rect, 4)
         if !SendMessage(0x1038, row - 1, rect.Ptr, , this.List.Hwnd)
             return false
-        availableWidth := NumGet(rect, 8, "Int") - NumGet(rect, 0, "Int") - 8
+        dpi := DllCall("user32\GetDpiForWindow", "Ptr", this.List.Hwnd,
+            "UInt")
+        if !dpi
+            dpi := 96
+        horizontalInset := Max(1, Round(8 * dpi / 96))
+        availableWidth := NumGet(rect, 8, "Int")
+            - NumGet(rect, 0, "Int") - horizontalInset
         if availableWidth <= 0
             return false
         return this.MeasureTextWidth(text) > availableWidth
@@ -107,21 +121,68 @@ class ListCellTooltipWindow {
         return width
     }
 
+    MeasureTooltipText(text, maximumWidthDip, windowDpi) {
+        cacheKey := windowDpi ":" maximumWidthDip ":" text
+        if this.TooltipSizeCache.Has(cacheKey)
+            return this.TooltipSizeCache[cacheKey]
+        deviceContext := DllCall("user32\GetDC", "Ptr",
+            this.TextControl.Hwnd, "Ptr")
+        if !deviceContext
+            return {Width: maximumWidthDip, Height: 20}
+        fontHandle := SendMessage(0x0031, 0, 0, , this.TextControl.Hwnd)
+        previousFont := fontHandle ? DllCall("gdi32\SelectObject", "Ptr",
+            deviceContext, "Ptr", fontHandle, "Ptr") : 0
+        try {
+            maximumWidthPx := Max(1,
+                Round(maximumWidthDip * windowDpi / 96))
+            naturalWidthPx := 1
+            Loop Parse, text, "`n", "`r" {
+                lineText := A_LoopField != "" ? A_LoopField : " "
+                extent := Buffer(8, 0)
+                if DllCall("gdi32\GetTextExtentPoint32W", "Ptr",
+                        deviceContext, "Str", lineText, "Int", StrLen(lineText),
+                        "Ptr", extent, "Int")
+                    naturalWidthPx := Max(naturalWidthPx,
+                        NumGet(extent, 0, "Int"))
+            }
+            textWidthPx := Min(naturalWidthPx, maximumWidthPx)
+            measureRect := Buffer(16, 0)
+            NumPut("Int", textWidthPx, measureRect, 8)
+            DllCall("user32\DrawTextW", "Ptr", deviceContext, "Str", text,
+                "Int", -1, "Ptr", measureRect, "UInt", 0x0C50, "Int")
+            size := {
+                Width: Max(1, Ceil(textWidthPx * 96 / windowDpi)),
+                Height: Max(1, Ceil(NumGet(measureRect, 12, "Int")
+                    * 96 / windowDpi))
+            }
+            if this.TooltipSizeCache.Count >= 64
+                this.TooltipSizeCache.Clear()
+            this.TooltipSizeCache[cacheKey] := size
+            return size
+        } finally {
+            if previousFont
+                DllCall("gdi32\SelectObject", "Ptr", deviceContext,
+                    "Ptr", previousFont, "Ptr")
+            DllCall("user32\ReleaseDC", "Ptr", this.TextControl.Hwnd,
+                "Ptr", deviceContext)
+        }
+    }
+
     ShowPending(*) {
         if this.Disposed || this.PendingCell == "" || this.PendingText == ""
             return
         if !DllCall("user32\IsWindowVisible", "Ptr", this.List.Hwnd, "Int")
             return this.Hide()
-        colors := UiThemeService.GetPalette()
+        style := UiThemeService.GetTooltipStyle()
         if !IsObject(this.Gui) {
             this.Gui := Gui("-Caption +ToolWindow +AlwaysOnTop +E0x08000020")
-            this.Gui.BackColor := colors.Tooltip
-            this.Gui.MarginX := 12
-            this.Gui.MarginY := 8
-            this.Gui.SetFont("s10 c" colors.TooltipText,
+            this.Gui.BackColor := style.Background
+            this.Gui.MarginX := style.MarginX
+            this.Gui.MarginY := style.MarginY
+            this.Gui.SetFont("s" style.FontSize " c" style.Text,
                 LocalizationService.GetUiFontName())
-            this.TextControl := this.Gui.Add("Text", "w420 +Wrap Background"
-                colors.Tooltip " c" colors.TooltipText, this.PendingText)
+            this.TextControl := this.Gui.Add("Text", "w1 h1 +Wrap Background"
+                style.Background " c" style.Text, this.PendingText)
             if VerCompare(A_OSVersion, "10.0.22000") >= 0
                 try DllCall("dwmapi\DwmSetWindowAttribute", "Ptr", this.Gui.Hwnd,
                     "Int", 33, "Int*", 2, "Int", 4)
@@ -140,7 +201,9 @@ class ListCellTooltipWindow {
             tooltipDpi := 96
         maximumTextWidth := Max(80,
             Floor((workArea.Right - workArea.Left - 32) * 96 / tooltipDpi))
-        this.TextControl.Move(, , Min(420, maximumTextWidth))
+        textSize := this.MeasureTooltipText(this.PendingText,
+            Min(420, maximumTextWidth), tooltipDpi)
+        this.TextControl.Move(, , textSize.Width, textSize.Height)
         this.Gui.Show("Hide AutoSize")
         this.Gui.GetPos(, , &tooltipWidth, &tooltipHeight)
         maximumWidth := Max(1, workArea.Right - workArea.Left - 8)
@@ -211,7 +274,17 @@ class ListCellTooltipWindow {
 
     InvalidateMeasurements() {
         this.WidthCache.Clear()
+        this.TooltipSizeCache.Clear()
         this.Hide()
+    }
+
+    InvalidateTheme() {
+        this.InvalidateMeasurements()
+        if IsObject(this.Gui)
+            this.Gui.Destroy()
+        this.Gui := ""
+        this.TextControl := ""
+        return true
     }
 
     Dispose() {
@@ -231,6 +304,7 @@ class ListCellTooltipWindow {
             this.Gui := ""
         this.TextControl := ""
         this.List := ""
+        this.AvailableWidthProvider := ""
         if hidden
             this.ShowTimer := ""
         if moveReleased
@@ -240,6 +314,7 @@ class ListCellTooltipWindow {
         if wheelReleased
             this.MouseWheelCallback := ""
         this.WidthCache.Clear()
+        this.TooltipSizeCache.Clear()
         cleanup.Complete()
         return true
     }

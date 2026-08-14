@@ -333,6 +333,36 @@ class RoundedButtonPainter {
             | ((value >> 16) & 0xFF)
     }
 
+    FillEllipse(hdc, left, top, width, height, color) {
+        if !this.Ready || !hdc || width <= 0 || height <= 0
+            return false
+        graphics := 0
+        brush := 0
+        try {
+            if DllCall("gdiplus\GdipCreateFromHDC", "Ptr", hdc,
+                    "Ptr*", &graphics, "UInt") || !graphics
+                return false
+            if DllCall("gdiplus\GdipCreateSolidFill", "UInt",
+                    this.ColorToArgb(color), "Ptr*", &brush, "UInt")
+                    || !brush
+                return false
+            DllCall("gdiplus\GdipSetSmoothingMode", "Ptr", graphics,
+                "Int", 4)
+            DllCall("gdiplus\GdipSetPixelOffsetMode", "Ptr", graphics,
+                "Int", 4)
+            return DllCall("gdiplus\GdipFillEllipse", "Ptr", graphics,
+                "Ptr", brush, "Float", left, "Float", top,
+                "Float", width, "Float", height, "UInt") == 0
+        } catch {
+            return false
+        } finally {
+            if brush
+                DllCall("gdiplus\GdipDeleteBrush", "Ptr", brush)
+            if graphics
+                DllCall("gdiplus\GdipDeleteGraphics", "Ptr", graphics)
+        }
+    }
+
     CreateRoundedPath(width, height, radius, inset := 0.5,
             offsetX := 0, offsetY := 0) {
         path := 0
@@ -363,43 +393,6 @@ class RoundedButtonPainter {
         } catch {
             DllCall("gdiplus\GdipDeletePath", "Ptr", path)
             return 0
-        }
-    }
-
-    FillRoundedRectangle(hdc, left, top, right, bottom, color, radius) {
-        width := right - left
-        height := bottom - top
-        if !this.Ready || !hdc || width <= 0 || height <= 0
-            return false
-        graphics := 0
-        path := 0
-        brush := 0
-        if DllCall("gdiplus\GdipCreateFromHDC", "Ptr", hdc,
-                "Ptr*", &graphics, "UInt") || !graphics
-            return false
-        try {
-            DllCall("gdiplus\GdipSetSmoothingMode", "Ptr", graphics,
-                "Int", 4)
-            DllCall("gdiplus\GdipSetPixelOffsetMode", "Ptr", graphics,
-                "Int", 4)
-            DllCall("gdiplus\GdipSetCompositingQuality", "Ptr", graphics,
-                "Int", 2)
-            path := this.CreateRoundedPath(width, height, radius, 0.5,
-                left, top)
-            if !path
-                return false
-            if DllCall("gdiplus\GdipCreateSolidFill", "UInt",
-                    this.ColorToArgb(color), "Ptr*", &brush, "UInt") || !brush
-                return false
-            return DllCall("gdiplus\GdipFillPath", "Ptr", graphics,
-                "Ptr", brush, "Ptr", path, "UInt") == 0
-        } finally {
-            if brush
-                DllCall("gdiplus\GdipDeleteBrush", "Ptr", brush)
-            if path
-                DllCall("gdiplus\GdipDeletePath", "Ptr", path)
-            if graphics
-                DllCall("gdiplus\GdipDeleteGraphics", "Ptr", graphics)
         }
     }
 
@@ -517,14 +510,12 @@ class RoundedButtonPainter {
             return false
         availableWidth := right - left
         availableHeight := bottom - top
-        if !this.Ready || !hdc || availableWidth <= 0
-                || availableHeight <= 0
+        if !this.Ready || !hdc || availableWidth <= 0 || availableHeight <= 0
             return false
         try visualSize := Max(6.0, Min(visualSize + 0,
             availableWidth, availableHeight))
         catch
             return false
-
         graphics := 0
         brush := 0
         path := 0
@@ -539,7 +530,6 @@ class RoundedButtonPainter {
                 "Int", 4)
             DllCall("gdiplus\GdipSetPixelOffsetMode", "Ptr", graphics,
                 "Int", 4)
-
             visualLeft := (left + right - visualSize) / 2.0
             visualTop := (top + bottom - visualSize) / 2.0
             if normalizedSymbol == "⏸" {
@@ -555,7 +545,6 @@ class RoundedButtonPainter {
                     "Float", visualSize, "UInt")
                 return firstStatus == 0 && secondStatus == 0
             }
-
             if DllCall("gdiplus\GdipCreatePath", "Int", 0,
                     "Ptr*", &path, "UInt") || !path
                 return false
@@ -566,10 +555,10 @@ class RoundedButtonPainter {
                     "Float", visualLeft, "Float", visualTop,
                     "Float", visualRight, "Float", visualCenterY, "UInt")
                     || DllCall("gdiplus\GdipAddPathLine", "Ptr", path,
-                    "Float", visualRight, "Float", visualCenterY,
-                    "Float", visualLeft, "Float", visualBottom, "UInt")
+                        "Float", visualRight, "Float", visualCenterY,
+                        "Float", visualLeft, "Float", visualBottom, "UInt")
                     || DllCall("gdiplus\GdipClosePathFigure", "Ptr", path,
-                    "UInt")
+                        "UInt")
                 return false
             return DllCall("gdiplus\GdipFillPath", "Ptr", graphics,
                 "Ptr", brush, "Ptr", path, "UInt") == 0
@@ -602,8 +591,9 @@ class RoundedButtonPainter {
                 state.Control.Hwnd, "UInt")
             if !surfaceDpi
                 surfaceDpi := 96
-            radius := Max(3,
-                Round(RoundedButtonPainter.RadiusDip * surfaceDpi / 96))
+            radiusDip := state.HasOwnProp("RadiusDip")
+                ? state.RadiusDip : RoundedButtonPainter.RadiusDip
+            radius := Max(3, Round(radiusDip * surfaceDpi / 96))
             path := this.CreateRoundedPath(width, height, radius)
             if !path
                 return false
@@ -623,6 +613,8 @@ class RoundedButtonPainter {
     }
 
     DrawText(hdc, width, height, state) {
+        if state.HasOwnProp("ClearMarkSizeDip")
+            return this.DrawCenteredClearMark(hdc, width, height, state)
         font := DllCall("user32\SendMessageW", "Ptr", state.Control.Hwnd,
             "UInt", 0x0031, "Ptr", 0, "Ptr", 0, "Ptr")
         if !font
@@ -637,10 +629,14 @@ class RoundedButtonPainter {
                 state.Control.Hwnd, "UInt")
             if !textDpi
                 textDpi := 96
-            inset := Max(4, Round(6 * textDpi / 96))
+            insetDip := state.HasOwnProp("TextInsetDip")
+                ? state.TextInsetDip : 6
+            inset := Max(0, Round(insetDip * textDpi / 96))
             textRect := Buffer(16, 0)
             text := ""
             try text := state.Control.Text
+            textAlign := state.HasOwnProp("TextAlign")
+                ? state.TextAlign : "center"
             if state.HasOwnProp("LeadingTextSlotDip")
                     && RegExMatch(text, "^(\S+)\s+(.+)$", &leadingMatch) {
                 leadingText := leadingMatch[1]
@@ -653,7 +649,10 @@ class RoundedButtonPainter {
                 bodyExtent := TextVisualAlignment.MeasureText(hdc, bodyText)
                 contentWidth := Min(availableWidth,
                     slotWidth + gap + bodyExtent.Width)
-                contentX := Floor((width - contentWidth) / 2)
+                contentX := textAlign == "left" ? inset
+                    : (textAlign == "right"
+                        ? width - inset - contentWidth
+                        : Floor((width - contentWidth) / 2))
                 visualSize := Max(1, Round(
                     state.LeadingTextVisualSizeDip * textDpi / 96))
                 if !this.DrawLeadingCommandSymbol(hdc, leadingText,
@@ -718,7 +717,10 @@ class RoundedButtonPainter {
                 }
                 contentWidth := Min(availableWidth,
                     imageAndGapWidth + textWidth)
-                contentX := Max(inset, Floor((width - contentWidth) / 2))
+                contentX := textAlign == "left" ? inset
+                    : (textAlign == "right"
+                        ? width - inset - contentWidth
+                        : Max(inset, Floor((width - contentWidth) / 2)))
                 contentHeight := Max(leadingMetrics.Height,
                     trailingMetrics.Height, textHeight)
                 contentY := Max(0, Floor((height - contentHeight) / 2))
@@ -776,15 +778,72 @@ class RoundedButtonPainter {
                 DllCall("user32\DrawTextW", "Ptr", hdc, "Str", text,
                     "Int", -1, "Ptr", textRect, "UInt", 0x00000811, "Int")
             } else {
-                textRect := TextVisualAlignment.CreateCenteredTextRect(hdc,
-                    text, inset, 0, width - inset, height)
+                textRect := state.HasOwnProp("RasterTextAlignment")
+                        && state.RasterTextAlignment
+                    ? TextVisualAlignment.CreateRasterCenteredTextRect(hdc,
+                        text, inset, 0, width - inset, height)
+                    : TextVisualAlignment.CreateCenteredTextRect(hdc,
+                        text, inset, 0, width - inset, height)
+                textFlags := 0x00008824
+                if textAlign == "right"
+                    textFlags |= 0x00000002
+                else if textAlign == "center"
+                    textFlags |= 0x00000001
                 DllCall("user32\DrawTextW", "Ptr", hdc, "Str", text,
-                    "Int", -1, "Ptr", textRect, "UInt", 0x00008825, "Int")
+                    "Int", -1, "Ptr", textRect, "UInt", textFlags, "Int")
             }
         } finally {
             if previousFont
                 DllCall("gdi32\SelectObject", "Ptr", hdc,
                     "Ptr", previousFont, "Ptr")
+        }
+    }
+
+    DrawCenteredClearMark(hdc, width, height, state) {
+        if !this.Ready || !hdc || width <= 0 || height <= 0
+            return false
+        dpi := DllCall("user32\GetDpiForWindow", "Ptr",
+            state.Control.Hwnd, "UInt")
+        if !dpi
+            dpi := 96
+        size := Min(width, height, Max(4.0,
+            state.ClearMarkSizeDip * dpi / 96))
+        stroke := Max(1.0, state.ClearMarkStrokeDip * dpi / 96)
+        halfSize := size / 2.0
+        centerX := width / 2.0
+        centerY := height / 2.0
+        graphics := 0
+        pen := 0
+        try {
+            if DllCall("gdiplus\GdipCreateFromHDC", "Ptr", hdc,
+                    "Ptr*", &graphics, "UInt") || !graphics
+                return false
+            if DllCall("gdiplus\GdipCreatePen1", "UInt",
+                    this.ColorToArgb(state.TextColor), "Float", stroke,
+                    "Int", 2, "Ptr*", &pen, "UInt") || !pen
+                return false
+            DllCall("gdiplus\GdipSetSmoothingMode", "Ptr", graphics,
+                "Int", 4)
+            DllCall("gdiplus\GdipSetPixelOffsetMode", "Ptr", graphics,
+                "Int", 4)
+            firstStatus := DllCall("gdiplus\GdipDrawLine", "Ptr", graphics,
+                "Ptr", pen, "Float", centerX - halfSize,
+                "Float", centerY - halfSize,
+                "Float", centerX + halfSize,
+                "Float", centerY + halfSize, "UInt")
+            secondStatus := DllCall("gdiplus\GdipDrawLine", "Ptr", graphics,
+                "Ptr", pen, "Float", centerX + halfSize,
+                "Float", centerY - halfSize,
+                "Float", centerX - halfSize,
+                "Float", centerY + halfSize, "UInt")
+            return firstStatus == 0 && secondStatus == 0
+        } catch {
+            return false
+        } finally {
+            if pen
+                DllCall("gdiplus\GdipDeletePen", "Ptr", pen)
+            if graphics
+                DllCall("gdiplus\GdipDeleteGraphics", "Ptr", graphics)
         }
     }
 
@@ -799,7 +858,29 @@ class RoundedButtonPainter {
             Gap: Round(image.GapDip * dpi / 96)}
     }
 
-    MeasureTextHeight(control, text, width, horizontalInsetDip := 0) {
+    MeasureButtonTextHeight(control, text, width, state,
+            layoutRound := "") {
+        horizontalInsetDip := state.HasOwnProp("TextInsetDip")
+            ? state.TextInsetDip : 6
+        reservedWidthDip := 0
+        for imageProperty in ["ButtonImage", "TrailingButtonImage"] {
+            if !state.HasOwnProp(imageProperty)
+                    || !IsObject(state.%imageProperty%)
+                continue
+            image := state.%imageProperty%
+            aspect := image.Width / image.Height
+            imageWidthDip := aspect >= 1 ? image.SizeDip
+                : image.SizeDip * aspect
+            reservedWidthDip += imageWidthDip
+            if text != ""
+                reservedWidthDip += image.GapDip
+        }
+        return this.MeasureTextHeight(control, text, width,
+            horizontalInsetDip, reservedWidthDip, layoutRound)
+    }
+
+    MeasureTextHeight(control, text, width, horizontalInsetDip := 0,
+            reservedWidthDip := 0, layoutRound := "") {
         hdc := DllCall("user32\GetDC", "Ptr", control.Hwnd, "Ptr")
         if !hdc
             return 0
@@ -810,12 +891,17 @@ class RoundedButtonPainter {
         previousFont := font ? DllCall("gdi32\SelectObject", "Ptr", hdc,
             "Ptr", font, "Ptr") : 0
         try {
-            measureDpi := DllCall("user32\GetDpiForWindow", "Ptr",
-                control.Hwnd, "UInt")
+            measureDpi := IsObject(layoutRound)
+                    && layoutRound.HasOwnProp("Dpi")
+                ? layoutRound.Dpi
+                : DllCall("user32\GetDpiForWindow", "Ptr",
+                    control.Hwnd, "UInt")
             if !measureDpi
                 measureDpi := 96
             inset := Round(horizontalInsetDip * measureDpi / 96)
-            pixelWidth := Max(1, Round(width * measureDpi / 96) - inset * 2)
+            reservedWidth := Round(reservedWidthDip * measureDpi / 96)
+            pixelWidth := Max(1, Round(width * measureDpi / 96)
+                - inset * 2 - reservedWidth)
             textRect := Buffer(16, 0)
             NumPut("Int", 0, "Int", 0, "Int", pixelWidth,
                 "Int", 0, textRect)
@@ -829,6 +915,51 @@ class RoundedButtonPainter {
                 DllCall("gdi32\SelectObject", "Ptr", hdc,
                     "Ptr", previousFont, "Ptr")
             DllCall("user32\ReleaseDC", "Ptr", control.Hwnd, "Ptr", hdc)
+        }
+    }
+
+    DrawDashedDivider(hdc, width, height, state) {
+        backgroundBrush := 0
+        lineBrush := 0
+        try {
+            backgroundBrush := DllCall("gdi32\CreateSolidBrush", "UInt",
+                this.ColorToBgr(state.BackgroundColor), "Ptr")
+            lineBrush := DllCall("gdi32\CreateSolidBrush", "UInt",
+                this.ColorToBgr(state.LineColor), "Ptr")
+            if !backgroundBrush || !lineBrush
+                return false
+
+            rect := Buffer(16, 0)
+            NumPut("Int", 0, "Int", 0, "Int", width, "Int", height, rect)
+            if !DllCall("user32\FillRect", "Ptr", hdc, "Ptr", rect,
+                    "Ptr", backgroundBrush, "Int")
+                return false
+
+            dpi := DllCall("user32\GetDpiForWindow", "Ptr",
+                state.Control.Hwnd, "UInt")
+            if !dpi
+                dpi := 96
+            dashWidth := Max(1, Round(state.DashWidthDip * dpi / 96))
+            dashGap := Max(1, Round(state.DashGapDip * dpi / 96))
+            dashHeight := Max(1, Round(state.DashHeightDip * dpi / 96))
+            dashY := Max(0, Floor((height - dashHeight) / 2))
+            dashX := 0
+            while dashX < width {
+                dashRight := Min(width, dashX + dashWidth)
+                NumPut("Int", dashX, "Int", dashY, "Int", dashRight,
+                    "Int", Min(height, dashY + dashHeight), rect)
+                if !DllCall("user32\FillRect", "Ptr", hdc, "Ptr", rect,
+                        "Ptr", lineBrush, "Int")
+                    return false
+                dashX += dashWidth + dashGap
+            }
+            return true
+        } finally {
+            if lineBrush
+                DllCall("gdi32\DeleteObject", "Ptr", lineBrush, "Int")
+            if backgroundBrush
+                DllCall("gdi32\DeleteObject", "Ptr", backgroundBrush,
+                    "Int")
         }
     }
 
@@ -852,9 +983,14 @@ class RoundedButtonPainter {
             return false
         }
         try {
-            if !this.DrawSurface(memoryDc, width, height, state)
-                return false
-            this.DrawText(memoryDc, width, height, state)
+            if state.Kind == "divider" {
+                if !this.DrawDashedDivider(memoryDc, width, height, state)
+                    return false
+            } else {
+                if !this.DrawSurface(memoryDc, width, height, state)
+                    return false
+                this.DrawText(memoryDc, width, height, state)
+            }
             return !!DllCall("gdi32\BitBlt", "Ptr", hdc,
                 "Int", 0, "Int", 0, "Int", width, "Int", height,
                 "Ptr", memoryDc, "Int", 0, "Int", 0,

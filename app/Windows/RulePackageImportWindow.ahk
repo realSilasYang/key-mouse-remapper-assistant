@@ -14,6 +14,7 @@ class RulePackageImportWindow {
         this.IconHandles := []
         this.Interactions := ""
         this.ListSelection := ""
+        this.StatusIsError := false
         this.Disposed := false
         try this.Build()
         catch as buildError {
@@ -56,13 +57,13 @@ class RulePackageImportWindow {
         this.List := this.Gui.Add("ListView",
             "x16 y122 w728 h286 Report Checked +ReadOnly -Multi -Hdr"
             " +LV0x10000 -Border -E0x200 Background" colors.Surface
-            " c" colors.Text, [Tr("规则编号"), Tr("模式"), Tr("权限")])
+            " c" colors.Text, [Tr("名称"), Tr("模式"), Tr("权限")])
         this.List.SetFont("s10 c" colors.Text, fontName)
         this.ListSelection := ListViewSelectionPresenter(this.List,
             this.Interactions.Painter)
         this.Interactions.SetFocusSink(this.List)
         this.Header := ListViewPseudoHeader(this.Gui, this.List, [
-            {Column: 1, Label: Tr("规则编号"), SortOptions: "Logical"},
+            {Column: 1, Label: Tr("名称"), SortOptions: "Logical"},
             {Column: 2, Label: Tr("模式"), Align: "Center",
                 SortOptions: "Logical"},
             {Column: 3, Label: Tr("权限"), SortOptions: "Logical"}
@@ -85,16 +86,18 @@ class RulePackageImportWindow {
         this.ClearButton := this.AddButton(138, 430, 112,
             Tr("全部取消"), colors.Toolbar,
             ObjBindMethod(this, "ClearSelection"), colors.ToolbarText)
-        this.ImportButton := this.AddButton(500, 430, 112,
+        this.ImportButton := this.AddButton(530, 430, 112,
             Tr("导入所选"), colors.Primary,
             ObjBindMethod(this, "ImportSelected"))
-        this.CancelButton := this.AddButton(622, 430, 112,
+        this.CancelButton := this.AddButton(654, 430, 80,
             Tr("取消"), colors.Toolbar, ObjBindMethod(this, "RequestClose"),
             colors.ToolbarText)
         this.Interactions.SetButtonLucideIcon(this.SelectAllButton,
-            "circle-check-big.svg", 15, 6)
+            "circle-check-big.svg", 15, 6,
+            UiThemeService.ButtonIconColor(colors.StatusEnabledIcon))
         this.Interactions.SetButtonLucideIcon(this.ClearButton,
-            "x.svg", 15, 6)
+            "x.svg", 15, 6,
+            UiThemeService.ButtonIconColor(colors.Danger))
         this.Status := this.Gui.Add("Text",
             "x16 y478 w718 h36 +Wrap Background" colors.Window
             " c" colors.Muted, Tr("仅勾选的规则会被导入。"))
@@ -120,8 +123,19 @@ class RulePackageImportWindow {
             return Tr("无额外权限")
         text := ""
         for permission in permissions
-            text .= (text == "" ? "" : ", ") permission
+            text .= (text == "" ? "" : ", ")
+                . this.FormatPermission(permission)
         return text
+    }
+
+    FormatPermission(permission) {
+        switch String(permission) {
+            case "generated_input": return Tr("生成键鼠输入")
+            case "window_control": return Tr("控制活动窗口")
+            case "system_control": return Tr("执行系统控制")
+            case "arbitrary_code": return Tr("运行自定义 AHK 代码")
+        }
+        return String(permission)
     }
 
     SelectAll(*) {
@@ -145,19 +159,42 @@ class RulePackageImportWindow {
     ImportSelected(*) {
         selectedIds := this.GetSelectedIds()
         if !selectedIds.Length {
+            this.StatusIsError := true
             this.Status.Opt("c" UiThemeService.GetPalette().Error)
             this.Status.Text := Tr("请至少选择一条规则。")
             return false
         }
+        if this.SelectedRulesRequireArbitraryCode(selectedIds)
+                && !ShowDarkConfirmBox(
+                    Tr("所选规则包含可读写文件、启动程序、控制窗口和请求管理员权限的自定义 AHK 代码。确认导入并运行吗？"),
+                    Tr("导入自定义 AHK 代码"), Tr("导入并运行"), Tr("取消"),
+                    this.Gui)
+            return false
         result := this.App.CompleteRulePackageImport(this.FilePath,
             this.Package, this.CollisionPolicy, selectedIds)
         if !IsObject(result) {
+            this.StatusIsError := true
             this.Status.Opt("c" UiThemeService.GetPalette().Error)
             this.Status.Text := Tr("导入失败，请查看主窗口状态。")
             return false
         }
         this.Dispose()
         return true
+    }
+
+    SelectedRulesRequireArbitraryCode(selectedIds) {
+        selected := Map()
+        for ruleId in selectedIds
+            selected[String(ruleId)] := true
+        for item in this.Preview["rules"] {
+            if !selected.Has(item["id"])
+                continue
+            for permission in item["permissions"] {
+                if permission == "arbitrary_code"
+                    return true
+            }
+        }
+        return false
     }
 
     Show() {
@@ -175,6 +212,54 @@ class RulePackageImportWindow {
             return false
         ApplyDarkWindow(this.Gui.Hwnd)
         ApplyDarkListView(this.List.Hwnd)
+        return true
+    }
+
+    ApplyAppearance() {
+        if this.Disposed
+            return false
+        BeginStableWindowUpdate(this.Gui.Hwnd)
+        try {
+            colors := UiThemeService.GetPalette()
+            fontName := LocalizationService.GetUiFontName()
+            systemFont := LocalizationService.GetLanguageSystemUiFontName()
+            this.Gui.Title := Tr("导入规则包预览")
+            this.Gui.BackColor := colors.Window
+            this.Interactions.SetParentColor(colors.Window)
+            this.SourceText.SetFont("s10 c" colors.Text, fontName)
+            this.SummaryText.SetFont("s10 c" colors.Muted, fontName)
+            this.Header.SetLabels([Tr("名称"), Tr("模式"), Tr("权限")])
+            this.Header.ApplyAppearance(colors.Toolbar, colors.Muted,
+                systemFont, 9)
+            this.List.Opt("Background" colors.Surface " c" colors.Text)
+            this.List.SetFont("s10 c" colors.Text, fontName)
+            buttonSpecs := [
+                {Button: this.SelectAllButton, Color: colors.Toolbar,
+                    TextColor: colors.ToolbarText},
+                {Button: this.ClearButton, Color: colors.Toolbar,
+                    TextColor: colors.ToolbarText},
+                {Button: this.ImportButton, Color: colors.Primary,
+                    TextColor: colors.ButtonText},
+                {Button: this.CancelButton, Color: colors.Toolbar,
+                    TextColor: colors.ToolbarText}
+            ]
+            for spec in buttonSpecs {
+                spec.Button.SetFont("s10 bold", systemFont)
+                this.Interactions.SetButtonAppearance(spec.Button,
+                    spec.Color, spec.TextColor, true)
+            }
+            this.Interactions.SetButtonLucideIcon(this.SelectAllButton,
+                "circle-check-big.svg", 15, 6,
+                UiThemeService.ButtonIconColor(colors.StatusEnabledIcon))
+            this.Interactions.SetButtonLucideIcon(this.ClearButton,
+                "x.svg", 15, 6,
+                UiThemeService.ButtonIconColor(colors.Danger))
+            this.Status.Opt("Background" colors.Window)
+            this.Status.SetFont("s10 c" (this.StatusIsError
+                ? colors.Error : colors.Muted), fontName)
+            this.ApplyNativeThemes()
+            this.Gui.BackColor := colors.Window
+        } finally EndStableWindowUpdate(this.Gui.Hwnd, true)
         return true
     }
 
@@ -200,10 +285,6 @@ class RulePackageImportWindow {
                 cleanup.Failures.Push("释放父窗口关系：" ownerError.Message)
             }
         }
-        if IsObject(this.Interactions)
-                && cleanup.Run("释放交互服务",
-                    () => this.Interactions.Dispose())
-            this.Interactions := ""
         if IsObject(this.ListSelection)
                 && cleanup.Run("释放列表选择器",
                     () => this.ListSelection.Dispose())
@@ -211,6 +292,10 @@ class RulePackageImportWindow {
         if this.HasOwnProp("Header") && IsObject(this.Header)
                 && cleanup.Run("释放列表表头", () => this.Header.Dispose())
             this.Header := ""
+        if IsObject(this.Interactions)
+                && cleanup.Run("释放交互服务",
+                    () => this.Interactions.Dispose())
+            this.Interactions := ""
         if IsObject(this.Gui)
                 && cleanup.Run("销毁窗口", () => this.Gui.Destroy())
             this.Gui := ""

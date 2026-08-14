@@ -13,9 +13,6 @@ class ItalianStrings {
             "新增",
                 "Aggiungi")
         catalog.Set(
-            "新增映射",
-                "Aggiungi mappatura")
-        catalog.Set(
             "删除",
                 "Elimina")
         catalog.Set(
@@ -24,6 +21,7 @@ class ItalianStrings {
         catalog.Set(
             "恢复",
                 "Riprendi")
+        catalog.Set("反转状态", "Inverti stato")
         catalog.Set(
             "序号",
                 "N.")
@@ -37,8 +35,8 @@ class ItalianStrings {
             "生效范围",
                 "Ambito")
         catalog.Set(
-            "设计目的",
-                "Scopo")
+            "名称",
+                "Nome")
         catalog.Set(
             "新建映射",
                 "Nuova mappatura")
@@ -69,36 +67,8 @@ class ItalianStrings {
         catalog.Set(
             "新增映射代码",
                 "Aggiungi il codice di mappatura")
-        catalog.Set(
-            "元数据说明",
-                "Riferimento ai metadati")
-        catalog.Set(
-            "RuleSpec 外壳版本，当前必须为 2。",
-                "Versione dell'involucro RuleSpec; attualmente deve essere 2.")
-        catalog.Set(
-            "规则模式，当前必须为 managed。",
-                "Modalità della regola; attualmente deve essere managed.")
-        catalog.Set(
-            "映射的唯一编号，必须与 RuleSpec 的 id 一致。",
-                "ID univoco della mappatura; deve corrispondere all'id RuleSpec.")
-        catalog.Set(
-            "结构化 RuleSpec JSON 的开始标记。",
-                "Marcatore iniziale del JSON RuleSpec strutturato.")
-        catalog.Set(
-            "注释化 JSON；可编辑来源、条件、显示信息和输出动作。",
-                "JSON commentato; modifica origine, condizioni, dati visualizzati e azioni di output.")
-        catalog.Set(
-            "结构化 RuleSpec JSON 的结束标记。",
-                "Marcatore finale del JSON RuleSpec strutturato.")
-        catalog.Set(
-            "规范化 RuleSpec JSON 的 SHA-256 摘要。",
-                "Digest SHA-256 del JSON RuleSpec normalizzato.")
-        catalog.Set(
-            "生成区只含说明注释，不包含可执行 AHK。",
-                "L'area generata contiene solo commenti esplicativi e nessun AHK eseguibile.")
-        catalog.Set(
-            "整个映射块只允许注释化 RuleSpec JSON；右侧说明仅供参考，不会保存到代码。",
-                "L'intero blocco di mappatura consente solo JSON RuleSpec commentato. La guida a destra non viene salvata.")
+        catalog.Set("规则块", "Regola normale")
+        catalog.Set("受托管脚本", "Script gestito")
         catalog.Set(
             "代码修改尚未保存，确定放弃吗？",
                 "Il codice presenta modifiche non salvate. Scartarli?")
@@ -112,7 +82,7 @@ class ItalianStrings {
             "重新加载",
                 "Ricarica")
         catalog.Set(
-            "事件查看器",
+            "事件查看",
                 "Eventi")
         catalog.Set("事件详情", "Dettagli evento")
         catalog.Set("事件：{1}", "Evento: {1}")
@@ -127,14 +97,6 @@ class ItalianStrings {
         catalog.Set("原始观察中", "Osservazione input grezzo attiva")
         catalog.Set("原始观察切换失败：{1}",
             "Impossibile cambiare l’osservazione input grezzo: {1}")
-        catalog.Set("诊断包", "Diagnostica")
-        catalog.Set("诊断包预览", "Anteprima pacchetto diagnostico")
-        catalog.Set("导出诊断包", "Esporta pacchetto diagnostico")
-        catalog.Set("诊断包导出失败：{1}",
-            "Impossibile esportare il pacchetto diagnostico: {1}")
-        catalog.Set("诊断包已导出：{1}", "Pacchetto diagnostico esportato: {1}")
-        catalog.Set("将导出 {1} 条事件；已脱敏窗口标题 {2}、路径 {3}、文本/命令 {4}、代码 {5}、变量值 {6} 项。是否继续？",
-            "Esportare {1} eventi? Sono stati oscurati {2} titoli di finestra, {3} percorsi, {4} valori testo/comando, {5} valori di codice e {6} valori di variabili.")
         catalog.Set(
             "导入规则包",
                 "Importa pacchetto di regole")
@@ -151,23 +113,20 @@ class ItalianStrings {
             "规则包导入失败：{1}",
                 "Importazione del pacchetto di regole non riuscita: {1}")
         catalog.Set(
-            "规则包导入失败，且回滚失败：{1}",
-                "Importazione e rollback del pacchetto di regole non riusciti: {1}")
-        catalog.Set(
             "规则包导入完成：新增 {1}，替换 {2}，重命名 {3}，跳过 {4}。",
                 "Importazione completata: {1} aggiunto, {2} sostituito, {3} rinominato, {4} saltato.")
-        catalog.Set("变量", "Variabili")
-        catalog.Set("变量快照", "Istantanea variabili")
         catalog.Set("导入规则包预览", "Anteprima importazione pacchetto")
         catalog.Set("来源：{1} · 版本：{2}", "Origine: {1} · Versione: {2}")
         catalog.Set("共 {1} 条规则，默认选中 {2} 条；权限：{3}", "{1} regole; {2} selezionate. Autorizzazioni: {3}")
-        catalog.Set("规则编号", "ID regola")
         catalog.Set("模式", "Modalità")
         catalog.Set("权限", "Autorizzazioni")
         catalog.Set("全选", "Seleziona tutto")
         catalog.Set("全部取消", "Deseleziona tutto")
         catalog.Set("导入所选", "Importa selezionate")
         catalog.Set("无额外权限", "Nessuna autorizzazione aggiuntiva")
+        catalog.Set("生成键鼠输入", "Generare input da tastiera e mouse")
+        catalog.Set("控制活动窗口", "Controllare la finestra attiva")
+        catalog.Set("执行系统控制", "Eseguire un controllo di sistema")
         catalog.Set("请至少选择一条规则。", "Seleziona almeno una regola.")
         catalog.Set("导入失败，请查看主窗口状态。", "Importazione non riuscita. Controlla lo stato della finestra principale.")
         catalog.Set(
@@ -186,14 +145,8 @@ class ItalianStrings {
             "规则仓储",
                 "Deposito")
         catalog.Set(
-            "撤销历史",
-                "Storia")
-        catalog.Set(
             "系统事件",
                 "Sistema")
-        catalog.Set(
-            "界面事件",
-                "interfaccia utente")
         catalog.Set(
             "暂停刷新",
                 "Pausa")
@@ -231,9 +184,6 @@ class ItalianStrings {
             "仓储",
                 "Deposito")
         catalog.Set(
-            "历史",
-                "Storia")
-        catalog.Set(
             "系统",
                 "Sistema")
         catalog.Set(
@@ -255,20 +205,11 @@ class ItalianStrings {
             "事件已导出：{1}",
                 "Eventi esportati: {1}")
         catalog.Set(
-            "无法打开事件查看器：{1}",
-                "Impossibile aprire il Visualizzatore eventi: {1}")
-        catalog.Set(
             "退出程序",
                 "Esci dal programma")
         catalog.Set(
             "设置",
                 "Impostazioni")
-        catalog.Set(
-            "界面语言",
-                "Lingua")
-        catalog.Set(
-            "主题",
-                "Tema")
         catalog.Set(
             "界面语言：",
                 "Lingua dell'interfaccia:")
@@ -320,6 +261,7 @@ class ItalianStrings {
         catalog.Set(
             "无法启动按键录制，请重试。",
                 "Impossibile avviare la registrazione della chiave. Riprova.")
+        catalog.Set("无法启动按键录制：{1}", "Impossibile avviare la registrazione dei tasti: {1}")
         catalog.Set(
             "正在录制来源按键…",
                 "Registrazione delle chiavi della sorgente...")
@@ -354,14 +296,14 @@ class ItalianStrings {
             "请先选择要删除的映射。",
                 "Seleziona prima una mappatura da eliminare.")
         catalog.Set(
-            "所选映射缺少代码块编号，无法删除。",
-                "La mappatura selezionata non ha un ID di blocco e non può essere eliminata.")
+            "所选映射缺少名称，无法删除。",
+                "La mappatura selezionata non ha un nome e non può essere eliminata.")
         catalog.Set(
             "请先选择要暂停或恢复的映射。",
                 "Seleziona prima una mappatura da mettere in pausa o riprendere.")
         catalog.Set(
-            "所选映射缺少代码块编号，无法修改状态。",
-                "La mappatura selezionata non ha ID di blocco e non può cambiare stato.")
+            "所选映射缺少名称，无法修改状态。",
+                "La mappatura selezionata non ha un nome e non può cambiare stato.")
         catalog.Set(
             "无法打开映射代码：{1}",
                 "Impossibile aprire il codice di mappatura: {1}")
@@ -423,38 +365,20 @@ class ItalianStrings {
             "读取重映射代码区域失败：{1}",
                 "Impossibile leggere la regione di mappatura: {1}")
         catalog.Set(
-            "托管规则未应用：{1}",
-                "Le regole gestite non sono state applicate: {1}")
-        catalog.Set(
-            "无法检查现有映射：{1}",
-                "Impossibile controllare le mappature esistenti: {1}")
-        catalog.Set(
             "为避免失去界面操作，来源按键不能是无修饰的鼠标左键。",
                 "Un pulsante sinistro del mouse non modificato non può essere utilizzato come chiave sorgente.")
-        catalog.Set(
-            "该来源按键已被现有映射占用。",
-                "Quella chiave di origine è già utilizzata da un'altra mappatura.")
-        catalog.Set(
-            "来源按键与目标按键相同，无需建立映射。",
-                "Sorgente e destinazione sono identici; non è necessaria alcuna mappatura.")
         catalog.Set(
             "映射未写入脚本：{1}",
                 "La mappatura non è stata scritta: {1}")
         catalog.Set(
-            "已写入脚本：{1} -> {2}；正在自动应用。",
-                "Scritto nello script: {1} -> {2}; applicazione automatica in corso.")
-        catalog.Set(
-            "删除映射",
-                "Elimina la mappatura")
+            "已写入脚本：{1} -> {2}；已应用。",
+                "Scritto nello script: {1} -> {2}; applicato.")
         catalog.Set(
             "映射未删除：{1}",
                 "La mappatura non è stata eliminata: {1}")
         catalog.Set(
-            "已从脚本删除：{1} -> {2}；正在自动应用。",
-                "Eliminato dallo script: {1} -> {2}; applicazione automatica in corso.")
-        catalog.Set(
-            "调整映射顺序",
-                "Riordinare le mappature")
+            "已从脚本删除：{1} -> {2}；已应用。",
+                "Eliminato dallo script: {1} -> {2}; applicato.")
         catalog.Set(
             "顺序未保存：{1}",
                 "L'ordine non è stato salvato: {1}")
@@ -462,20 +386,14 @@ class ItalianStrings {
             "已按拖动结果实时更新脚本顺序。",
                 "Aggiornato l'ordine degli script dal risultato trascinato.")
         catalog.Set(
-            "暂停映射",
-                "Metti in pausa la mappatura")
-        catalog.Set(
-            "恢复映射",
-                "Riprendi la mappatura")
-        catalog.Set(
             "映射状态未修改：{1}",
                 "Lo stato della mappatura non è stato modificato: {1}")
         catalog.Set(
-            "已恢复映射：{1} -> {2}；正在自动应用。",
-                "Mappatura ripresa: {1} -> {2}; applicazione automatica in corso.")
+            "已恢复映射：{1} -> {2}；已应用。",
+                "Mappatura ripresa: {1} -> {2}; applicata.")
         catalog.Set(
-            "已暂停映射：{1} -> {2}；正在自动应用。",
-                "Mappatura in pausa: {1} -> {2}; applicazione automatica in corso.")
+            "已暂停映射：{1} -> {2}；已应用。",
+                "Mappatura in pausa: {1} -> {2}; applicata.")
         catalog.Set(
             "映射代码未保存：{1}",
                 "Il codice di mappatura non è stato salvato: {1}")
@@ -486,52 +404,39 @@ class ItalianStrings {
             "未保存：{1}",
                 "Non salvato: {1}")
         catalog.Set(
-            "已保存映射代码：{1} -> {2}；正在自动应用。",
-                "Codice di mappatura salvato: {1} -> {2}; applicazione automatica in corso.")
+            "已保存映射代码：{1} -> {2}；已应用。",
+                "Codice di mappatura salvato: {1} -> {2}; applicato.")
         catalog.Set(
-            "已新增映射代码：{1} -> {2}；正在自动应用。",
-                "Codice di mappatura aggiunto: {1} -> {2}; applicazione automatica in corso.")
+            "已新增映射代码：{1} -> {2}；已应用。",
+                "Codice di mappatura aggiunto: {1} -> {2}; applicato.")
+        catalog.Set("已保存，正在后台应用…",
+            "Salvato; applicazione in background...")
+        catalog.Set("受托管脚本已应用。", "Script gestito applicato.")
+        catalog.Set("映射代码没有变化。", "Il codice di mappatura non è cambiato.")
+        catalog.Set("映射代码已保存，但受托管脚本应用失败：{1}",
+            "Il codice di mappatura è stato salvato, ma lo script gestito non è stato applicato: {1}")
         catalog.Set(
             "无法创建空白映射代码：{1}",
                 "Impossibile creare il codice di mappatura vuoto: {1}")
         catalog.Set(
-            "无法打开设置：{1}",
-                "Impossibile aprire le impostazioni: {1}")
-        catalog.Set(
             "设置未保存：{1}",
                 "Le impostazioni non sono state salvate: {1}")
-        catalog.Set(
-            "界面内容字体",
-                "Carattere dell'interfaccia utente")
-        catalog.Set(
-            "撤销失败：{1}",
-                "Annullamento non riuscito: {1}")
-        catalog.Set(
-            "重做失败：{1}",
-                "Ripetizione non riuscita: {1}")
-        catalog.Set(
-            "已撤销：{1}",
-                "Annullato: {1}")
-        catalog.Set(
-            "已重做：{1}",
-                "Ripetuto: {1}")
-        catalog.Set(
-            "映射配置",
-                "Configurazione della mappatura")
         catalog.Set(
             "{1} 条重映射正在生效 · 当前为脚本代码顺序",
                 "{1} mappature attive · ordine script personalizzato")
         catalog.Set("键鼠重映射小助手设置",
             "Impostazioni dell'assistente di rimappatura tastiera e mouse")
-        catalog.Set("外观",
-            "Aspetto")
-        catalog.Set("规则包",
-            "Pacchetti di regole")
+        catalog.Set("启动",
+            "Avvio")
+        catalog.Set("显示",
+            "Visualizzazione")
+        catalog.Set("规则与事件",
+            "Regole ed eventi")
         catalog.Set("关于",
             "Informazioni")
         catalog.Set("事件缓冲区容量（条）：",
             "Capacità del buffer eventi:")
-        catalog.Set("事件查看器自动跟随最新事件",
+        catalog.Set("事件查看自动跟随最新事件",
             "Segui automaticamente gli eventi più recenti")
         catalog.Set("让每一条键鼠映射都可录制、可审阅、可掌控",
             "Registra, verifica e controlla ogni rimappatura di tastiera e mouse")
@@ -539,8 +444,6 @@ class ItalianStrings {
             "Versione corrente")
         catalog.Set("运行环境",
             "Ambiente di esecuzione")
-        catalog.Set("查看最新版本",
-            "Visualizza l’ultima versione")
         catalog.Set("开源地址",
             "Repository open source")
         catalog.Set("“{1}”必须是 {2} 到 {3} 之间的整数。",
@@ -553,24 +456,11 @@ class ItalianStrings {
             "{1} (versione EXE)")
         catalog.Set("{1}（源码版）",
             "{1} (versione sorgente)")
-        catalog.Set("设置没有变化。",
-            "Nessuna impostazione modificata.")
         catalog.Set("设置已保存并已应用。",
             "Impostazioni salvate e applicate.")
-        catalog.Set("设置",
-            "Impostazioni")
         catalog.Set("Esc 取消录制",
             "Esc annulla la registrazione")
-        catalog.Set("事件自动跟随",
-            "Segui gli eventi più recenti")
-        catalog.Set("事件", "Eventi")
         catalog.Set("{1}（便携版）", "{1} (versione portatile)")
-        catalog.Set("帮助信息", "Guida")
-        catalog.Set("捐赠", "Dona")
-        catalog.Set("配置外观、规则包、事件`n以及关于选项",
-            "Configura Aspetto, Pacchetti di regole, Eventi`ne Informazioni")
-        catalog.Set("打开帮助信息`n可选择查看使用说明、运行日志或提交反馈",
-            "Apri Aiuto`nScegli la guida utente, il registro di esecuzione o l’invio di feedback")
         catalog.Set("快揭不开锅了（≥Д≤）",
             "La cassa è quasi vuota（≥Д≤）")
         catalog.Set("使用说明", "Guida all'uso")
@@ -579,31 +469,164 @@ class ItalianStrings {
         catalog.Set("微信支付", "WeChat Pay")
         catalog.Set("支付宝", "Alipay")
         catalog.Set("二维码图片未找到", "Immagine del codice QR non trovata")
-        catalog.Set("如果小助手为您节省了排查问题和恢复程序的时间，欢迎通过下方二维码打赏作者！`n请选择扶贫方式：", "Se l’assistente ti ha fatto risparmiare tempo nella diagnosi dei problemi e nel ripristino dei programmi, puoi sostenere l’autore tramite i codici QR qui sotto!`nScegli come vuoi contribuire:")
-        catalog.Set("无法打开帮助信息：{1}", "Impossibile aprire la Guida: {1}")
-        catalog.Set("无法打开使用说明：{1}", "Impossibile aprire la guida all'uso: {1}")
-        catalog.Set("无法打开捐赠窗口：{1}", "Impossibile aprire la finestra delle donazioni: {1}")
+        catalog.Set("如果小助手为您节省了配置键鼠映射的时间，欢迎通过下方二维码打赏作者！`n请选择扶贫方式（≥Д≤）", "Se l’assistente ti ha fatto risparmiare tempo nella configurazione delle mappature di tastiera e mouse, puoi sostenere l’autore tramite i codici QR qui sotto!`nScegli come vuoi contribuire (≥Д≤)")
         catalog.Set("无法打开反馈页面：{1}", "Impossibile aprire la pagina dei feedback: {1}")
         catalog.Set("键鼠重映射小助手用于录制、审阅和维护键盘与鼠标映射。关闭主窗口只会隐藏到系统托盘，已经启用的映射仍会继续生效。", "L'assistente di rimappatura tastiera e mouse consente di registrare, esaminare e gestire le rimappature di tastiera e mouse. Chiudendo la finestra principale, l'app viene solo nascosta nell'area di notifica; le rimappature abilitate restano attive.")
         catalog.Set("一、快速上手", "1. Avvio rapido")
-        catalog.Set("• 点击顶部“新增”，会打开已经填好元数据字段的 @mapping 编辑器；也可以在下方分别录制来源按键和目标按键，填写设计目的后保存。", "• Seleziona Aggiungi nella barra superiore per aprire un editor @mapping con i campi dei metadati già predisposti. Puoi anche registrare separatamente l'origine e la destinazione in basso, indicare lo scopo e salvare.")
+        catalog.Set("• 点击顶部“新增”，会打开已经填好元数据字段的 @mapping 编辑器；也可以在下方分别录制来源按键和目标按键，填写名称后保存。", "• Seleziona Aggiungi nella barra superiore per aprire un editor @mapping con i campi dei metadati già predisposti. Puoi anche registrare separatamente l'origine e la destinazione in basso, inserire un nome e salvare.")
         catalog.Set("• 录制会实时显示原始规范名称、阅读友好名称、虚拟键码和扫描码，并区分左右 Ctrl、Shift、Alt、Win 以及键盘、鼠标和滚轮输入。", "• La registrazione mostra in tempo reale il nome canonico, il nome leggibile, il codice tasto virtuale e il codice di scansione. Distingue Ctrl, Maiusc, Alt e Win sinistri e destri, oltre agli input di tastiera, mouse e rotellina.")
-        catalog.Set("• 同时按下的任意按键会组成一次录制；所有按键释放后结束。录制期间再次点击录制按钮会取消本次录制，不会把该次点击记为 LButton。", "• Tutti i tasti tenuti premuti insieme formano una registrazione, che termina quando vengono rilasciati tutti. Selezionando di nuovo il pulsante di registrazione, l'operazione viene annullata anziché registrare quel clic come LButton.")
         catalog.Set("二、主界面与代码编辑", "2. Finestra principale e modifica del codice")
-        catalog.Set("• 单击选择映射；双击条目、悬停时按 F2 或使用右键菜单，可编辑完整 @mapping 代码块。", "• Fai clic una volta per selezionare una rimappatura. Fai doppio clic su una riga, premi F2 mentre la punti oppure usa il menu contestuale per modificare l'intero blocco @mapping.")
+        catalog.Set("• 单击选择映射；双击条目、选中后按 F2 或使用右键菜单，可编辑完整 @mapping 代码块。", "• Fai clic una volta per selezionare una rimappatura. Fai doppio clic su una riga, premi F2 dopo averla selezionata oppure usa il menu contestuale per modificare l'intero blocco @mapping.")
         catalog.Set("• 选中条目后可暂停、恢复或删除；直接拖动列表行可调整永久顺序，脚本中的代码块顺序会实时同步。", "• Una rimappatura selezionata può essere sospesa, ripresa o eliminata. Trascina le righe per cambiare l'ordine permanente; l'ordine dei blocchi nello script viene sincronizzato subito.")
         catalog.Set("• 点击伪表头只进行临时排序；字段按升序、降序、自定义顺序循环，序号列按降序、自定义顺序循环，不会改写脚本。", "• L'ordinamento tramite le intestazioni simulate è temporaneo. I campi alternano ordine crescente, decrescente e personalizzato; la colonna del numero alterna ordine decrescente e personalizzato. Lo script non viene riscritto.")
-        catalog.Set("• 映射区域只保存注释化 RuleSpec v2，是映射的唯一持久来源。GUI 创建或编辑的托管规则会直接热应用；可执行 AHK 代码不会被接受。", "• L'area di mappatura memorizza solo RuleSpec v2 commentate ed è l'unica origine persistente. Le regole gestite create o modificate nella GUI vengono applicate a caldo; il codice AHK eseguibile viene rifiutato.")
-        catalog.Set("四、事件、历史与界面设置", "4. Eventi, cronologia e aspetto")
-        catalog.Set("• 事件查看器记录输入、规则匹配、条件拒绝、执行结果、仓储和系统事件，支持筛选、暂停、清空及 JSONL 导出。", "• Il Visualizzatore eventi registra input, corrispondenze di regole, rifiuti delle condizioni, risultati di esecuzione, attività dell'archivio ed eventi di sistema. Supporta filtri, pausa, cancellazione ed esportazione JSONL.")
+        catalog.Set("• 事件查看记录输入、规则匹配、条件拒绝、执行结果、仓储和系统事件，支持筛选、暂停、清空及 JSONL 导出。", "• Il Visualizzatore eventi registra input, corrispondenze di regole, rifiuti delle condizioni, risultati di esecuzione, attività dell'archivio ed eventi di sistema. Supporta filtri, pausa, cancellazione ed esportazione JSONL.")
+        catalog.Set("四、事件查看与设置", "4. Visualizzatore eventi e impostazioni")
         catalog.Set("五、后台运行与问题排查", "5. Esecuzione in background e risoluzione dei problemi")
         catalog.Set("• 主窗口关闭后程序仍驻留托盘。托盘可以重新显示主界面、手动重新加载或彻底退出；修改映射规则后通常不需要手动重新加载。", "• L'app resta nell'area di notifica dopo la chiusura della finestra principale. Da lì puoi mostrare la finestra, ricaricare manualmente o uscire del tutto; le modifiche alle regole normalmente non richiedono un ricaricamento manuale.")
-        catalog.Set("• “帮助信息”还可打开项目反馈页面。提交问题时请说明系统版本、复现步骤、相关 @mapping 代码和事件导出，并在公开前移除敏感路径或应用信息。", "• La Guida apre anche la pagina dei feedback del progetto. Quando segnali un problema, includi la versione di Windows, i passaggi per riprodurlo, il codice @mapping pertinente e un'esportazione degli eventi, rimuovendo prima della pubblicazione percorsi o dati sensibili delle app.")
-        catalog.Set("安全模式：已停用所有映射和输入观察。连续启动失败 {1} 次。", "Modalità provvisoria: tutte le rimappature e l'osservazione dell'input sono disattivate dopo {1} avvii non riusciti consecutivi.")
         catalog.Set("仅勾选的规则会被导入。", "Verranno importate solo le regole selezionate.")
         catalog.Set("三、规则与生效范围", "3. Regole e ambito")
         catalog.Set("• 所有规则属于同一全局规则集；生效范围和条件可在 @mapping 编辑器中精确调整，保存后会立即重新选择生效规则。", "• Tutte le regole appartengono a un unico insieme globale. Ambito e condizioni possono essere regolati con precisione nell'editor @mapping. Il salvataggio riseleziona subito le regole attive.")
-        catalog.Set("• Ctrl+Z 撤销，Ctrl+Shift+Z 或 Ctrl+Y 重做。映射增删、暂停恢复、拖动排序、代码编辑和设置修改都会进入持久历史。", "• Ctrl+Z annulla; Ctrl+Shift+Z o Ctrl+Y ripristina. Aggiunte, eliminazioni, pause, riprese, riordinamenti, modifiche al codice e impostazioni restano nella cronologia persistente.")
+        catalog.Set("没有可撤销的映射变更。", "Non ci sono modifiche di mappatura da annullare.")
+        catalog.Set("已撤销上一步映射变更。", "L’ultima modifica di mappatura è stata annullata.")
+        catalog.Set("撤销映射变更失败：{1}", "Impossibile annullare la modifica di mappatura: {1}")
+        catalog.Set("没有可重做的映射变更。", "Non ci sono modifiche di mappatura da ripetere.")
+        catalog.Set("已重做映射变更。", "La modifica di mappatura è stata ripetuta.")
+        catalog.Set("重做映射变更失败：{1}", "Impossibile ripetere la modifica di mappatura: {1}")
+        catalog.Set("录制结束后无法恢复重映射：{1}", "Impossibile riprendere la rimappatura dopo la registrazione: {1}")
+        catalog.Set("• 新增、删除、暂停或恢复、代码编辑、拖动排序和规则包导入均可撤销；Ctrl+Z 撤销，Ctrl+Shift+Z 或 Ctrl+Y 重做。", "• Aggiunta, eliminazione, pausa o ripresa, modifica del codice, riordino mediante trascinamento e importazione di pacchetti di regole possono essere annullati. Ctrl+Z annulla; Ctrl+Maiusc+Z o Ctrl+Y ripete.")
+        catalog.Set("开机自动启动（计划任务）", "Avvio automatico all'accesso（attività pianificata）")
+        catalog.Set("检查更新失败：{1}", "Controllo degli aggiornamenti non riuscito: {1}")
+        catalog.Set("启动时显示主窗口", "Mostra la finestra principale all'avvio")
+        catalog.Set("更新检查正在进行，请稍候。", "È già in corso un controllo degli aggiornamenti. Attendere.")
+        catalog.Set("关闭", "Disattiva")
+        catalog.Set("将下载并校验源码发行包，保留个人配置后替换源码并自动重启。", "Il pacchetto del codice sorgente verrà scaricato e verificato. Il codice verrà quindi sostituito conservando le impostazioni personali e l'assistente si riavvierà automaticamente.")
+        catalog.Set("桌面与开始菜单快捷方式", "Collegamenti sul desktop e nel menu Start")
+        catalog.Set("创建", "Crea")
+        catalog.Set("无法检查更新：{1}", "Impossibile controllare gli aggiornamenti: {1}")
+        catalog.Set("提示", "Avviso")
+        catalog.Set("检测到同名计划任务，但它并非当前程序创建；为避免误删，请先在任务计划程序中处理它。", "È stata rilevata un'attività pianificata con lo stesso nome, ma non è stata creata da questo programma. Per evitare di eliminarla per errore, gestirla prima nell'Utilità di pianificazione.")
+        catalog.Set("立即更新", "Aggiorna ora")
+        catalog.Set("错误", "Errore")
+        catalog.Set("创建成功！", "Creati!")
+        catalog.Set("无法建立单实例运行锁，小助手将退出。", "Impossibile ottenere il blocco per l'istanza singola`; l'assistente verrà chiuso.")
+        catalog.Set("重新加载失败，已保留当前实例：{1}", "Ricaricamento non riuscito`; l'istanza corrente è stata mantenuta: {1}")
+        catalog.Set("稍后", "Più tardi")
+        catalog.Set("切换", "Cambia")
+        catalog.Set("冲突", "Conflitto")
+        catalog.Set("将确认源码仓库没有未提交修改，再快速前进到正式发布标签并自动重启。", "Verrà verificato che il repository del codice sorgente non contenga modifiche non sottoposte a commit, quindi verrà eseguito un avanzamento rapido fino al tag di pubblicazione ufficiale seguito dal riavvio automatico.")
+        catalog.Set("无法开始更新：{1}", "Impossibile avviare l'aggiornamento: {1}")
+        catalog.Set("正在检查更新…", "Ricerca di aggiornamenti…")
+        catalog.Set("检查更新", "Controlla aggiornamenti")
+        catalog.Set("小助手更新", "Aggiornamento dell'assistente")
+        catalog.Set("将下载并校验完整发行包，退出小助手后替换程序文件并自动重启。", "Il pacchetto di distribuzione completo verrà scaricato e verificato. Dopo la chiusura dell'assistente, i file del programma verranno sostituiti e l'assistente si riavvierà automaticamente.")
+        catalog.Set("创建快捷方式失败：{1}", "Impossibile creare il collegamento: {1}")
+        catalog.Set("当前陪伴您的已经是最新版本的小助手啦！", "L'assistente che ti accompagna è già aggiornato all'ultima versione!")
+        catalog.Set("确定", "OK")
+        catalog.Set("没有可安装的应用更新", "Nessun aggiornamento dell'applicazione disponibile per l'installazione")
+        catalog.Set("更新检查未返回结果", "Il controllo degli aggiornamenti non ha restituito alcun risultato")
+        catalog.Set("开启", "Attiva")
+        catalog.Set("不可用", "Non disponibile")
+        catalog.Set("启动失败", "Avvio non riuscito")
+        catalog.Set("启动时检查小助手更新", "Controlla gli aggiornamenti dell'assistente all'avvio")
+        catalog.Set("以管理员身份运行", "Esegui come amministratore")
+        catalog.Set("操作计划任务时发生错误：{1}", "Si è verificato un errore durante la gestione dell’attività pianificata: {1}")
+        catalog.Set("发现新版本 {1}，当前版本为 {2}。`n`n{3}`n`n是否立即更新？", "È disponibile la nuova versione {1}; la versione corrente è {2}.`n`n{3}`n`nAggiornare ora?")
+        catalog.Set("开机自动启动", "Avvio automatico all’accesso")
+        catalog.Set("输入录制不可用：{1}", "La registrazione dell’input non è disponibile: {1}")
+        catalog.Set("新脚本未通过 AutoHotkey 启动验证。", "Il nuovo script non ha superato la verifica di avvio di AutoHotkey.")
+        catalog.Set("保存并运行", "Salva ed esegui")
+        catalog.Set("导入并运行", "Importa ed esegui")
+        catalog.Set("导入自定义 AHK 代码", "Importa codice AHK personalizzato")
+        catalog.Set("继续", "Continua")
+        catalog.Set("切换规则类型", "Cambia tipo di regola")
+        catalog.Set("切换规则类型会清空当前未保存内容，是否继续？", "Il cambio del tipo di regola cancellerà il contenuto corrente non salvato. Continuare?")
+        catalog.Set("所选规则包含可读写文件、启动程序、控制窗口和请求管理员权限的自定义 AHK 代码。确认导入并运行吗？", "Le regole selezionate contengono codice AHK personalizzato che può leggere e scrivere file, avviare programmi, controllare finestre e richiedere privilegi di amministratore. Importare ed eseguire?")
+        catalog.Set("无法创建规则模板：{1}", "Impossibile creare il modello della regola: {1}")
+        catalog.Set("运行自定义 AHK 代码", "Esegui codice AHK personalizzato")
+        catalog.Set("自定义 AHK 代码可读取文件、启动程序、控制窗口并请求管理员权限。确认运行当前代码吗？", "Il codice AHK personalizzato può leggere e scrivere file, avviare programmi, controllare finestre e richiedere privilegi di amministratore. Eseguire questo codice?")
+        catalog.Set("规则未应用：{1}", "Le regole non sono state applicate: {1}")
+        catalog.Set("• 映射区域以注释形式保存规则块和受托管脚本。规则块在主进程热应用；受托管脚本的自定义 AHK v2 源码在独立受管进程运行，保存、暂停、恢复、删除和退出均由小助手统一管理。", "• L’area di mappatura archivia blocchi regola normali e script gestiti sotto forma di commenti. I blocchi normali vengono applicati nel processo principale. Il codice AutoHotkey v2 personalizzato viene eseguito in un processo gestito separato controllato dall’assistente.")
+        catalog.Set("区分左右修饰键", "Distingui i modificatori sinistri/destri")
+        catalog.Set("帮助", "Aiuto")
+        catalog.Set("打赏", "Dona")
+        catalog.Set("打开帮助`n可选择查看使用说明、运行日志或提交反馈", "Apri Aiuto`nScegli la guida utente, il registro di esecuzione o l’invio di feedback")
+        catalog.Set("点个 star 吧~", "Regalaci una stellina~")
+        catalog.Set("配置显示、规则包和事件选项", "Configura visualizzazione, pacchetti di regole ed eventi")
+        catalog.Set("查看版本、运行环境和项目入口", "Visualizza versione, ambiente runtime e link del progetto")
+        catalog.Set("找作者对线", "Parla con autore")
+        catalog.Set("演奏你的和弦！", "Suona il tuo accordo!")
+        catalog.Set("• “帮助”还可打开项目反馈页面。提交问题时请说明系统版本、复现步骤、相关 @mapping 代码和事件导出，并在公开前移除敏感路径或应用信息。", "• La Guida apre anche la pagina dei feedback del progetto. Quando segnali un problema, includi la versione di Windows, i passaggi per riprodurlo, il codice @mapping pertinente e un'esportazione degli eventi, rimuovendo prima della pubblicazione percorsi o dati sensibili delle app.")
+        catalog.Set("AI 设置", "AI settings")
+        catalog.Set("API 地址：", "Indirizzo API:")
+        catalog.Set("API 密钥：", "Chiave API:")
+        catalog.Set("模型名称：", "Nome modello:")
+        catalog.Set("请求超时（秒）：", "Request timeout (seconds):")
+        catalog.Set("请求超时（秒）", "Request timeout (seconds)")
+        catalog.Set("提示词：", "Prompt:")
+        catalog.Set("生成", "Genera")
+        catalog.Set("优化", "Ottimizza")
+        catalog.Set("系统说明", "Istruzioni di sistema")
+        catalog.Set("编辑", "Edit")
+        catalog.Set("AI 提示词", "AI prompts")
+        catalog.Set("生成提示词不能为空。", "Generation prompt cannot be empty.")
+        catalog.Set("优化提示词不能为空。", "Optimization prompt cannot be empty.")
+        catalog.Set("恢复默认", "Restore default")
+        catalog.Set("系统说明不能为空。", "System instructions cannot be empty.")
+        catalog.Set("生成重映射规则", "Generate remapping rule")
+        catalog.Set("优化当前规则", "Optimize current rule")
+        catalog.Set("AI 生成规则", "IA Genera regola")
+        catalog.Set("设置序号圆点", "Imposta punto numerico")
+        catalog.Set("清除圆点颜色", "Cancella colore del punto")
+        catalog.Set("雾松绿", "Verde pino nebbia")
+        catalog.Set("青灰蓝", "Blu grigiastro")
+        catalog.Set("薰衣草紫", "Lavanda")
+        catalog.Set("烟粉", "Rosa polvere")
+        catalog.Set("浅琥珀", "Ambra chiara")
+        catalog.Set("静谧青", "Verde acqua tenue")
+        catalog.Set("珍珠灰", "Grigio perla")
+        catalog.Set("已更新 {1} 条规则的序号圆点颜色。", "Colore del punto aggiornato per {1} regole.")
+        catalog.Set("序号圆点颜色未保存：{1}", "Il colore del punto non è stato salvato: {1}")
+        catalog.Set("AI 优化规则", "IA Ottimizza regola")
+        catalog.Set("请输入规则目的。", "Inserisci lo scopo della regola.")
+        catalog.Set("说点什么吧，我什么都会做的 T_T", "Dimmi pure quello che vuoi, so fare tutto T_T")
+        catalog.Set("我是来帮你的，你要干什么？！", "Sono qui per aiutarti. Cosa vuoi fare?!")
+        catalog.Set("请先关闭当前代码编辑器，再优化其他映射。", "Chiudi l'editor di codice corrente prima di ottimizzare un'altra mappatura.")
+        catalog.Set("AI 服务尚未初始化。", "The AI service is not initialized.")
+        catalog.Set("AI 参数未保存：{1}", "I parametri IA non sono stati salvati: {1}")
+        catalog.Set("无法读取当前映射代码：{1}", "Could not read the current mapping code: {1}")
+        catalog.Set("AI 正在生成规则，请稍候...", "AI is generating a rule. Please wait...")
+        catalog.Set("AI 正在优化规则，请稍候...", "L'IA sta ottimizzando la regola. Attendere...")
+        catalog.Set("AI 请求失败，请检查 AI 设置和网络连接。", "La richiesta IA non è riuscita. Controlla le impostazioni IA e la connessione di rete.")
+        catalog.Set("测试连接", "Testa connessione")
+        catalog.Set("正在测试 AI 连接…", "Test della connessione IA…")
+        catalog.Set("AI 连接测试成功。", "Test della connessione IA riuscito.")
+        catalog.Set("AI 连接测试失败：{1}", "Test della connessione IA non riuscito: {1}")
+        catalog.Set("请填写 API 地址。", "Inserisci l’indirizzo API.")
+        catalog.Set("请填写模型名称。", "Inserisci il nome del modello.")
+        catalog.Set("请求期间编辑器内容已变化，请重新执行 AI 操作。", "The editor changed during the request. Run the AI operation again.")
+        catalog.Set("AI 规则已放入编辑器，请检查后保存。", "The AI rule is in the editor. Review it before saving.")
+        catalog.Set("状态", "Stato")
+        catalog.Set("启用", "Attivata")
+        catalog.Set("无法读取设置文件，已使用默认设置：{1}", "Impossibile leggere le impostazioni`; sono usati i valori predefiniti: {1}")
+        catalog.Set("审阅 AI 优化结果", "Rivedi l’ottimizzazione AI")
+        catalog.Set("已保留原内容，AI 结果未应用。", "Il contenuto originale è stato mantenuto. Il risultato AI non è stato applicato.")
+        catalog.Set("AI 结果无法应用到编辑器，请重试。", "Impossibile applicare il risultato AI all’editor. Riprova.")
+        catalog.Set("无法打开 AI 结果审阅：{1}", "Impossibile aprire la revisione del risultato AI: {1}")
+        catalog.Set("当前 {1} 行，AI 建议 {2} 行；约 {3} 行有变化。", "Attuale: {1} righe`; proposta AI: {2} righe`; circa {3} righe modificate.")
+        catalog.Set("当前内容", "Contenuto attuale")
+        catalog.Set("AI 建议", "Proposta AI")
+        catalog.Set("接受结果", "Accetta risultato")
+        catalog.Set("保留原文", "Mantieni originale")
+        catalog.Set("AI 返回的规则经过自动修复后仍未通过本地校验：{1}", "La regola AI non ha superato la convalida locale neanche dopo la riparazione automatica: {1}")
+        catalog.Set("AI 规则校验结果不完整。", "Il risultato della convalida della regola AI è incompleto.")
+        catalog.Set("AI 正在复核规则的实际行为，请稍候...", "L’AI sta verificando il comportamento effettivo della regola. Attendi...")
+        catalog.Set("AI 正在根据本地校验结果修复规则，请稍候...", "L’AI sta riparando la regola in base alla convalida locale. Attendi...")
+        catalog.Set("本地校验失败：{1}", "Convalida locale non riuscita: {1}")
+        catalog.Set("失败发生阶段：{1}", "Fase dell’errore: {1}")
+        catalog.Set("必须修复根因并重新满足用户原始目的。", "Correggi la causa principale e soddisfa pienamente l’intento originale dell’utente.")
+        catalog.Set("规则块能力不足，必须改用受托管脚本完整实现。", "Un blocco di regole standard non è sufficiente`; usa uno script gestito per l’implementazione completa.")
+        catalog.Set("未保存：请先用完整的 AHK v2 脚本替换代码占位文字。", "Non salvato: sostituisci prima il segnaposto con uno script AHK v2 completo.")
+        catalog.Set("当前等待时间：{1} 秒", "Current wait time: {1} seconds")
         return catalog
     }
 }

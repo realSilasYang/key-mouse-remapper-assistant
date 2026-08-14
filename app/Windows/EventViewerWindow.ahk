@@ -8,15 +8,106 @@ class EventViewerWindow {
     static OutcomeColumn := 5
     static DetailColumn := 6
     static EventColumnWidth := 184
+    static DetailEditHeight := 96
     static SortRefreshDelayMs := 50
     static SnapshotRefreshDelayMs := 50
     static MaximumSnapshotRebuildPasses := 3
+    static EventLabels := Map(
+        "startup", "程序启动",
+        "reload_marker_cleanup_failed", "重载标记清理失败",
+        "rules_applied", "规则已应用",
+        "rules_changed", "规则已更改",
+        "history_undo", "已撤销规则更改",
+        "history_redo", "已重做规则更改",
+        "rule_matched", "规则已匹配",
+        "rule_held", "已识别长按",
+        "rule_released", "来源键已释放",
+        "rule_alone_cancelled", "单独短按已取消",
+        "cycle_repeat_suppressed", "重复输入已抑制",
+        "action_executed", "动作已执行",
+        "action_failed", "动作执行失败",
+        "condition_rejected", "规则条件不匹配",
+        "condition_failed", "规则条件检查失败",
+        "output_cleanup_abandoned", "输出清理已放弃",
+        "output_cleanup_failed", "输出清理失败",
+        "resume_state_recovered", "输入状态已恢复",
+        "raw_input", "原始输入",
+        "raw_key_down", "按键已按下",
+        "raw_key_up", "按键已释放",
+        "raw_wheel", "滚轮输入",
+        "app_command", "应用命令输入",
+        "capture_started", "按键录制已开始",
+        "capture_completed", "按键录制已完成",
+        "capture_cancelled", "按键录制已取消",
+        "capture_rejected", "按键录制已拒绝",
+        "capture_resume_failed", "录制后恢复重映射失败",
+        "capture_device_lost", "录制设备已断开",
+        "update", "更新操作",
+        "update_check", "更新检查",
+        "update_install", "更新安装",
+        "system_theme_refresh_failed", "系统主题刷新失败",
+        "input_devices_recovered", "输入设备已恢复",
+        "input_devices_recovery_failed", "输入设备恢复失败",
+        "power_suspend", "系统即将休眠",
+        "power_suspend_failed", "休眠前输入恢复失败",
+        "power_resume", "系统已唤醒",
+        "power_resume_failed", "唤醒后输入恢复失败",
+        "session_lock", "会话已锁定",
+        "session_lock_failed", "会话锁定时输入恢复失败",
+        "session_unlock", "会话已解锁",
+        "session_unlock_failed", "会话解锁时输入恢复失败",
+        "session_notification_registration_failed", "会话通知注册失败")
+    static OutcomeLabels := Map(
+        "ok", "成功", "error", "失败",
+        "current", "已是最新版本", "available", "发现新版本",
+        "started", "已开始", "cancelled", "已取消",
+        "rejected", "已拒绝", "source", "来源键",
+        "target", "目标键", "down", "按下", "up", "释放",
+        "wheel", "滚动", "held", "长按",
+        "other_input", "检测到其他输入",
+        "unsupported_source_chord", "不支持的来源组合键",
+        "modifier_change", "修饰键状态已改变",
+        "held_during_reconfigure", "重新配置时来源键仍被按住",
+        "send", "发送按键", "mouse", "发送鼠标操作",
+        "app_command", "发送应用命令", "text", "输入文本",
+        "sleep", "等待", "window_minimize", "最小化窗口",
+        "window_close", "关闭窗口",
+        "lock_workstation", "锁定工作站",
+        "key_down", "按下目标键", "key_up", "释放目标键",
+        "to", "按下时执行", "to_if_alone", "单独短按时执行",
+        "to_if_held_down", "识别长按时执行",
+        "to_after_key_up", "来源键释放后执行",
+        "output_cleanup", "清理输出状态")
+    static DetailLabels := Map(
+        "to", "按下时执行",
+        "to_if_alone", "单独短按时执行",
+        "to_if_held_down", "识别长按时执行",
+        "to_after_key_up", "来源键释放后执行",
+        "output_cleanup", "清理输出状态",
+        "all_conditions_matched", "全部条件均匹配",
+        "all_matched", "全部子条件均匹配",
+        "no_child_matched", "没有子条件匹配",
+        "not_matched", "反向条件匹配",
+        "not_rejected", "反向条件不匹配",
+        "application_matched", "应用条件匹配",
+        "application_rejected", "应用条件不匹配",
+        "process_matched", "进程条件匹配",
+        "process_rejected", "进程条件不匹配",
+        "window_matched", "窗口条件匹配",
+        "window_rejected", "窗口条件不匹配",
+        "session_matched", "会话条件匹配",
+        "session_rejected", "会话条件不匹配",
+        "input_source_matched", "输入法条件匹配",
+        "input_source_rejected", "输入法条件不匹配",
+        "ShowAfterReload remained set after startup.",
+            "程序启动后仍残留重载显示标记")
 
     __New(ownerWindow) {
         this.OwnerWindow := ownerWindow
         this.App := ownerWindow.App
         this.Trace := this.App.Trace
         this.Gui := ""
+        this.OwnerLease := ""
         this.IconHandles := []
         this.Interactions := ""
         this.ListSelection := ""
@@ -30,13 +121,16 @@ class EventViewerWindow {
             "ApplyPendingSnapshotRefresh")
         this.SortRefreshPending := false
         this.SortRefreshTimer := ObjBindMethod(this, "ApplyPendingSort")
-        this.DetailMode := "event"
         this.Disposed := false
+        this.LastLayoutResult := ""
+        this.LastLayoutSignature := ""
+        this.AppliedColumnWidths := []
         this.SequenceItemIds := Map()
         this.ItemIdSequences := Map()
         this.EntriesBySequence := Map()
-        this.FilterValues := ["", "input", "runtime", "repository",
-            "history", "system", "ui"]
+        this.RuleDisplays := Map()
+        this.DetailSequence := ""
+        this.FilterValues := ["runtime", "input", "repository", "system", ""]
         try this.Build()
         catch as buildError {
             try this.Dispose()
@@ -49,9 +143,14 @@ class EventViewerWindow {
         fontName := LocalizationService.GetUiFontName()
         systemFont := LocalizationService.GetLanguageSystemUiFontName()
         this.Gui := Gui("+Owner" this.OwnerWindow.Gui.Hwnd
-            " +Resize +MinSize" EventViewerWindow.MinimumWidth "x"
-            EventViewerWindow.MinimumHeight, Tr("事件查看器"))
+            " +Resize +MinimizeBox +MinSize"
+            EventViewerWindow.MinimumWidth "x"
+            EventViewerWindow.MinimumHeight, Tr("事件查看"))
         this.IconHandles := ApplyApplicationWindowIcon(this.Gui.Hwnd)
+        this.OwnerLease := WindowHierarchy.Acquire(this.OwnerWindow.Gui,
+            this.Gui.Hwnd)
+        if !this.OwnerLease
+            throw Error("无法建立事件查看窗口层级。")
         this.Gui.BackColor := colors.Window
         this.Gui.MarginX := 0
         this.Gui.MarginY := 0
@@ -65,9 +164,8 @@ class EventViewerWindow {
         this.FilterDropDown := this.Gui.Add("DropDownList",
             "x66 y17 w150 Choose1 Background" colors.Input " c"
             colors.Text " -Border -E0x200", AddComboBoxDisplayPadding([
-                Tr("全部事件"), Tr("输入事件"), Tr("规则运行"),
-                Tr("规则仓储"), Tr("撤销历史"), Tr("系统事件"),
-                Tr("界面事件")]))
+                Tr("规则运行"), Tr("输入事件"), Tr("规则仓储"),
+                Tr("系统事件"), Tr("全部事件")]))
         this.FilterDropDown.OnEvent("Change", ObjBindMethod(this,
             "OnFilterChanged"))
         ApplyDarkComboBoxTheme(this.FilterDropDown.Hwnd)
@@ -82,13 +180,6 @@ class EventViewerWindow {
         this.RawObservationButton := this.AddButton(594, 15, 144,
             Tr("原始观察"), colors.Toolbar,
             ObjBindMethod(this, "ToggleRawObservation"), colors.ToolbarText)
-        this.VariableButton := this.AddButton(748, 15, 110,
-            Tr("变量"), colors.Toolbar,
-            ObjBindMethod(this, "ShowVariables"), colors.ToolbarText)
-        this.DiagnosticButton := this.AddButton(868, 15, 120,
-            Tr("诊断包"), colors.Toolbar,
-            ObjBindMethod(this, "ChooseDiagnosticBundle"),
-            colors.ToolbarText)
         this.ApplyCommandIcons()
 
         this.List := this.Gui.Add("ListView",
@@ -158,18 +249,20 @@ class EventViewerWindow {
     }
 
     ApplyCommandIcons() {
+        colors := UiThemeService.GetPalette()
         this.Interactions.SetButtonLucideIcon(this.PauseButton,
-            this.Paused ? "play.svg" : "circle-pause.svg", 15, 6)
+            this.Paused ? "play.svg" : "circle-pause.svg", 15, 6,
+            UiThemeService.ButtonIconColor(colors.ButtonText))
         this.Interactions.SetButtonLucideIcon(this.ClearButton,
-            "eraser.svg", 15, 6)
+            "eraser.svg", 15, 6,
+            UiThemeService.ButtonIconColor(colors.Danger))
         this.Interactions.SetButtonLucideIcon(this.ExportButton,
-            "file-output.svg", 15, 6)
+            "file-output.svg", 15, 6,
+            UiThemeService.ButtonIconColor(colors.ButtonText))
         this.Interactions.SetButtonLucideIcon(this.RawObservationButton,
-            this.RawObservationActive ? "x.svg" : "target.svg", 15, 6)
-        this.Interactions.SetButtonLucideIcon(this.VariableButton,
-            "sliders-horizontal.svg", 15, 6)
-        this.Interactions.SetButtonLucideIcon(this.DiagnosticButton,
-            "circle-info.svg", 15, 6)
+            this.RawObservationActive ? "x.svg" : "target.svg", 15, 6,
+            UiThemeService.ButtonIconColor(this.RawObservationActive
+                ? colors.ButtonText : colors.DisplayIcon))
     }
 
     Show() {
@@ -210,8 +303,11 @@ class EventViewerWindow {
             this.SnapshotDirty := true
             return false
         }
+        this.RefreshRuleDisplays()
         this.CancelPendingSort()
         this.CancelPendingSnapshotRefresh()
+        if IsObject(this.CellTooltip)
+            this.CellTooltip.Hide()
         this.SnapshotLoading := true
         rebuildPasses := 0
         deferredRefreshRequired := false
@@ -224,7 +320,7 @@ class EventViewerWindow {
                 this.SequenceItemIds.Clear()
                 this.ItemIdSequences.Clear()
                 this.EntriesBySequence.Clear()
-                this.DetailEdit.Value := ""
+                this.ClearDetails()
                 for entry in this.Trace.Snapshot(this.GetFilterCategory())
                     this.AddEntry(entry, false)
                 ; Input hooks can interrupt the GUI thread while it is
@@ -246,8 +342,6 @@ class EventViewerWindow {
             DllCall("user32\RedrawWindow", "Ptr", this.List.Hwnd,
                 "Ptr", 0, "Ptr", 0, "UInt", 0x0181, "Int")
         }
-        if this.DetailMode == "variables"
-            this.RefreshVariableSnapshot()
         this.UpdateStatus()
         this.ScrollToLatest()
         if deferredRefreshRequired
@@ -280,29 +374,31 @@ class EventViewerWindow {
     }
 
     OnTraceEntry(entry) {
-        if this.Disposed || this.Paused
-            return
-        if this.SnapshotLoading {
-            this.SnapshotDirty := true
-            return
-        }
-        if entry.HasOwnProp("EvictedSequence") && entry.EvictedSequence
-                && !this.RemoveSequence(entry.EvictedSequence) {
-            this.LoadSnapshot()
+        if entry.Event == "rules_changed"
+            this.RefreshRuleDisplays()
+        previousCritical := A_IsCritical
+        Critical("On")
+        try {
+            if this.Disposed || this.Paused
+                return
+            if this.SnapshotLoading {
+                this.SnapshotDirty := true
+                return
+            }
+            if entry.HasOwnProp("EvictedSequence") && entry.EvictedSequence
+                    && !this.RemoveSequence(entry.EvictedSequence) {
+                this.LoadSnapshot()
+                this.UpdateStatus()
+                return
+            }
+            category := this.GetFilterCategory()
+            if category != "" && entry.Category != category {
+                this.UpdateStatus()
+                return
+            }
+            this.AddEntry(entry)
             this.UpdateStatus()
-            return
-        }
-        category := this.GetFilterCategory()
-        if category != "" && entry.Category != category {
-            this.UpdateStatus()
-            return
-        }
-        this.AddEntry(entry)
-        if this.DetailMode == "variables"
-                && entry.Category == "runtime"
-                && entry.Event == "action_executed"
-            this.RefreshVariableSnapshot()
-        this.UpdateStatus()
+        } finally Critical(previousCritical ? previousCritical : "Off")
     }
 
     RemoveSequence(sequence) {
@@ -321,6 +417,8 @@ class EventViewerWindow {
             }
             if IsObject(this.CellTooltip)
                 this.CellTooltip.Hide()
+            if this.DetailSequence == sequenceKey
+                this.ClearDetails()
             this.List.Delete(rowIndex + 1)
             this.SequenceItemIds.Delete(sequenceKey)
             this.ItemIdSequences.Delete(String(itemId))
@@ -331,31 +429,22 @@ class EventViewerWindow {
         }
     }
 
-    HasSequence(sequence) {
-        sequenceKey := String(sequence)
-        if !this.SequenceItemIds.Has(sequenceKey)
-            return false
-        return SendMessage(0x10B5, this.SequenceItemIds[sequenceKey], 0, ,
-            this.List.Hwnd) >= 0 ; LVM_MAPIDTOINDEX
-    }
-
     AddEntry(entry, applySort := true) {
         previousCritical := A_IsCritical
         Critical("On")
         try {
-            sourceAndRule := entry.Source
-            if entry.RuleId != ""
-                sourceAndRule .= (sourceAndRule == "" ? "" : " · ")
-                    . entry.RuleId
             row := this.List.Add("",
                 EventViewerWindow.FormatLocalTimestamp(entry.Timestamp),
-                this.GetCategoryLabel(entry.Category), entry.Event,
-                sourceAndRule, entry.Outcome, entry.Detail)
+                this.GetCategoryLabel(entry.Category),
+                this.GetEventLabel(entry.Event),
+                this.FormatSourceAndRule(entry),
+                this.GetOutcomeLabel(entry.Outcome),
+                this.GetDetailLabel(entry.Detail))
             itemId := SendMessage(0x10B4, row - 1, 0, ,
                 this.List.Hwnd) ; LVM_MAPINDEXTOID
             if itemId < 0 {
                 this.List.Delete(row)
-                throw Error("无法建立事件查看器行标识。")
+                throw Error("无法建立事件查看行标识。")
             }
             this.SequenceItemIds[String(entry.Sequence)] := itemId
             this.ItemIdSequences[String(itemId)] := String(entry.Sequence)
@@ -386,6 +475,8 @@ class EventViewerWindow {
         if this.Disposed || this.SnapshotLoading
                 || !this.ListHeader.HasActiveSort()
             return false
+        if IsObject(this.CellTooltip)
+            this.CellTooltip.Hide()
         previousCritical := A_IsCritical
         Critical("On")
         try return this.ListHeader.ApplyCurrentSort()
@@ -400,47 +491,107 @@ class EventViewerWindow {
     }
 
     OnHeaderSortChanged(column, *) {
+        if IsObject(this.CellTooltip)
+            this.CellTooltip.Hide()
         if column == 0
             this.LoadSnapshot()
     }
 
     OnListItemSelected(control, row, selected) {
-        if this.Disposed || !selected || row < 1
+        if this.Disposed || row < 1
             return
         itemId := SendMessage(0x10B4, row - 1, 0, ,
             this.List.Hwnd) ; LVM_MAPINDEXTOID
         itemKey := String(itemId)
-        if itemId < 0 || !this.ItemIdSequences.Has(itemKey)
+        if itemId < 0 || !this.ItemIdSequences.Has(itemKey) {
+            if !selected
+                this.ClearDetails()
             return
+        }
         sequenceKey := this.ItemIdSequences[itemKey]
+        if !selected {
+            if this.DetailSequence == sequenceKey && !this.List.GetNext()
+                this.ClearDetails()
+            return
+        }
         if !this.EntriesBySequence.Has(sequenceKey)
             return
-        this.DetailMode := "event"
+        this.DetailSequence := sequenceKey
         this.DetailLabel.Text := Tr("事件详情")
         this.DetailEdit.Value := this.FormatEntryDetails(
             this.EntriesBySequence[sequenceKey])
         try SendMessage(0x00B1, 0, 0, , this.DetailEdit.Hwnd) ; EM_SETSEL
     }
 
+    ClearDetails() {
+        this.DetailSequence := ""
+        this.DetailEdit.Value := ""
+    }
+
+    RefreshVisibleEntryLocalization() {
+        if this.Disposed
+            return false
+        if IsObject(this.CellTooltip)
+            this.CellTooltip.Hide()
+        for sequenceKey, itemId in this.SequenceItemIds {
+            if !this.EntriesBySequence.Has(sequenceKey)
+                continue
+            rowIndex := SendMessage(0x10B5, itemId, 0, ,
+                this.List.Hwnd) ; LVM_MAPIDTOINDEX
+            if rowIndex >= 0 {
+                entry := this.EntriesBySequence[sequenceKey]
+                this.List.Modify(rowIndex + 1,
+                    "Col" EventViewerWindow.CategoryColumn,
+                    this.GetCategoryLabel(entry.Category),
+                    this.GetEventLabel(entry.Event),
+                    this.FormatSourceAndRule(entry),
+                    this.GetOutcomeLabel(entry.Outcome),
+                    this.GetDetailLabel(entry.Detail))
+            }
+        }
+        if this.DetailSequence != ""
+                && this.EntriesBySequence.Has(this.DetailSequence)
+            this.DetailEdit.Value := this.FormatEntryDetails(
+                this.EntriesBySequence[this.DetailSequence])
+        return true
+    }
+
+    OnTraceCapacityChanged() {
+        if this.Disposed
+            return false
+        if this.Paused {
+            this.UpdateStatus()
+            return true
+        }
+        try return this.LoadSnapshot()
+        catch {
+            try this.ScheduleSnapshotRefresh()
+            return false
+        }
+    }
+
     FormatEntryDetails(entry) {
         lines := []
-        lines.Push(Tr("事件：{1}", entry.Event))
+        lines.Push(Tr("事件：{1}", this.GetEventLabel(entry.Event)))
         lines.Push(Tr("类别：{1}", this.GetCategoryLabel(entry.Category)))
         lines.Push(Tr("时间：{1}", entry.Timestamp))
-        lines.Push("Tick: " entry.Tick " ms")
+        lines.Push("运行计时：" entry.Tick " 毫秒")
         if entry.Source != ""
-            lines.Push(Tr("来源：{1}", entry.Source))
-        if entry.RuleId != ""
-            lines.Push("Rule ID: " entry.RuleId)
+            lines.Push(Tr("来源：{1}", this.GetSourceLabel(entry.Source)))
+        if entry.RuleId != "" {
+            lines.Push("规则：" this.GetRuleDisplay(entry.RuleId))
+            lines.Push(Tr("名称") "：" entry.RuleId)
+        }
         if entry.Outcome != ""
-            lines.Push(Tr("结果：{1}", entry.Outcome))
+            lines.Push(Tr("结果：{1}",
+                this.GetOutcomeLabel(entry.Outcome)))
         if entry.Detail != ""
-            lines.Push(Tr("详情：{1}", entry.Detail))
+            lines.Push(Tr("详情：{1}", this.GetDetailLabel(entry.Detail)))
         if Type(entry.Data) == "Map" && entry.Data.Count {
             if entry.Data.Has("identity")
                 this.AppendInputIdentityDetails(lines, entry.Data)
             lines.Push("")
-            lines.Push("JSON:")
+            lines.Push("原始数据（JSON）：")
             lines.Push(JsonCodec.Stringify(entry.Data, true, true))
         }
         return this.JoinLines(lines)
@@ -450,28 +601,140 @@ class EventViewerWindow {
         identity := unifiedEvent["identity"]
         lines.Push("")
         lines.Push(Tr("按键名称：{1}", identity["name"]))
-        lines.Push("Kind: " identity["kind"])
+        lines.Push("输入类型：" this.GetInputKindLabel(identity["kind"]))
         lines.Push("VK: " (identity["vk_hex"] == "" ? "--"
             : "0x" identity["vk_hex"]))
         lines.Push("SC: " (identity["sc_hex"] == "" ? "---"
             : "0x" identity["sc_hex"]))
-        lines.Push("Extended: "
-            (identity["extended"].Value ? "true" : "false"))
+        lines.Push("扩展键："
+            (identity["extended"].Value ? "是" : "否"))
         if identity["device_id"] != ""
-            lines.Push("Device ID: " identity["device_id"])
+            lines.Push("设备编号：" identity["device_id"])
         if identity["device_handle"] != ""
-            lines.Push("Device handle: " identity["device_handle"])
+            lines.Push("设备句柄：" identity["device_handle"])
         if identity["usage_page"] || identity["usage"]
-            lines.Push(Format("Usage: 0x{:04X} / 0x{:04X}",
+            lines.Push(Format("HID 用法：0x{:04X} / 0x{:04X}",
                 identity["usage_page"], identity["usage"]))
-        lines.Push("Phase: " unifiedEvent["phase"])
-        lines.Push("Repeat: "
-            (unifiedEvent["repeat"].Value ? "true" : "false"))
-        lines.Push("Injected: "
-            (unifiedEvent["injected"].Value ? "true" : "false"))
-        lines.Push("Origin: " unifiedEvent["origin"])
-        lines.Push("QPC: " unifiedEvent["qpc"] " / "
+        lines.Push("阶段：" this.GetOutcomeLabel(unifiedEvent["phase"]))
+        lines.Push("重复输入："
+            (unifiedEvent["repeat"].Value ? "是" : "否"))
+        lines.Push("注入输入："
+            (unifiedEvent["injected"].Value ? "是" : "否"))
+        lines.Push("输入来源：" this.GetInputOriginLabel(
+            unifiedEvent["origin"]))
+        lines.Push("高精度计时：" unifiedEvent["qpc"] " / "
             unifiedEvent["qpc_frequency"] " Hz")
+    }
+
+    RefreshRuleDisplays() {
+        if !this.App.HasOwnProp("Repository")
+                || !IsObject(this.App.Repository)
+            return false
+        try mappings := this.App.Repository.Load()
+        catch
+            return false
+        for mapping in mappings {
+            this.RuleDisplays[String(mapping.Id)] := {
+                Source: String(mapping.Source),
+                Target: String(mapping.Target),
+                Name: String(mapping.Id),
+                Display: this.BuildRuleDisplay(mapping)
+            }
+        }
+        return true
+    }
+
+    BuildRuleDisplay(mapping) {
+        source := Trim(String(mapping.Source))
+        target := Trim(String(mapping.Target))
+        if source != "" && target != ""
+            return source " → " target
+        if source != ""
+            return source
+        if target != ""
+            return target
+        name := Trim(String(mapping.Id))
+        return name != "" ? name : "未知规则"
+    }
+
+    FormatSourceAndRule(entry) {
+        source := this.GetSourceLabel(entry.Source)
+        if entry.RuleId == ""
+            return source
+        ruleKey := String(entry.RuleId)
+        if !this.RuleDisplays.Has(ruleKey)
+            return source != "" ? source : "未知规则"
+        rule := this.RuleDisplays[ruleKey]
+        if source == "" || StrLower(source) == StrLower(rule.Source)
+            return rule.Display
+        return source " · " rule.Display
+    }
+
+    GetRuleDisplay(ruleId) {
+        ruleKey := String(ruleId)
+        return this.RuleDisplays.Has(ruleKey)
+            ? this.RuleDisplays[ruleKey].Display : "未知规则"
+    }
+
+    GetEventLabel(eventName) {
+        eventKey := StrLower(Trim(String(eventName)))
+        return EventViewerWindow.EventLabels.Has(eventKey)
+            ? EventViewerWindow.EventLabels[eventKey] : "其他事件"
+    }
+
+    GetOutcomeLabel(outcome) {
+        outcomeText := Trim(String(outcome))
+        if outcomeText == ""
+            return ""
+        outcomeKey := StrLower(outcomeText)
+        return EventViewerWindow.OutcomeLabels.Has(outcomeKey)
+            ? EventViewerWindow.OutcomeLabels[outcomeKey] : "其他结果"
+    }
+
+    GetDetailLabel(detail) {
+        detailText := String(detail)
+        if detailText == ""
+            return ""
+        detailKey := Trim(detailText)
+        if EventViewerWindow.DetailLabels.Has(detailKey)
+            return EventViewerWindow.DetailLabels[detailKey]
+        if SubStr(detailKey, 1, 8) == "negated_" {
+            originalReason := SubStr(detailKey, 9)
+            if EventViewerWindow.DetailLabels.Has(originalReason)
+                return "取反后："
+                    . EventViewerWindow.DetailLabels[originalReason]
+        }
+        if RegExMatch(detailKey, "^[a-z][a-z0-9_]*$")
+            return "其他详情"
+        return detailText
+    }
+
+    GetSourceLabel(source) {
+        sourceText := String(source)
+        switch StrLower(sourceText) {
+            case "source": return "来源键"
+            case "target": return "目标键"
+            default: return sourceText
+        }
+    }
+
+    GetInputKindLabel(kind) {
+        switch StrLower(String(kind)) {
+            case "keyboard": return "键盘"
+            case "mouse": return "鼠标"
+            case "app-command": return "应用命令"
+            default: return "其他输入"
+        }
+    }
+
+    GetInputOriginLabel(origin) {
+        switch StrLower(String(origin)) {
+            case "raw-input": return "原始输入"
+            case "raw-input-device": return "原始输入设备"
+            case "hook": return "输入钩子"
+            case "synthetic": return "模拟输入"
+            default: return "其他来源"
+        }
     }
 
     JoinLines(lines) {
@@ -479,29 +742,6 @@ class EventViewerWindow {
         for index, line in lines
             result .= (index > 1 ? "`r`n" : "") line
         return result
-    }
-
-    ShowVariables(*) {
-        this.DetailMode := "variables"
-        this.DetailLabel.Text := Tr("变量快照")
-        return this.RefreshVariableSnapshot()
-    }
-
-    RefreshVariableSnapshot() {
-        if this.Disposed || this.DetailMode != "variables"
-            return false
-        context := this.App.ContextService.Build(
-            this.App.VariableStore, this.App.GetInputDevices())
-        scopes := this.App.VariableStore.GetSnapshot(context["builtin"])
-        lines := []
-        for scopeName in ["transient", "persistent", "builtin"] {
-            lines.Push("")
-            lines.Push(scopeName ":")
-            lines.Push(JsonCodec.Stringify(scopes[scopeName], true, true))
-        }
-        this.DetailEdit.Value := this.JoinLines(lines)
-        try SendMessage(0x00B1, 0, 0, , this.DetailEdit.Hwnd)
-        return true
     }
 
     ScrollToLatest(row := 0) {
@@ -512,6 +752,8 @@ class EventViewerWindow {
             row := this.List.GetCount()
         if row < 1
             return false
+        if IsObject(this.CellTooltip)
+            this.CellTooltip.Hide()
         this.List.Modify(row, "Vis")
         return true
     }
@@ -549,19 +791,11 @@ class EventViewerWindow {
             NumGet(localTime, 14, "UShort"))
     }
 
-    ApplyBehaviorSettings() {
-        if this.Disposed
-            return false
-        this.LoadSnapshot()
-        return true
-    }
-
     GetCategoryLabel(category) {
         switch category {
             case "input": return Tr("输入")
             case "runtime": return Tr("运行时")
             case "repository": return Tr("仓储")
-            case "history": return Tr("历史")
             case "system": return Tr("系统")
             case "ui": return Tr("界面")
             default: return String(category)
@@ -610,17 +844,21 @@ class EventViewerWindow {
     }
 
     Clear(*) {
-        this.CancelPendingSort()
-        this.CancelPendingSnapshotRefresh()
-        this.Trace.Clear()
-        this.List.Delete()
-        this.SequenceItemIds.Clear()
-        this.ItemIdSequences.Clear()
-        this.EntriesBySequence.Clear()
-        this.DetailEdit.Value := ""
-        if this.DetailMode == "variables"
-            this.RefreshVariableSnapshot()
-        this.UpdateStatus()
+        previousCritical := A_IsCritical
+        Critical("On")
+        try {
+            this.CancelPendingSort()
+            this.CancelPendingSnapshotRefresh()
+            if IsObject(this.CellTooltip)
+                this.CellTooltip.Hide()
+            this.Trace.Clear()
+            this.List.Delete()
+            this.SequenceItemIds.Clear()
+            this.ItemIdSequences.Clear()
+            this.EntriesBySequence.Clear()
+            this.ClearDetails()
+            this.UpdateStatus()
+        } finally Critical(previousCritical ? previousCritical : "Off")
     }
 
     ChooseExport(*) {
@@ -629,41 +867,6 @@ class EventViewerWindow {
         filePath := FileSelect("S16", suggested, Tr("导出事件"),
             "JSON Lines (*.jsonl)")
         return filePath == "" ? false : this.ExportTo(filePath)
-    }
-
-    ChooseDiagnosticBundle(*) {
-        try preview := this.App.CreateDiagnosticPreview()
-        catch as previewError {
-            this.Status.Opt("c" UiThemeService.GetPalette().Error)
-            this.Status.Text := Tr("诊断包导出失败：{1}",
-                previewError.Message)
-            return false
-        }
-        counts := preview.Counts
-        textAndCommands := counts["text_actions"] + counts["run_commands"]
-        message := Tr("将导出 {1} 条事件；已脱敏窗口标题 {2}、路径 {3}、"
-            . "文本/命令 {4}、代码 {5}、变量值 {6} 项。是否继续？",
-            preview.EventCount, counts["window_titles"], counts["paths"],
-            textAndCommands, counts["raw_code"], counts["variable_values"])
-        if !ShowDarkConfirmBox(message, Tr("诊断包预览"),
-                Tr("导出诊断包"), Tr("取消"), this.Gui)
-            return false
-        suggested := A_Desktop "\key-mouse-remapper-assistant-diagnostic-"
-            . FormatTime(, "yyyyMMdd-HHmmss") ".json"
-        filePath := FileSelect("S16", suggested, Tr("导出诊断包"),
-            "JSON (*.json)")
-        if filePath == ""
-            return false
-        try this.App.ExportDiagnosticPreview(preview, filePath)
-        catch as exportError {
-            this.Status.Opt("c" UiThemeService.GetPalette().Error)
-            this.Status.Text := Tr("诊断包导出失败：{1}",
-                exportError.Message)
-            return false
-        }
-        this.Status.Opt("c" UiThemeService.GetPalette().Muted)
-        this.Status.Text := Tr("诊断包已导出：{1}", filePath)
-        return true
     }
 
     ExportTo(filePath) {
@@ -690,34 +893,124 @@ class EventViewerWindow {
     }
 
     OnResize(guiObj, minMax, width, height) {
-        if minMax == -1
+        if minMax == -1 || this.Disposed || width <= 0 || height <= 0
             return
+        layoutRound := AtomicControlLayout.BeginRound(this.Gui)
+        if !IsObject(layoutRound)
+            return false
         listWidth := Max(200, width - 24)
-        listHeight := Max(180, Floor((height - 150) * 0.58))
-        this.List.Move(12, 78, listWidth, listHeight)
-        widths := this.ConfigureColumns(listWidth)
-        this.ListHeader.SetBounds(12, 50, widths, listWidth)
-        detailLabelY := 88 + listHeight
-        detailEditY := detailLabelY + 24
-        detailHeight := Max(52, height - detailEditY - 44)
-        this.DetailLabel.Move(12, detailLabelY, listWidth, 22)
-        this.DetailEdit.Move(12, detailEditY, listWidth, detailHeight)
-        this.Status.Move(12, height - 34, listWidth, 24)
+        statusY := height - 34
+        detailHeight := EventViewerWindow.DetailEditHeight
+        detailEditY := statusY - detailHeight - 10
+        detailLabelY := detailEditY - 24
+        listHeight := Max(180, detailLabelY - 88)
+        widths := this.CalculateColumnWidths(listWidth)
+        entries := [
+            {Control: this.List, X: 12, Y: 78,
+                Width: listWidth, Height: listHeight},
+            {Control: this.DetailLabel, X: 12, Y: detailLabelY,
+                Width: listWidth, Height: 22},
+            {Control: this.DetailEdit, X: 12, Y: detailEditY,
+                Width: listWidth, Height: detailHeight},
+            {Control: this.Status, X: 12, Y: statusY,
+                Width: listWidth, Height: 24}
+        ]
+        for entry in this.ListHeader.BuildLayoutEntries(12, 50, widths,
+                listWidth)
+            entries.Push(entry)
+        ; Keep the native ListView surface closed while its outer rectangle,
+        ; pseudo-header and columns are committed as one resize transaction.
+        signature := layoutRound.Dpi "|" width "|" height "|" listWidth "|"
+            . detailEditY "|" detailLabelY "|" statusY "|"
+            . this.JoinColumnWidths(widths)
+        listResizeSuspended := (signature != this.LastLayoutSignature
+            || this.HasPendingColumnWidths(widths))
+            ? this.SuspendListResizeRedraw() : false
+        try {
+            result := AtomicControlLayout.Apply(this.Gui, entries, {
+                ParentColor: UiThemeService.GetPalette().Window,
+                ClearMargin: 2, Round: layoutRound
+            })
+            this.LastLayoutResult := result
+            if result.Status != AtomicControlLayout.Applied
+                    && result.Status != AtomicControlLayout.Unchanged
+                return false
+            this.ApplyColumnWidths(widths, false)
+            this.LastLayoutSignature := signature
+            return result
+        } finally this.ResumeListResizeRedraw(listResizeSuspended)
+    }
+
+    SuspendListResizeRedraw() {
+        return AtomicControlRedrawTransaction.Begin([this.List])
+    }
+
+    ResumeListResizeRedraw(transaction) {
+        return AtomicControlRedrawTransaction.End(transaction)
+    }
+
+    JoinColumnWidths(widths) {
+        value := ""
+        for width in widths
+            value .= (value == "" ? "" : ",") String(width)
+        return value
+    }
+
+    HasPendingColumnWidths(widths) {
+        for index, columnWidth in widths {
+            if index > this.AppliedColumnWidths.Length
+                    || this.AppliedColumnWidths[index] != columnWidth
+                return true
+        }
+        return false
     }
 
     ConfigureColumns(width) {
+        widths := this.CalculateColumnWidths(width)
+        this.ApplyColumnWidths(widths)
+        return widths
+    }
+
+    CalculateColumnWidths(width) {
         timeWidth := 106
         categoryWidth := 82
         eventWidth := EventViewerWindow.EventColumnWidth
-        sourceWidth := Max(150, Floor(width * 0.20))
+        sourceWidth := Max(280, Floor(width * 0.32))
         outcomeWidth := 100
         detailWidth := Max(180, width - timeWidth - categoryWidth
             - eventWidth - sourceWidth - outcomeWidth - 4)
-        widths := [timeWidth, categoryWidth, eventWidth, sourceWidth,
+        return [timeWidth, categoryWidth, eventWidth, sourceWidth,
             outcomeWidth, detailWidth]
-        for index, columnWidth in widths
-            this.List.ModifyCol(index, columnWidth)
-        return widths
+    }
+
+    ApplyColumnWidths(widths, manageRedraw := true) {
+        pending := []
+        for index, columnWidth in widths {
+            if index > this.AppliedColumnWidths.Length
+                    || this.AppliedColumnWidths[index] != columnWidth
+                pending.Push({Index: index, Width: columnWidth})
+        }
+        if !pending.Length
+            return false
+        if manageRedraw
+            this.List.Opt("-Redraw")
+        try {
+            for item in pending {
+                this.List.ModifyCol(item.Index, item.Width)
+                while this.AppliedColumnWidths.Length < item.Index
+                    this.AppliedColumnWidths.Push(0)
+                this.AppliedColumnWidths[item.Index] := item.Width
+            }
+        } finally {
+            if manageRedraw
+                this.List.Opt("+Redraw")
+        }
+        if manageRedraw
+            DllCall("user32\RedrawWindow", "Ptr", this.List.Hwnd,
+                "Ptr", 0, "Ptr", 0, "UInt",
+                AtomicControlLayout.RdwRefreshNoErase,
+                "Int")
+        return true
     }
 
     ApplyAppearance() {
@@ -728,18 +1021,19 @@ class EventViewerWindow {
         colors := UiThemeService.GetPalette()
         fontName := LocalizationService.GetUiFontName()
         systemFont := LocalizationService.GetLanguageSystemUiFontName()
-        this.Gui.Title := Tr("事件查看器")
+        this.Gui.Title := Tr("事件查看")
         this.Gui.BackColor := colors.Window
         this.Interactions.SetParentColor(colors.Window)
+        if IsObject(this.CellTooltip)
+            this.CellTooltip.InvalidateTheme()
         this.FilterLabel.Text := Tr("筛选：")
         this.FilterLabel.Opt("c" colors.Muted)
         selectedFilter := this.FilterDropDown.Value
         UnregisterDarkComboBoxTheme(this.FilterDropDown.Hwnd)
         this.FilterDropDown.Delete()
         this.FilterDropDown.Add(AddComboBoxDisplayPadding([
-            Tr("全部事件"), Tr("输入事件"), Tr("规则运行"),
-                Tr("规则仓储"), Tr("撤销历史"), Tr("系统事件"),
-                Tr("界面事件")]))
+            Tr("规则运行"), Tr("输入事件"), Tr("规则仓储"),
+            Tr("系统事件"), Tr("全部事件")]))
         this.FilterDropDown.Value := selectedFilter
         this.HeaderLabels := [Tr("时间"), Tr("类别"), Tr("事件"),
             Tr("来源 / 规则"), Tr("结果"), Tr("详情")]
@@ -748,8 +1042,7 @@ class EventViewerWindow {
             systemFont, 9)
         this.List.Opt("Background" colors.Surface " c" colors.Text)
         this.List.SetFont("s10 c" colors.Text, fontName)
-        this.DetailLabel.Text := this.DetailMode == "variables"
-            ? Tr("变量快照") : Tr("事件详情")
+        this.DetailLabel.Text := Tr("事件详情")
         this.DetailLabel.Opt("Background" colors.Window " c" colors.Muted)
         this.DetailEdit.Opt("Background" colors.Input " c" colors.Text)
         this.DetailEdit.SetFont("s10", fontName)
@@ -758,8 +1051,6 @@ class EventViewerWindow {
         this.Interactions.SetTextNoErase(this.ExportButton, Tr("导出事件"))
         this.Interactions.SetTextNoErase(this.RawObservationButton,
             this.RawObservationActive ? Tr("退出观察") : Tr("原始观察"))
-        this.Interactions.SetTextNoErase(this.DiagnosticButton, Tr("诊断包"))
-        this.Interactions.SetTextNoErase(this.VariableButton, Tr("变量"))
         this.Interactions.SetButtonAppearance(this.ClearButton,
             colors.Toolbar, colors.ToolbarText, true)
         this.Interactions.SetButtonAppearance(this.ExportButton,
@@ -768,10 +1059,6 @@ class EventViewerWindow {
             this.RawObservationActive ? colors.Pause : colors.Toolbar,
             this.RawObservationActive ? colors.ButtonText
                 : colors.ToolbarText, true)
-        this.Interactions.SetButtonAppearance(this.DiagnosticButton,
-            colors.Toolbar, colors.ToolbarText, true)
-        this.Interactions.SetButtonAppearance(this.VariableButton,
-            colors.Toolbar, colors.ToolbarText, true)
         this.Interactions.SetTextNoErase(this.PauseButton,
             this.Paused ? Tr("恢复刷新") : Tr("暂停刷新"))
         this.Interactions.SetButtonAppearance(this.PauseButton,
@@ -779,10 +1066,13 @@ class EventViewerWindow {
             colors.ButtonText, true)
         this.ApplyCommandIcons()
         for button in [this.PauseButton, this.ClearButton, this.ExportButton,
-                this.RawObservationButton, this.VariableButton]
+                this.RawObservationButton]
             button.SetFont("s10 bold", systemFont)
-        this.DiagnosticButton.SetFont("s10 bold", systemFont)
-        this.LoadSnapshot()
+        if this.Paused {
+            this.RefreshVisibleEntryLocalization()
+            this.UpdateStatus()
+        } else
+            this.LoadSnapshot()
         this.ApplyNativeThemes()
         } finally EndStableWindowUpdate(this.Gui.Hwnd, true)
         return true
@@ -790,11 +1080,11 @@ class EventViewerWindow {
 
     RequestClose(*) => this.Dispose()
 
-    Dispose() {
+    Dispose(*) {
         if this.Disposed
             return
         this.Disposed := true
-        cleanup := CleanupCollector("事件查看器")
+        cleanup := CleanupCollector("事件查看")
         cleanup.Run("停止排序计时器",
             () => this.CancelPendingSort())
         cleanup.Run("停止刷新计时器",
@@ -806,8 +1096,17 @@ class EventViewerWindow {
         }
         if this.SubscriptionId
             if cleanup.Run("取消事件订阅",
-                    () => this.Trace.Unsubscribe(this.SubscriptionId))
+                () => this.Trace.Unsubscribe(this.SubscriptionId))
                 this.SubscriptionId := 0
+        closeContext := ""
+        if this.OwnerLease {
+            try {
+                closeContext := WindowHierarchy.Release(this.OwnerLease)
+                this.OwnerLease := ""
+            } catch as ownerError {
+                cleanup.Failures.Push("释放父窗口关系：" ownerError.Message)
+            }
+        }
         if IsObject(this.CellTooltip)
                 && cleanup.Run("释放单元格提示",
                     () => this.CellTooltip.Dispose())
@@ -839,6 +1138,8 @@ class EventViewerWindow {
             this.SortRefreshTimer := ""
         cleanup.Run("通知父窗口",
             () => this.OwnerWindow.OnEventViewerClosed(this))
+        cleanup.Run("恢复父窗口",
+            () => WindowHierarchy.CompleteClose(closeContext))
         cleanup.Complete()
         return true
     }

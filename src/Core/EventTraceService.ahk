@@ -15,21 +15,59 @@ class EventTraceService {
         this.Subscribers := Map()
         this.NextSubscriptionId := 1
         this.DroppedCount := 0
+        this.PublicationQueue := []
+        this.Publishing := false
     }
 
     Record(category, eventName, fields := "") {
         entry := this.NormalizeEntry(category, eventName, fields)
-        if this.Count < this.Capacity {
-            this.Buffer.Push(entry)
-            this.Count++
-        } else {
-            entry.EvictedSequence := this.Buffer[this.StartIndex].Sequence
-            this.Buffer[this.StartIndex] := entry
-            this.StartIndex := Mod(this.StartIndex, this.Capacity) + 1
-            this.DroppedCount++
-        }
-        this.Publish(entry)
+        shouldPublish := false
+        previousCritical := A_IsCritical
+        Critical("On")
+        try {
+            entry.Sequence := this.NextSequence++
+            if this.Count < this.Capacity {
+                this.Buffer.Push(entry)
+                this.Count++
+            } else {
+                entry.EvictedSequence := this.Buffer[this.StartIndex].Sequence
+                this.Buffer[this.StartIndex] := entry
+                this.StartIndex := Mod(this.StartIndex, this.Capacity) + 1
+                this.DroppedCount++
+            }
+            this.PublicationQueue.Push(entry)
+            if !this.Publishing {
+                this.Publishing := true
+                shouldPublish := true
+            }
+        } finally Critical(previousCritical ? previousCritical : "Off")
+        if shouldPublish
+            this.DrainPublicationQueue()
         return this.CloneEntry(entry)
+    }
+
+    DrainPublicationQueue() {
+        try {
+            loop {
+                previousCritical := A_IsCritical
+                Critical("On")
+                try {
+                    if !this.PublicationQueue.Length {
+                        this.Publishing := false
+                        return
+                    }
+                    entry := this.PublicationQueue.RemoveAt(1)
+                } finally Critical(previousCritical
+                    ? previousCritical : "Off")
+                this.Publish(entry)
+            }
+        } catch as publicationError {
+            previousCritical := A_IsCritical
+            Critical("On")
+            try this.Publishing := false
+            finally Critical(previousCritical ? previousCritical : "Off")
+            throw publicationError
+        }
     }
 
     NormalizeEntry(category, eventName, fields) {
@@ -39,9 +77,8 @@ class EventTraceService {
         eventName := this.NormalizeRequiredText(eventName, "事件名称",
             &textCharacters)
         normalizedFields := this.NormalizeFields(fields, &textCharacters)
-        sequence := this.NextSequence++
         return {
-            Sequence: sequence,
+            Sequence: 0,
             EvictedSequence: 0,
             Timestamp: FormatTime(A_NowUTC, "yyyy-MM-dd'T'HH:mm:ss")
                 . "." Format("{:03}", A_MSec) "Z",
@@ -87,84 +124,62 @@ class EventTraceService {
         category := Trim(String(category))
         if Type(minimumSequence) != "Integer" || minimumSequence < 0
             throw ValueError("最小事件序号必须是非负整数。")
+        pending := []
+        previousCritical := A_IsCritical
+        Critical("On")
+        try {
+            Loop this.Count {
+                bufferIndex := Mod(this.StartIndex - 2 + A_Index,
+                    this.Capacity) + 1
+                entry := this.Buffer[bufferIndex]
+                if entry.Sequence < minimumSequence
+                    continue
+                if category != "" && entry.Category != category
+                    continue
+                pending.Push(entry)
+            }
+        } finally Critical(previousCritical ? previousCritical : "Off")
         result := []
-        Loop this.Count {
-            index := Mod(this.StartIndex - 2 + A_Index, this.Capacity) + 1
-            entry := this.Buffer[index]
-            if entry.Sequence < minimumSequence
-                continue
-            if category != "" && entry.Category != category
-                continue
+        for entry in pending
             result.Push(this.CloneEntry(entry))
-        }
         return result
     }
 
     Clear() {
-        clearedCount := this.Count
-        this.Buffer := []
-        this.StartIndex := 1
-        this.Count := 0
-        return clearedCount
+        previousCritical := A_IsCritical
+        Critical("On")
+        try {
+            clearedCount := this.Count
+            this.Buffer := []
+            this.StartIndex := 1
+            this.Count := 0
+            return clearedCount
+        } finally Critical(previousCritical ? previousCritical : "Off")
     }
 
     SetCapacity(capacity) {
         capacity := this.NormalizeCapacity(capacity)
-        if capacity == this.Capacity
-            return false
-        entries := this.Snapshot()
-        removedCount := Max(0, entries.Length - capacity)
-        if removedCount
-            entries.RemoveAt(1, removedCount)
-        this.Capacity := capacity
-        this.Buffer := entries
-        this.StartIndex := 1
-        this.Count := entries.Length
-        this.DroppedCount += removedCount
-        return true
-    }
-
-    CaptureState() {
-        return {
-            Capacity: this.Capacity,
-            Entries: this.Snapshot(),
-            NextSequence: this.NextSequence,
-            DroppedCount: this.DroppedCount
-        }
-    }
-
-    RestoreState(state) {
-        if !IsObject(state) || !state.HasOwnProp("Capacity")
-                || !state.HasOwnProp("Entries")
-                || !state.HasOwnProp("NextSequence")
-                || !state.HasOwnProp("DroppedCount")
-                || Type(state.Entries) != "Array"
-            throw TypeError("事件缓冲区状态无效。")
-        capacity := this.NormalizeCapacity(state.Capacity)
-        if state.Entries.Length > capacity
-            throw ValueError("事件缓冲区状态超过目标容量。")
-        if Type(state.NextSequence) != "Integer" || state.NextSequence < 1
-                || Type(state.DroppedCount) != "Integer"
-                || state.DroppedCount < 0
-            throw ValueError("事件缓冲区计数器状态无效。")
-        restoredEntries := []
-        previousSequence := 0
-        for entry in state.Entries {
-            normalizedEntry := this.NormalizeRestoredEntry(entry)
-            if normalizedEntry.Sequence <= previousSequence
-                throw ValueError("事件缓冲区状态序号没有严格递增。")
-            previousSequence := normalizedEntry.Sequence
-            restoredEntries.Push(normalizedEntry)
-        }
-        if state.NextSequence <= previousSequence
-            throw ValueError("事件缓冲区下一序号没有领先于已有事件。")
-        this.Capacity := capacity
-        this.Buffer := restoredEntries
-        this.StartIndex := 1
-        this.Count := this.Buffer.Length
-        this.NextSequence := state.NextSequence
-        this.DroppedCount := state.DroppedCount
-        return true
+        previousCritical := A_IsCritical
+        Critical("On")
+        try {
+            if capacity == this.Capacity
+                return false
+            entries := []
+            Loop this.Count {
+                bufferIndex := Mod(this.StartIndex - 2 + A_Index,
+                    this.Capacity) + 1
+                entries.Push(this.Buffer[bufferIndex])
+            }
+            removedCount := Max(0, entries.Length - capacity)
+            if removedCount
+                entries.RemoveAt(1, removedCount)
+            this.Capacity := capacity
+            this.Buffer := entries
+            this.StartIndex := 1
+            this.Count := entries.Length
+            this.DroppedCount += removedCount
+            return true
+        } finally Critical(previousCritical ? previousCritical : "Off")
     }
 
     NormalizeCapacity(capacity) {
@@ -176,87 +191,54 @@ class EventTraceService {
         return capacity
     }
 
-    NormalizeRestoredEntry(entry) {
-        requiredFields := ["Sequence", "EvictedSequence", "Timestamp",
-            "Tick", "Category", "Event", "Source", "RuleId", "Outcome",
-            "Detail", "Data"]
-        if !IsObject(entry)
-            throw TypeError("事件缓冲区条目无效。")
-        for fieldName in requiredFields {
-            if !entry.HasOwnProp(fieldName)
-                throw TypeError("事件缓冲区条目缺少字段：" fieldName)
-        }
-        if Type(entry.Sequence) != "Integer" || entry.Sequence < 1
-                || Type(entry.EvictedSequence) != "Integer"
-                || entry.EvictedSequence < 0
-                || Type(entry.Tick) != "Integer" || entry.Tick < 0
-            throw ValueError("事件缓冲区条目计数器无效。")
-        if Type(entry.Timestamp) != "String"
-                || !RegExMatch(entry.Timestamp,
-                    "^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$")
-            throw ValueError("事件缓冲区条目时间无效。")
-        textCharacters := 0
-        normalizedText := Map()
-        for fieldName in ["Category", "Event", "Source", "RuleId",
-                "Outcome", "Detail"] {
-            value := entry.%fieldName%
-            if Type(value) != "String"
-                throw TypeError("事件缓冲区文本字段必须是字符串。")
-            if StrLen(value) > EventTraceService.MaximumTextLength
-                throw ValueError("事件缓冲区文本字段超过上限。")
-            if (fieldName == "Category" || fieldName == "Event")
-                    && Trim(value) == ""
-                throw ValueError("事件缓冲区类别和名称不能为空。")
-            this.AddTextCharacters(value, &textCharacters)
-            normalizedText[fieldName] := value
-        }
-        normalizedData := this.CloneJsonValueWithBudget(entry.Data,
-            &textCharacters)
-        return {
-            Sequence: entry.Sequence,
-            EvictedSequence: entry.EvictedSequence,
-            Timestamp: entry.Timestamp,
-            Tick: entry.Tick,
-            Category: normalizedText["Category"],
-            Event: normalizedText["Event"],
-            Source: normalizedText["Source"],
-            RuleId: normalizedText["RuleId"],
-            Outcome: normalizedText["Outcome"],
-            Detail: normalizedText["Detail"],
-            Data: normalizedData
-        }
-    }
-
     Subscribe(callback) {
         if !IsObject(callback)
             throw TypeError("事件订阅回调无效。")
-        subscriptionId := this.NextSubscriptionId++
-        this.Subscribers[subscriptionId] := callback
-        return subscriptionId
+        previousCritical := A_IsCritical
+        Critical("On")
+        try {
+            subscriptionId := this.NextSubscriptionId++
+            this.Subscribers[subscriptionId] := callback
+            return subscriptionId
+        } finally Critical(previousCritical ? previousCritical : "Off")
     }
 
     Unsubscribe(subscriptionId) {
-        if !this.Subscribers.Has(subscriptionId)
-            return false
-        this.Subscribers.Delete(subscriptionId)
-        return true
+        previousCritical := A_IsCritical
+        Critical("On")
+        try {
+            if !this.Subscribers.Has(subscriptionId)
+                return false
+            this.Subscribers.Delete(subscriptionId)
+            return true
+        } finally Critical(previousCritical ? previousCritical : "Off")
     }
 
     Publish(entry) {
         pending := []
-        for subscriptionId, callback in this.Subscribers
-            pending.Push({Id: subscriptionId, Callback: callback})
+        previousCritical := A_IsCritical
+        Critical("On")
+        try {
+            for subscriptionId, callback in this.Subscribers
+                pending.Push({Id: subscriptionId, Callback: callback})
+        } finally Critical(previousCritical ? previousCritical : "Off")
         staleSubscriptions := []
         for pendingSubscription in pending {
-            if !this.Subscribers.Has(pendingSubscription.Id)
+            if !this.HasSubscription(pendingSubscription.Id)
                 continue
             try pendingSubscription.Callback.Call(this.CloneEntry(entry))
             catch
                 staleSubscriptions.Push(pendingSubscription.Id)
         }
         for subscriptionId in staleSubscriptions
-            if this.Subscribers.Has(subscriptionId)
-                this.Subscribers.Delete(subscriptionId)
+            this.Unsubscribe(subscriptionId)
+    }
+
+    HasSubscription(subscriptionId) {
+        previousCritical := A_IsCritical
+        Critical("On")
+        try return this.Subscribers.Has(subscriptionId)
+        finally Critical(previousCritical ? previousCritical : "Off")
     }
 
     ExportJsonLines(filePath, category := "") {

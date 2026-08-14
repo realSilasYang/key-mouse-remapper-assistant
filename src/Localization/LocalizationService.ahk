@@ -73,10 +73,6 @@ class LocalizationService {
         return this.NormalizeRequestedLanguage(language, fallback)
     }
 
-    static TryNormalizeLanguage(language, &normalized) {
-        return this.TryNormalizeRequestedLanguage(language, &normalized)
-    }
-
     static TryNormalizeRequestedLanguage(language, &normalized) {
         normalized := ""
         try languageText := StrLower(Trim(String(language)))
@@ -120,17 +116,6 @@ class LocalizationService {
         return true
     }
 
-    static GetSupportedLanguageCodes(includeAuto := false) {
-        ; 前四项固定；其余先按亚洲、欧洲分组，再按 Ethnologue 2026 的
-        ; 全球总使用人口由多到少排列。
-        codes := ["zh-CN", "zh-HK", "zh-TW", "en-US", "ja-JP",
-            "vi-VN", "ko-KR", "es-ES", "fr-FR", "pt-BR", "ru-RU",
-            "de-DE", "it-IT"]
-        if includeAuto
-            codes.InsertAt(1, "auto")
-        return codes
-    }
-
     static GetLanguageChoices() {
         return [
             {Code: "auto", Label: this.Translate("跟随系统")},
@@ -154,12 +139,6 @@ class LocalizationService {
         if this.Language == ""
             this.Configure()
         return this.Language
-    }
-
-    static GetRequestedLanguage() {
-        if this.Language == ""
-            this.Configure()
-        return this.RequestedLanguage
     }
 
     static IsChinese() {
@@ -195,8 +174,11 @@ class LocalizationService {
         installedName := this.FindInstalledUiFontName(spec.Primary)
         if installedName != ""
             return installedName
-        if this.EnsurePackagedUiFontAvailable(spec.Primary, spec.Asset) {
-            installedName := this.FindInstalledUiFontName(spec.Primary)
+        installedName := this.FindInstalledUiFontName(spec.Fallback)
+        if installedName != ""
+            return installedName
+        if this.EnsurePackagedUiFontAvailable(spec.Fallback) {
+            installedName := this.FindInstalledUiFontName(spec.Fallback)
             if installedName != ""
                 return installedName
         }
@@ -215,28 +197,28 @@ class LocalizationService {
             : this.ResolveActualLanguage(language)
         switch language {
             case "zh-CN":
-                return {Primary: "Noto Sans CJK SC",
-                    Asset: "NotoSansCJK.ttc",
+                return {Primary: "PingFang SC",
+                    Fallback: "Noto Sans CJK SC",
                     System: "Microsoft YaHei UI"}
             case "zh-HK":
-                return {Primary: "Noto Sans CJK HK",
-                    Asset: "NotoSansCJK.ttc",
+                return {Primary: "PingFang HK",
+                    Fallback: "Noto Sans CJK HK",
                     System: "Microsoft JhengHei UI"}
             case "zh-TW":
-                return {Primary: "Noto Sans CJK TC",
-                    Asset: "NotoSansCJK.ttc",
+                return {Primary: "PingFang TC",
+                    Fallback: "Noto Sans CJK TC",
                     System: "Microsoft JhengHei UI"}
             case "ja-JP":
-                return {Primary: "Noto Sans CJK JP",
-                    Asset: "NotoSansCJK.ttc",
+                return {Primary: "Harano Aji Gothic",
+                    Fallback: "Noto Sans CJK JP",
                     System: "Yu Gothic UI"}
             case "ko-KR":
-                return {Primary: "Noto Sans CJK KR",
-                    Asset: "NotoSansCJK.ttc",
+                return {Primary: "AppleSDGothicNeoR00",
+                    Fallback: "Noto Sans CJK KR",
                     System: "Malgun Gothic"}
             default:
-                return {Primary: "Noto Sans",
-                    Asset: "NotoSans-Variable.ttf",
+                return {Primary: "SF Pro Text",
+                    Fallback: "Noto Sans",
                     System: "Segoe UI"}
         }
     }
@@ -255,12 +237,6 @@ class LocalizationService {
         return this.UiFont
     }
 
-    static GetRequestedUiFont() {
-        if this.UiFont == ""
-            this.ConfigureUiFont()
-        return this.RequestedUiFont
-    }
-
     static NormalizeRequestedUiFont(fontName, fallback := "auto") {
         if this.TryNormalizeRequestedUiFont(fontName, &normalized)
             return normalized
@@ -269,10 +245,6 @@ class LocalizationService {
 
     static NormalizeUiFont(fontName, fallback := "auto") {
         return this.NormalizeRequestedUiFont(fontName, fallback)
-    }
-
-    static TryNormalizeUiFont(fontName, &normalized) {
-        return this.TryNormalizeRequestedUiFont(fontName, &normalized)
     }
 
     static TryNormalizeRequestedUiFont(fontName, &normalized) {
@@ -437,11 +409,6 @@ class LocalizationService {
         }
     }
 
-    static GetLoadedPrivateUiFontResourceCount() {
-        return IsObject(this.LoadedPrivateUiFontPaths)
-            ? this.LoadedPrivateUiFontPaths.Length : 0
-    }
-
     static ShutdownUiFonts(*) {
         if !IsObject(this.LoadedPrivateUiFontPaths)
             return true
@@ -504,6 +471,14 @@ class LocalizationService {
                     throw OSError(A_LastError, "无法释放字体枚举设备上下文。")
             }
         }
+        ; 部分从 macOS 字体文件安装到 Windows 的苹方家族不会被
+        ; EnumFontFamiliesExW 完整列出。逐个创建并反查实际字体面，只有没有
+        ; 被 GDI 替换成系统兜底的家族才加入可用集合。
+        for knownFontName in ["PingFang SC", "PingFang HK", "PingFang TC",
+            "Harano Aji Gothic", "AppleSDGothicNeoR00", "SF Pro Text"] {
+            if this.ProbeUiFontFamily(knownFontName)
+                fontSet[knownFontName] := true
+        }
         namesText := ""
         for fontName in fontSet
             namesText .= fontName "`n"
@@ -525,6 +500,50 @@ class LocalizationService {
         this.ClearFailedPrivateUiFontCache()
         this.InstalledUiFonts := ""
         return this.GetInstalledUiFontNames()
+    }
+
+    static ProbeUiFontFamily(fontName) {
+        logFont := Buffer(92, 0)
+        NumPut("Int", -16, logFont, 0)
+        NumPut("Int", 400, logFont, 16)
+        NumPut("UChar", 1, logFont, 23) ; DEFAULT_CHARSET
+        StrPut(String(fontName), logFont.Ptr + 28, 32, "UTF-16")
+        fontHandle := DllCall("gdi32\CreateFontIndirectW", "Ptr", logFont,
+            "Ptr")
+        if !fontHandle
+            return false
+        deviceContext := DllCall("gdi32\CreateCompatibleDC", "Ptr", 0,
+            "Ptr")
+        if !deviceContext {
+            DllCall("gdi32\DeleteObject", "Ptr", fontHandle)
+            return false
+        }
+        previousFont := DllCall("gdi32\SelectObject", "Ptr", deviceContext,
+            "Ptr", fontHandle, "Ptr")
+        try {
+            faceBuffer := Buffer(128 * 2, 0)
+            faceLength := DllCall("gdi32\GetTextFaceW", "Ptr", deviceContext,
+                "Int", 128, "Ptr", faceBuffer, "Int")
+            if faceLength <= 0
+                return false
+            resolvedName := StrGet(faceBuffer, "UTF-16")
+            if StrLower(resolvedName) == StrLower(String(fontName))
+                return true
+            ; 苹方在 Windows GDI 中返回本地化家族名。只接受这三个已核验
+            ; 别名，避免把普通字体替换误判为首选字体可用。
+            switch StrLower(String(fontName)) {
+                case "pingfang sc": return resolvedName == "苹方-简"
+                case "pingfang hk": return resolvedName == "苹方-港"
+                case "pingfang tc": return resolvedName == "苹方-繁"
+                default: return false
+            }
+        } finally {
+            if previousFont
+                DllCall("gdi32\SelectObject", "Ptr", deviceContext,
+                    "Ptr", previousFont, "Ptr")
+            DllCall("gdi32\DeleteDC", "Ptr", deviceContext)
+            DllCall("gdi32\DeleteObject", "Ptr", fontHandle)
+        }
     }
 
     static CollectInstalledUiFont(enumLogFontPtr, textMetricPtr,
@@ -584,15 +603,6 @@ class LocalizationService {
         ; 语言在 #Warn 下产生“从未赋值”警告；真正请求缺失目录时仍会报错。
         catalogClass := %className%
         return catalogClass.Create()
-    }
-
-    static GetAllTranslationCatalogs() {
-        catalogs := []
-        for language in this.GetSupportedLanguageCodes() {
-            if language != "zh-CN"
-                catalogs.Push(this.GetCatalog(language))
-        }
-        return catalogs
     }
 
     static Translate(chineseTemplate, values*) {
@@ -725,10 +735,6 @@ class LocalizationService {
         return this.GetCatalog(language).Has(String(chineseTemplate))
     }
 
-    static HasEnglish(chineseTemplate) {
-        return this.HasTranslation(chineseTemplate, "en-US")
-    }
-
     static GetEnglishCatalog() {
         return this.GetCatalog("en-US")
     }
@@ -740,35 +746,6 @@ class LocalizationService {
         ; 核心层保留稳定的中文语义值，到日志和对话框边界再按当前语言翻译。
         if this.HasTranslation(text)
             return this.Translate(text)
-        fieldCountPattern := "^字段数量应为 " "(\d+)" "，实际为 "
-            . "(\d+)$"
-        if RegExMatch(text, fieldCountPattern, &fieldCountMatch) {
-            return this.Translate("字段数量应为 {1}，实际为 {2}",
-                fieldCountMatch[1], fieldCountMatch[2])
-        }
-        static prefixedDiagnostics := [
-            ["缺少窗口布局字段", "缺少窗口布局字段：{1}"],
-            ["窗口布局字段不是整数", "窗口布局字段不是整数：{1}"],
-            ["窗口布局字段超出范围", "窗口布局字段超出范围：{1}"],
-            ["缺少运行参数", "缺少运行参数：{1}"],
-            ["运行参数不是整数", "运行参数不是整数：{1}"],
-            ["运行参数超出范围", "运行参数超出范围：{1}"],
-            ["运行参数不能为空", "运行参数不能为空：{1}"],
-            ["运行参数不是支持的界面语言", "运行参数不是支持的界面语言：{1}"],
-            ["运行参数不是支持的界面主题", "运行参数不是支持的界面主题：{1}"],
-            ["无法生成监控项快照", "无法生成监控项快照：{1}"],
-            ["恢复记录缺少字段", "恢复记录缺少字段：{1}"],
-            ["缺少窗口生命周期回调", "缺少窗口生命周期回调：{1}"],
-            ["不允许的升级保护阶段转换", "不允许的升级保护阶段转换：{1}"],
-            ["缺少诊断信息提供器", "缺少诊断信息提供器：{1}"],
-            ["无法写入诊断文件", "无法写入诊断文件：{1}"],
-            ["无法收集此部分诊断信息", "无法收集此部分诊断信息：{1}"]
-        ]
-        for diagnostic in prefixedDiagnostics {
-            prefix := diagnostic[1]
-            if RegExMatch(text, "^" prefix "[：:]\s*(.*)$", &match)
-                return this.Translate(diagnostic[2], match[1])
-        }
         ; Windows、COM 与第三方组件的原始错误原样保留，便于搜索错误码。
         return text
     }

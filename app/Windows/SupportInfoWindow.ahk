@@ -1,5 +1,5 @@
-; 主窗口的帮助信息入口。
-; 窗口只负责在使用说明、事件查看器和反馈页面之间分流；选择后先释放
+; 主窗口的帮助入口。
+; 窗口只负责在使用说明、事件查看和反馈页面之间分流；选择后先释放
 ; 主窗口的 Owner 租约，再打开目标内容，避免形成无意义的三级窗口关系。
 
 class SupportInfoWindow {
@@ -29,12 +29,12 @@ class SupportInfoWindow {
         buttonX := (this.WindowWidth - this.ButtonWidth) // 2
 
         this.Gui := Gui("+Owner" this.OwnerWindow.Gui.Hwnd
-            " +OwnDialogs -MinimizeBox -MaximizeBox", Tr("帮助信息"))
+            " +OwnDialogs +MinimizeBox -MaximizeBox", Tr("帮助"))
         this.IconHandles := ApplyApplicationWindowIcon(this.Gui.Hwnd)
         this.OwnerLease := WindowHierarchy.Acquire(this.OwnerWindow.Gui,
             this.Gui.Hwnd)
         if !this.OwnerLease
-            throw Error("无法建立帮助信息窗口层级。")
+            throw Error("无法建立帮助窗口层级。")
         this.Gui.BackColor := colors.Window
         this.Gui.MarginX := 0
         this.Gui.MarginY := 0
@@ -45,11 +45,13 @@ class SupportInfoWindow {
 
         this.GuideButton := this.AddButton(buttonX, 18, Tr("使用说明"),
             ObjBindMethod(this, "OpenGuide"))
-        this.EventButton := this.AddButton(buttonX, 62, Tr("事件查看器"),
+        this.EventButton := this.AddButton(buttonX, 62, Tr("事件查看"),
             ObjBindMethod(this, "OpenEventViewer"))
         this.FeedbackButton := this.AddButton(buttonX, 106, Tr("提交反馈"),
             ObjBindMethod(this, "OpenFeedback"))
         this.ApplyCommandIcons()
+        this.Interactions.SetButtonTooltip(this.FeedbackButton,
+            Tr("找作者对线"))
 
         this.Gui.OnEvent("Close", ObjBindMethod(this, "RequestClose"))
         this.Gui.OnEvent("Escape", ObjBindMethod(this, "RequestClose"))
@@ -69,12 +71,16 @@ class SupportInfoWindow {
     }
 
     ApplyCommandIcons() {
+        colors := UiThemeService.GetPalette()
         this.Interactions.SetButtonLucideIcon(this.GuideButton,
-            "book-open.svg", 16, 7)
+            "book-open.svg", 16, 7,
+            UiThemeService.ButtonIconColor(colors.DisplayIcon))
         this.Interactions.SetButtonLucideIcon(this.EventButton,
-            "logs.svg", 16, 7)
+            "logs.svg", 16, 7,
+            UiThemeService.ButtonIconColor(colors.CodeType))
         this.Interactions.SetButtonLucideIcon(this.FeedbackButton,
-            "message-square-text.svg", 16, 7)
+            "message-square-text.svg", 16, 7,
+            UiThemeService.ButtonIconColor(colors.RulesEventIcon))
     }
 
     Show() {
@@ -104,12 +110,12 @@ class SupportInfoWindow {
         try {
             colors := UiThemeService.GetPalette()
             systemFont := LocalizationService.GetLanguageSystemUiFontName()
-            this.Gui.Title := Tr("帮助信息")
+            this.Gui.Title := Tr("帮助")
             this.Gui.BackColor := colors.Window
             this.Interactions.SetParentColor(colors.Window)
             buttonSpecs := [
                 {Button: this.GuideButton, Text: Tr("使用说明")},
-                {Button: this.EventButton, Text: Tr("事件查看器")},
+                {Button: this.EventButton, Text: Tr("事件查看")},
                 {Button: this.FeedbackButton, Text: Tr("提交反馈")}
             ]
             for spec in buttonSpecs {
@@ -119,6 +125,8 @@ class SupportInfoWindow {
                 spec.Button.SetFont("s10 bold", systemFont)
             }
             this.ApplyCommandIcons()
+            this.Interactions.SetButtonTooltip(this.FeedbackButton,
+                Tr("找作者对线"))
             this.ApplyNativeThemes()
         } finally EndStableWindowUpdate(this.Gui.Hwnd, true)
         return true
@@ -142,17 +150,13 @@ class SupportInfoWindow {
         if this.Disposed
             return false
         ownerWindow := this.OwnerWindow
-        application := this.App
         this.Dispose(false)
         try {
             Run(SupportInfoWindow.FeedbackUrl)
-            application.TraceEvent("ui", "feedback_opened", {Outcome: "ok"})
             return true
         } catch as openError {
             ownerWindow.SetStatus(Tr("无法打开反馈页面：{1}",
                 openError.Message), true)
-            application.TraceEvent("ui", "feedback_opened", {Outcome: "error",
-                Detail: openError.Message})
             return false
         }
     }

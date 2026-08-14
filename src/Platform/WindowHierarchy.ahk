@@ -142,10 +142,64 @@ class WindowHierarchyPlatform {
     }
 
     MinimizeWindow(hwnd) {
+        if !this.IsWindow(hwnd)
+            return false
+        ; Hiding first discards DWM's last composed surface, leaving only an
+        ; application-icon placeholder in the taskbar thumbnail. A standard
+        ; minimize preserves the rendered frame used by taskbar preview.
         DllCall("user32\ShowWindow", "Ptr", hwnd,
-            "Int", Win32.SW_HIDE, "Int")
-        return DllCall("user32\ShowWindow", "Ptr", hwnd,
-            "Int", Win32.SW_SHOWMINNOACTIVE, "Int")
+            "Int", Win32.SW_MINIMIZE, "Int")
+        if !this.IsWindowMinimized(hwnd)
+            DllCall("user32\ShowWindow", "Ptr", hwnd,
+                "Int", Win32.SW_SHOWMINNOACTIVE, "Int")
+        return this.IsWindowMinimized(hwnd)
+    }
+
+    RestoreWindowFromTaskbar(hwnd, maximize := false) {
+        if !this.IsWindow(hwnd)
+            return false
+        showCommand := maximize ? Win32.SW_SHOWMAXIMIZED : Win32.SW_RESTORE
+        return this.RestoreVisibleWindow(hwnd, showCommand, true)
+    }
+
+    RestoreOwnerWindow(hwnd) {
+        if !this.IsWindow(hwnd)
+            return false
+        if this.IsWindowVisible(hwnd) && !this.IsWindowMinimized(hwnd)
+            return true
+        return this.RestoreVisibleWindow(hwnd, Win32.SW_RESTORE, false)
+    }
+
+    RestoreOwnedWindow(hwnd) {
+        if !this.IsWindow(hwnd)
+            return false
+        if this.IsWindowVisible(hwnd) && !this.IsWindowMinimized(hwnd)
+            return true
+        return this.RestoreVisibleWindow(hwnd, Win32.SW_RESTORE, false)
+    }
+
+    RestoreVisibleWindow(hwnd, showCommand, activate) {
+        if !this.IsWindow(hwnd)
+            return false
+        DllCall("user32\ShowWindow", "Ptr", hwnd, "Int", showCommand,
+            "Int")
+        ; A restore issued while the minimize animation is still completing
+        ; can be overwritten by that animation. Keep the common path
+        ; immediate, but retry briefly until the native state settles.
+        Loop 20 {
+            if !this.IsWindowMinimized(hwnd) && this.IsWindowVisible(hwnd)
+                break
+            Sleep(10)
+            DllCall("user32\ShowWindow", "Ptr", hwnd, "Int", showCommand,
+                "Int")
+        }
+        if this.IsWindowMinimized(hwnd) || !this.IsWindowVisible(hwnd)
+            return false
+        if activate {
+            DllCall("user32\SetForegroundWindow", "Ptr", hwnd, "Int")
+            DllCall("user32\SetActiveWindow", "Ptr", hwnd, "Ptr")
+        }
+        return true
     }
 
     GetOwnedWindowOwner(childHwnd) {
@@ -215,9 +269,10 @@ class WindowHierarchyManager {
                 ExtendedStyle: originalStyle,
                 TaskbarRegistered: false
             }
-            this.Platform.MinimizeWindow(childHwnd)
             entry.SuspendedChildren[childHwnd].TaskbarRegistered :=
                 this.Platform.RegisterTaskbarTab(childHwnd)
+            if !this.Platform.MinimizeWindow(childHwnd)
+                throw Error("Unable to minimize the child window")
         } catch {
             if entry.SuspendedChildren.Has(childHwnd) {
                 suspendedState := entry.SuspendedChildren[childHwnd]
@@ -253,20 +308,56 @@ class WindowHierarchyManager {
 
         suspendedState := entry.SuspendedChildren[childHwnd]
         try {
+            this.Platform.SetNativeOwner(childHwnd, ownerHwnd)
+            if this.Platform.GetNativeOwner(childHwnd) != ownerHwnd
+                throw Error("Unable to restore the child window owner")
+            ; Keep APPWINDOW and the explicit taskbar tab until the owner has
+            ; been restored successfully. If SetNativeOwner fails, the user
+            ; still has a taskbar entry from which to retry.
             this.Platform.UnregisterTaskbarTab(childHwnd)
             if IsObject(suspendedState)
                     && suspendedState.HasOwnProp("ExtendedStyle")
                 this.Platform.RestoreTaskbarStyle(childHwnd,
                     suspendedState.ExtendedStyle)
-            this.Platform.SetNativeOwner(childHwnd, ownerHwnd)
-            if this.Platform.GetNativeOwner(childHwnd) != ownerHwnd
-                throw Error("Unable to restore the child window owner")
         } catch {
             return false
         }
         entry.SuspendedChildren.Delete(childHwnd)
         this.UpdateOwnerModalState(entry, ownerHwnd)
         return true
+    }
+
+    RestoreChildFromTaskbar(childHwnd, maximize := false) {
+        ownerHwnd := this.FindOwnerHwnd(childHwnd)
+        if !ownerHwnd || !this.OwnerLocks.Has(ownerHwnd)
+            return false
+        entry := this.OwnerLocks[ownerHwnd]
+        if !entry.SuspendedChildren.Has(childHwnd)
+            return false
+        if !this.Platform.IsWindow(childHwnd)
+                || !this.Platform.IsWindow(ownerHwnd) {
+            this.PruneOwner(entry.Gui)
+            return false
+        }
+
+        ; An owned window is hidden whenever its owner remains minimized.
+        ; Restore the owner before rebuilding the native relationship so a
+        ; taskbar-restored child cannot disappear behind a disabled owner.
+        try {
+            if !this.Platform.RestoreOwnerWindow(ownerHwnd)
+                return false
+            if !this.Platform.RestoreWindowFromTaskbar(childHwnd, maximize)
+                return false
+            if !this.PrepareChildRestore(childHwnd)
+                return false
+            ; The taskbar click already grants foreground activation. A
+            ; subsequent WinActivate can still be rejected by test/offscreen
+            ; desktops, but the child has been restored successfully.
+            try this.Platform.ActivateOwnedWindow(childHwnd)
+            return true
+        } catch {
+            return false
+        }
     }
 
     Acquire(ownerGui, childHwnd := 0) {
@@ -428,8 +519,23 @@ class WindowHierarchyManager {
                 break
             entry := this.OwnerLocks[currentHwnd]
             nextHwnd := this.FindVisibleChild(entry, currentHwnd)
-            if !nextHwnd
-                break
+            if !nextHwnd {
+                nextHwnd := this.FindRecoverableChild(entry, currentHwnd)
+                if !nextHwnd
+                    break
+            }
+            ; Windows can hide an owned modal after its owner is minimized.
+            ; Once the child has been reattached, Windows can refuse to
+            ; restore the disabled owner. Detach the hidden child briefly so
+            ; the owner can return to its normal position, then rebuild the
+            ; exact modal relationship before showing the child.
+            ownerNeedsRestore := !this.Platform.IsWindowVisible(currentHwnd)
+                || this.Platform.IsWindowMinimized(currentHwnd)
+            childNeedsRestore := !this.Platform.IsWindowVisible(nextHwnd)
+                || this.Platform.IsWindowMinimized(nextHwnd)
+            if (ownerNeedsRestore || childNeedsRestore)
+                    && !this.RecoverOwnedChild(currentHwnd, nextHwnd)
+                return false
             currentHwnd := nextHwnd
         }
         if currentHwnd == ownerHwnd
@@ -540,6 +646,46 @@ class WindowHierarchyManager {
         }
         return 0
     }
+
+    FindRecoverableChild(entry, ownerHwnd) {
+        activePopup := this.Platform.GetLastActivePopup(ownerHwnd)
+        if entry.Children.Has(activePopup)
+                && !entry.SuspendedChildren.Has(activePopup)
+                && this.Platform.IsWindow(activePopup)
+            return activePopup
+        for childHwnd in entry.Children {
+            if !entry.SuspendedChildren.Has(childHwnd)
+                    && this.Platform.IsWindow(childHwnd)
+                return childHwnd
+        }
+        return 0
+    }
+
+    RecoverOwnedChild(ownerHwnd, childHwnd) {
+        if !this.Platform.IsWindow(ownerHwnd)
+                || !this.Platform.IsWindow(childHwnd)
+            return false
+        detached := false
+        try {
+            this.Platform.SetNativeOwner(childHwnd, 0)
+            if this.Platform.GetNativeOwner(childHwnd) != 0
+                return false
+            detached := true
+            if !this.Platform.RestoreOwnerWindow(ownerHwnd)
+                return false
+            this.Platform.SetNativeOwner(childHwnd, ownerHwnd)
+            if this.Platform.GetNativeOwner(childHwnd) != ownerHwnd
+                return false
+            detached := false
+            return this.Platform.RestoreOwnedWindow(childHwnd)
+        } catch {
+            return false
+        } finally {
+            if detached && this.Platform.IsWindow(childHwnd)
+                    && this.Platform.IsWindow(ownerHwnd)
+                try this.Platform.SetNativeOwner(childHwnd, ownerHwnd)
+        }
+    }
 }
 
 class WindowHierarchy {
@@ -583,5 +729,9 @@ class WindowHierarchy {
 
     static PrepareChildRestore(childHwnd) {
         return this.Manager.PrepareChildRestore(childHwnd)
+    }
+
+    static RestoreChildFromTaskbar(childHwnd, maximize := false) {
+        return this.Manager.RestoreChildFromTaskbar(childHwnd, maximize)
     }
 }

@@ -130,73 +130,107 @@ class JsonParser {
         if this.PeekCode() != 0x22
             this.Fail("JSON 缺少预期字符：" Chr(34))
         this.Position++
-        result := ""
-        segmentStart := this.Position
+        tokenStart := this.Position
+        closingPosition := this.FindStringClosingQuote(tokenStart)
+        token := SubStr(this.Text, tokenStart,
+            closingPosition - tokenStart)
+        this.Position := closingPosition + 1
+        if RegExMatch(token, '[\x00-\x1F]')
+            this.Fail("JSON 字符串包含未转义控制字符。")
+
+        escapedBackslashMarker := Chr(1)
+        decoded := StrReplace(token, "\\", escapedBackslashMarker)
+        if RegExMatch(decoded, '\\(?!["/bfnrtu])')
+            this.Fail("JSON 字符串包含无效转义。")
+        if RegExMatch(decoded, '\\u(?![0-9A-Fa-f]{4})')
+            this.Fail("JSON Unicode 转义无效。")
+        decoded := StrReplace(decoded, '\"', '"')
+        decoded := StrReplace(decoded, "\/", "/")
+        decoded := StrReplace(decoded, "\b", Chr(8))
+        decoded := StrReplace(decoded, "\f", Chr(12))
+        decoded := StrReplace(decoded, "\n", "`n")
+        decoded := StrReplace(decoded, "\r", "`r")
+        decoded := StrReplace(decoded, "\t", "`t")
+        if InStr(decoded, "\u")
+            return this.DecodeUnicodeEscapes(decoded,
+                escapedBackslashMarker)
+        decoded := StrReplace(decoded, escapedBackslashMarker, "\")
+        return decoded
+    }
+
+    FindStringClosingQuote(position) {
         pointer := this.Pointer
-        specialCharacters := this.StringSpecialCharacters()
-        while this.Position <= this.Length {
+        delimiters := this.StringDelimiterCharacters()
+        backslashes := this.StringBackslashCharacters()
+        while position <= this.Length {
             span := DllCall("msvcrt\wcscspn",
-                "Ptr", pointer + (this.Position - 1) * 2,
-                "Ptr", specialCharacters.Ptr, "UPtr")
-            this.Position += span
-            if this.Position > this.Length
+                "Ptr", pointer + (position - 1) * 2,
+                "Ptr", delimiters.Ptr, "UPtr")
+            position += span
+            if position > this.Length
                 break
-            characterCode := NumGet(pointer + (this.Position - 1) * 2,
-                "UShort")
-            if characterCode == 0x22 {
-                result .= SubStr(this.Text, segmentStart,
-                    this.Position - segmentStart)
-                this.Position++
-                return result
-            }
-            if characterCode < 0x20
-                this.Fail("JSON 字符串包含未转义控制字符。")
-            result .= SubStr(this.Text, segmentStart,
-                this.Position - segmentStart)
-            this.Position++
-            if this.Position > this.Length
-                this.Fail("JSON 字符串转义意外结束。")
-            escapedCode := NumGet(pointer + (this.Position - 1) * 2,
-                "UShort")
-            this.Position++
-            switch escapedCode {
-                case 0x22, 0x5C, 0x2F: result .= Chr(escapedCode)
-                case 0x62: result .= Chr(8)
-                case 0x66: result .= Chr(12)
-                case 0x6E: result .= "`n"
-                case 0x72: result .= "`r"
-                case 0x74: result .= "`t"
-                case 0x75: result .= this.ParseUnicodeEscape()
-                default: this.Fail("JSON 字符串包含无效转义。")
-            }
-            segmentStart := this.Position
+            if NumGet(pointer + (position - 1) * 2, "UShort") == 0x22
+                return position
+            slashCount := DllCall("msvcrt\wcsspn",
+                "Ptr", pointer + (position - 1) * 2,
+                "Ptr", backslashes.Ptr, "UPtr")
+            position += slashCount
+            if slashCount & 1
+                position++
         }
+        this.Position := position
         this.Fail("JSON 字符串缺少结束引号。")
     }
 
-    StringSpecialCharacters() {
+    StringDelimiterCharacters() {
         static characters := 0
         if !IsObject(characters) {
-            characters := Buffer(34 * 2, 0)
-            Loop 31
-                NumPut("UShort", A_Index, characters, (A_Index - 1) * 2)
-            NumPut("UShort", 0x22, characters, 31 * 2)
-            NumPut("UShort", 0x5C, characters, 32 * 2)
+            characters := Buffer(3 * 2, 0)
+            NumPut("UShort", 0x22, characters, 0)
+            NumPut("UShort", 0x5C, characters, 2)
         }
         return characters
     }
 
-    ParseUnicodeEscape() {
-        first := this.ReadHexCodeUnit()
-        if first < 0xD800 || first > 0xDBFF
-            return Chr(first)
-        if SubStr(this.Text, this.Position, 2) != "\u"
-            this.Fail("JSON 高代理项缺少低代理项。")
-        this.Position += 2
-        second := this.ReadHexCodeUnit()
-        if second < 0xDC00 || second > 0xDFFF
-            this.Fail("JSON 低代理项无效。")
-        return Chr(0x10000 + ((first - 0xD800) << 10) + second - 0xDC00)
+    StringBackslashCharacters() {
+        static characters := 0
+        if !IsObject(characters) {
+            characters := Buffer(2 * 2, 0)
+            NumPut("UShort", 0x5C, characters, 0)
+        }
+        return characters
+    }
+
+    DecodeUnicodeEscapes(text, escapedBackslashMarker) {
+        result := ""
+        VarSetStrCapacity(&result, StrLen(text))
+        sourcePosition := 1
+        searchPosition := 1
+        pattern := "\\u([0-9A-Fa-f]{4})"
+        while RegExMatch(text, pattern, &unicodeMatch, searchPosition) {
+            result .= StrReplace(SubStr(text, sourcePosition,
+                unicodeMatch.Pos(0) - sourcePosition),
+                escapedBackslashMarker, "\")
+            firstCodeUnit := Integer("0x" unicodeMatch[1])
+            searchPosition := unicodeMatch.Pos(0) + unicodeMatch.Len(0)
+            if firstCodeUnit >= 0xD800 && firstCodeUnit <= 0xDBFF {
+                if !RegExMatch(text, "\G" pattern, &lowMatch,
+                        searchPosition)
+                    this.Fail("JSON 高代理项缺少低代理项。")
+                secondCodeUnit := Integer("0x" lowMatch[1])
+                if secondCodeUnit < 0xDC00 || secondCodeUnit > 0xDFFF
+                    this.Fail("JSON 低代理项无效。")
+                result .= Chr(0x10000 + ((firstCodeUnit - 0xD800) << 10)
+                    + secondCodeUnit - 0xDC00)
+                searchPosition := lowMatch.Pos(0) + lowMatch.Len(0)
+            } else {
+                result .= Chr(firstCodeUnit)
+            }
+            sourcePosition := searchPosition
+        }
+        result .= StrReplace(SubStr(text, sourcePosition),
+            escapedBackslashMarker, "\")
+        return result
     }
 
     ReadHexCodeUnit() {
@@ -318,20 +352,9 @@ class JsonParser {
         return 0
     }
 
-    Peek() {
-        return this.Position <= this.Length
-            ? Chr(this.CodeAt(this.Position)) : ""
-    }
-
     PeekCode() {
         return this.Position <= this.Length
             ? NumGet(this.Pointer + (this.Position - 1) * 2, "UShort") : 0
-    }
-
-    Expect(expected) {
-        if this.PeekCode() != Ord(expected)
-            this.Fail("JSON 缺少预期字符：" expected)
-        this.Position++
     }
 
     Fail(message) {
@@ -422,8 +445,10 @@ class JsonWriter {
     }
 
     WriteString(value) {
-        result := '"'
         text := String(value)
+        result := ""
+        VarSetStrCapacity(&result, StrLen(text) * 2 + 2)
+        result .= '"'
         Loop StrLen(text) {
             character := SubStr(text, A_Index, 1)
             switch character {

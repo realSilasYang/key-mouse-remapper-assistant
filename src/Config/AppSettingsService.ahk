@@ -31,12 +31,33 @@ class AppSettingsService {
                     "UiFont", "auto"),
                 Theme: this.ReadSnapshotValue(values, "Appearance",
                     "Theme", "auto"),
+                ShowAtStartup: this.ReadSnapshotValue(values, "Startup",
+                    "ShowAtStartup", "0"),
+                RunAsAdministrator: this.ReadSnapshotValue(values,
+                    "Startup", "RunAsAdministrator", "1"),
+                CheckUpdatesOnStartup: this.ReadSnapshotValue(values,
+                    "Startup", "CheckUpdatesOnStartup", "1"),
                 EscapeCancelsRecording: this.ReadSnapshotValue(values, "Recording",
                     "EscapeCancelsRecording", "1"),
                 EventBufferCapacity: this.ReadSnapshotValue(values, "Events",
                     "EventBufferCapacity", "1000"),
                 EventViewerAutoScroll: this.ReadSnapshotValue(values, "Events",
-                    "EventViewerAutoScroll", "1")
+                    "EventViewerAutoScroll", "1"),
+                AIAddress: this.ReadSnapshotValue(values, "AI", "Address",
+                    ""),
+                AIKey: this.ReadSnapshotValue(values, "AI", "Key", ""),
+                AIModel: this.ReadSnapshotValue(values, "AI", "Model", ""),
+                AITimeoutS: this.ReadSnapshotValue(values, "AI", "TimeoutS",
+                    "600"),
+                AIPrompt: this.ReadMultilineSnapshotValue(values, "AI",
+                    "PromptEscaped", "Prompt",
+                    AIService.DefaultGeneratePrompt),
+                AIOptimizePrompt: this.ReadMultilineSnapshotValue(values,
+                    "AI", "OptimizePromptEscaped", "OptimizePrompt",
+                    AIService.DefaultOptimizePrompt),
+                AISystemPrompt: this.ReadMultilineSnapshotValue(values,
+                    "AI", "SystemPromptEscaped", "SystemPrompt",
+                    AIService.DefaultSystemPrompt)
             })
         } finally readLease.Release()
     }
@@ -54,10 +75,18 @@ class AppSettingsService {
         return {
             UiLanguage: LocalizationService.NormalizeLanguage(
                 this.GetProperty(settings, "UiLanguage", "auto")),
-            UiFont: LocalizationService.NormalizeUiFont(
+            UiFont: LocalizationService.NormalizeRequestedUiFont(
                 this.GetProperty(settings, "UiFont", "auto")),
             Theme: UiThemeService.NormalizeTheme(
                 this.GetProperty(settings, "Theme", "auto")),
+            ShowAtStartup: this.NormalizeBoolean(
+                this.GetProperty(settings, "ShowAtStartup", false), false),
+            RunAsAdministrator: this.NormalizeBoolean(
+                this.GetProperty(settings, "RunAsAdministrator", true),
+                true),
+            CheckUpdatesOnStartup: this.NormalizeBoolean(
+                this.GetProperty(settings, "CheckUpdatesOnStartup", true),
+                true),
             EscapeCancelsRecording: this.NormalizeBoolean(
                 this.GetProperty(settings, "EscapeCancelsRecording", true),
                 true),
@@ -67,7 +96,25 @@ class AppSettingsService {
                 AppSettingsService.MaximumEventBufferCapacity, 1000),
             EventViewerAutoScroll: this.NormalizeBoolean(
                 this.GetProperty(settings, "EventViewerAutoScroll", true),
-                true)
+                true),
+            AIAddress: Trim(String(this.GetProperty(settings, "AIAddress",
+                ""))),
+            AIKey: Trim(String(this.GetProperty(settings, "AIKey", ""))),
+            AIModel: Trim(String(this.GetProperty(settings, "AIModel",
+                ""))),
+            AITimeoutS: this.NormalizeInteger(
+                this.GetProperty(settings, "AITimeoutS",
+                AIService.DefaultTimeoutS), 1,
+                    AIService.MaximumTimeoutS, AIService.DefaultTimeoutS),
+            AIPrompt: this.NormalizePrompt(this.GetProperty(settings,
+                "AIPrompt", AIService.DefaultGeneratePrompt),
+                AIService.DefaultGeneratePrompt),
+            AIOptimizePrompt: this.NormalizePrompt(this.GetProperty(settings,
+                "AIOptimizePrompt", AIService.DefaultOptimizePrompt),
+                AIService.DefaultOptimizePrompt),
+            AISystemPrompt: this.NormalizePrompt(this.GetProperty(settings,
+                "AISystemPrompt", AIService.DefaultSystemPrompt),
+                AIService.DefaultSystemPrompt)
         }
     }
 
@@ -100,6 +147,44 @@ class AppSettingsService {
             ? normalized : fallback
     }
 
+    NormalizePrompt(value, fallback) {
+        try text := Trim(String(value))
+        catch
+            return fallback
+        if text == ""
+            return fallback
+        return text
+    }
+
+    EncodeMultilineValue(value) {
+        text := StrReplace(String(value), "\", "\\")
+        text := StrReplace(text, "`r", "\r")
+        return StrReplace(text, "`n", "\n")
+    }
+
+    DecodeMultilineValue(value) {
+        text := String(value)
+        result := ""
+        index := 1
+        while index <= StrLen(text) {
+            character := SubStr(text, index, 1)
+            if character != "\" || index == StrLen(text) {
+                result .= character
+                index++
+                continue
+            }
+            escaped := SubStr(text, index + 1, 1)
+            switch escaped {
+                case "r": result .= "`r"
+                case "n": result .= "`n"
+                case "\": result .= "\"
+                default: result .= "\" escaped
+            }
+            index += 2
+        }
+        return result
+    }
+
     ParseSnapshot(snapshot) {
         values := Map()
         currentSection := ""
@@ -129,6 +214,15 @@ class AppSettingsService {
         return values.Has(lookupKey) ? values[lookupKey] : fallback
     }
 
+    ReadMultilineSnapshotValue(values, section, escapedKey, legacyKey,
+            fallback) {
+        lookupKey := StrLower(String(section)) Chr(31)
+            . StrLower(String(escapedKey))
+        if values.Has(lookupKey)
+            return this.DecodeMultilineValue(values[lookupKey])
+        return this.ReadSnapshotValue(values, section, legacyKey, fallback)
+    }
+
     GetSnapshot() {
         if !FileExist(this.SettingsPath)
             return ""
@@ -142,6 +236,12 @@ class AppSettingsService {
             . "UiLanguage=" settings.UiLanguage "`r`n"
             . "UiFont=" settings.UiFont "`r`n"
             . "Theme=" settings.Theme "`r`n`r`n"
+            . "[Startup]`r`n"
+            . "ShowAtStartup=" (settings.ShowAtStartup ? 1 : 0) "`r`n"
+            . "RunAsAdministrator="
+                . (settings.RunAsAdministrator ? 1 : 0) "`r`n"
+            . "CheckUpdatesOnStartup="
+                . (settings.CheckUpdatesOnStartup ? 1 : 0) "`r`n`r`n"
             . "[Recording]`r`n"
             . "EscapeCancelsRecording="
                 . (settings.EscapeCancelsRecording ? 1 : 0) "`r`n`r`n"
@@ -149,6 +249,17 @@ class AppSettingsService {
             . "EventBufferCapacity=" settings.EventBufferCapacity "`r`n"
             . "EventViewerAutoScroll="
                 . (settings.EventViewerAutoScroll ? 1 : 0) "`r`n"
+            . "`r`n[AI]`r`n"
+            . "Address=" settings.AIAddress "`r`n"
+            . "Key=" settings.AIKey "`r`n"
+            . "Model=" settings.AIModel "`r`n"
+            . "TimeoutS=" settings.AITimeoutS "`r`n"
+            . "PromptEscaped="
+                . this.EncodeMultilineValue(settings.AIPrompt) "`r`n"
+            . "OptimizePromptEscaped="
+                . this.EncodeMultilineValue(settings.AIOptimizePrompt) "`r`n"
+            . "SystemPromptEscaped="
+                . this.EncodeMultilineValue(settings.AISystemPrompt) "`r`n"
     }
 
     WriteSnapshot(snapshot, expectedSnapshot?) {

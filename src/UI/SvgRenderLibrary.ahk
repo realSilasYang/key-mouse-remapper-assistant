@@ -21,10 +21,6 @@ class SvgRenderLibrary {
         this.RenderCacheClock := 0
     }
 
-    IsAvailable() {
-        return this.EnsureLoaded()
-    }
-
     EnsureLoaded() {
         if this.ModuleHandle && this.Options
             return true

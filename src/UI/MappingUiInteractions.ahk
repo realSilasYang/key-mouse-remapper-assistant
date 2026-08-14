@@ -14,6 +14,7 @@ class MappingUiInteractions {
         this.HandCursor := 0
         this.TextCursor := 0
         this.ArrowCursor := 0
+        this.PointerFeedbackFrozen := false
         this.Disposed := false
         this.Painter := RoundedButtonPainter(parentColor)
         this.SvgRenderer := IsObject(svgRenderer) ? svgRenderer : ""
@@ -46,22 +47,28 @@ class MappingUiInteractions {
         hwnd := control.Hwnd
         if !hwnd || !this.Painter.Ready
             return false
+        try control.SetFont("norm bold",
+            LocalizationService.GetLanguageSystemUiFontName())
         ; Text 控件默认会把鼠标命中透传给父窗口。SS_NOTIFY(0x100)
         ; 必须在子类化前启用，否则自绘成功但永远收不到按下/松开消息。
         try control.Opt("+0x100 +0x10000") ; SS_NOTIFY | WS_TABSTOP
         catch
             return false
-        if hoverColor == ""
-            hoverColor := this.LightenColor(normalColor)
-        if pressedColor == ""
-            pressedColor := this.LightenColor(hoverColor, 0.08)
         if textColor == ""
             textColor := MappingWindow.Colors.Text
+        if hoverColor == ""
+            hoverColor := this.AdjustInteractiveColor(normalColor,
+                textColor)
+        if pressedColor == ""
+            pressedColor := this.AdjustInteractiveColor(hoverColor,
+                textColor, 0.08)
         state := {
             Kind: "button", Control: control, Callback: callback,
             Normal: normalColor, Hover: hoverColor, Pressed: pressedColor,
             Current: normalColor, TextColor: textColor,
             Multiline: multiline, Interactive: true,
+            TextAlign: "center", TextInsetDip: 6,
+            RadiusDip: RoundedButtonPainter.RadiusDip,
             KeyboardGeneration: 0, SuppressNextActivation: false,
             TooltipText: ""
         }
@@ -97,32 +104,6 @@ class MappingUiInteractions {
         return true
     }
 
-    ; Keep the visual icon column stable while preserving the complete button
-    ; text for localization, keyboard interaction, and accessibility.
-    SetButtonLeadingTextSlot(control, slotDip := 20, gapDip := 4,
-            visualSizeDip := 10) {
-        try hwnd := control.Hwnd
-        catch
-            return false
-        if !this.Controls.Has(hwnd)
-            return false
-        state := this.Controls[hwnd]
-        if state.Kind != "button"
-            return false
-        try {
-            slotDip := Max(1, slotDip + 0)
-            gapDip := Max(0, gapDip + 0)
-            visualSizeDip := Max(6, visualSizeDip + 0)
-        } catch {
-            return false
-        }
-        state.LeadingTextSlotDip := slotDip
-        state.LeadingTextGapDip := gapDip
-        state.LeadingTextVisualSizeDip := visualSizeDip
-        this.Redraw(hwnd)
-        return true
-    }
-
     EnsureTooltip() {
         if !IsObject(this.Tooltip)
             this.Tooltip := DarkTooltipWindow(this.Gui)
@@ -144,11 +125,32 @@ class MappingUiInteractions {
             Kind: "icon", Control: control,
             Normal: backgroundColor, Hover: backgroundColor,
             Pressed: backgroundColor, Current: backgroundColor,
-            TextColor: iconColor, Multiline: false, Interactive: false
+            TextColor: iconColor, TextInsetDip: 0,
+            Multiline: false, Interactive: false
         }
         this.Controls[hwnd] := state
         if !this.Attach(hwnd) || !this.EnableOwnerDraw(control) {
             this.Detach(hwnd)
+            this.Controls.Delete(hwnd)
+            return false
+        }
+        this.Redraw(hwnd)
+        return true
+    }
+
+    RegisterDashedDivider(control, backgroundColor, lineColor,
+            dashWidthDip, dashGapDip, dashHeightDip) {
+        hwnd := control.Hwnd
+        if !hwnd || !this.Painter.Ready
+            return false
+        state := {
+            Kind: "divider", Control: control,
+            BackgroundColor: backgroundColor, LineColor: lineColor,
+            DashWidthDip: dashWidthDip, DashGapDip: dashGapDip,
+            DashHeightDip: dashHeightDip
+        }
+        this.Controls[hwnd] := state
+        if !this.EnableOwnerDraw(control) {
             this.Controls.Delete(hwnd)
             return false
         }
@@ -164,14 +166,17 @@ class MappingUiInteractions {
         return this.RegisterCursorControl(control, "text")
     }
 
-    RegisterTextInput(inputControl, hitTarget := "") {
+    RegisterTextInput(inputControl, hitTarget := "", cursorKind := "text",
+            hideCaret := false) {
         try inputHwnd := inputControl.Hwnd
         catch
             return false
         if !inputHwnd
             return false
         this.Controls[inputHwnd] := {
-            Kind: "text", Control: inputControl, TextInput: true
+            Kind: "text", Control: inputControl, TextInput: true,
+            CursorKind: cursorKind, FocusCount: 0,
+            HideCaret: !!hideCaret
         }
         this.TextInputTargets[inputHwnd] := inputHwnd
         if !this.Attach(inputHwnd) {
@@ -195,6 +200,24 @@ class MappingUiInteractions {
             }
             this.TextInputTargets[hitTargetHwnd] := inputHwnd
         }
+        return true
+    }
+
+    EnableHiddenVerticalWheelScroll(inputControl, linesPerNotch := 2,
+            afterScroll := "") {
+        try hwnd := inputControl.Hwnd
+        catch
+            return false
+        if !hwnd || !this.Controls.Has(hwnd)
+            return false
+        if afterScroll != "" && !IsObject(afterScroll)
+            return false
+        state := this.Controls[hwnd]
+        if state.Kind != "text"
+            return false
+        state.HiddenWheelScrollLines := Max(1, Integer(linesPerNotch))
+        state.WheelDelta := 0
+        state.AfterWheelScroll := IsObject(afterScroll) ? afterScroll : ""
         return true
     }
 
@@ -290,6 +313,7 @@ class MappingUiInteractions {
             return
         state := this.Controls[itemHwnd]
         if state.Kind != "button" && state.Kind != "icon"
+                && state.Kind != "divider"
             return
         hdcOffset := itemHwndOffset + A_PtrSize
         rectOffset := hdcOffset + A_PtrSize
@@ -298,7 +322,8 @@ class MappingUiInteractions {
             - NumGet(lParam, rectOffset, "Int")
         height := NumGet(lParam, rectOffset + 12, "Int")
             - NumGet(lParam, rectOffset + 4, "Int")
-        if this.Painter.Draw(hdc, width, height, state)
+        drawn := this.Painter.Draw(hdc, width, height, state)
+        if drawn
             return 1
     }
 
@@ -314,6 +339,10 @@ class MappingUiInteractions {
             if !this.Controls.Has(hwnd)
                 return this.DefSubclassProc(hwnd, message, wParam, lParam)
             state := this.Controls[hwnd]
+            if state.Kind == "button" && state.HasOwnProp("Preflight")
+                    && (message == 0x0200 || message == 0x0201
+                        || message == 0x0203 || message == Win32.WM_KEYDOWN)
+                state.Preflight.Call()
             switch message {
                 case Win32.WM_SETFOCUS:
                     if state.Kind == "focusRedirect" {
@@ -321,9 +350,12 @@ class MappingUiInteractions {
                         return 0
                     }
                     if state.HasOwnProp("TextInput") && state.TextInput {
+                        state.FocusCount += 1
                         result := this.DefSubclassProc(hwnd, message,
                             wParam, lParam)
                         this.EnsureTextInputCaret(hwnd)
+                        if state.HideCaret
+                            this.HideTextInputCaret(hwnd)
                         return result
                     }
                 case Win32.WM_KILLFOCUS:
@@ -347,10 +379,20 @@ class MappingUiInteractions {
                     }
                     if state.Kind == "icon"
                         return 0
+                    if state.Kind == "text" && state.HideCaret {
+                        result := this.DefSubclassProc(hwnd, message,
+                            wParam, lParam)
+                        this.HideTextInputCaret(hwnd)
+                        return result
+                    }
                     if state.Kind != "text"
                         this.MoveKeyboardFocus(hwnd)
                     if state.Kind == "button" {
                         if !state.Interactive
+                            return 0
+                        if state.HasOwnProp("PointerDownHandler")
+                                && IsObject(state.PointerDownHandler)
+                                && state.PointerDownHandler.Call(hwnd)
                             return 0
                         this.BeginPress(hwnd)
                         return 0
@@ -365,10 +407,40 @@ class MappingUiInteractions {
                             this.QueueClick(hwnd)
                         return 0
                     }
+                    if state.Kind == "text" && state.HideCaret {
+                        result := this.DefSubclassProc(hwnd, message,
+                            wParam, lParam)
+                        this.HideTextInputCaret(hwnd)
+                        return result
+                    }
                     if state.Kind == "button" {
                         if !state.Interactive
                             return 0
                         this.EndPress(hwnd, lParam)
+                        return 0
+                    }
+                case Win32.WM_MOUSEWHEEL:
+                    if state.Kind == "focusRedirect" {
+                        SendMessage(Win32.WM_MOUSEWHEEL, wParam, lParam, ,
+                            state.TargetHwnd)
+                        return 0
+                    }
+                    if state.HasOwnProp("HiddenWheelScrollLines") {
+                        wheelDelta := (wParam >> 16) & 0xFFFF
+                        if wheelDelta & 0x8000
+                            wheelDelta -= 0x10000
+                        state.WheelDelta += wheelDelta
+                        wheelNotches := state.WheelDelta >= 0
+                            ? Floor(state.WheelDelta / 120)
+                            : Ceil(state.WheelDelta / 120)
+                        if wheelNotches {
+                            state.WheelDelta -= wheelNotches * 120
+                            SendMessage(0x00B6, 0,
+                                -wheelNotches
+                                    * state.HiddenWheelScrollLines, , hwnd)
+                            if IsObject(state.AfterWheelScroll)
+                                state.AfterWheelScroll.Call()
+                        }
                         return 0
                     }
                 case Win32.WM_KEYDOWN:
@@ -389,7 +461,14 @@ class MappingUiInteractions {
                             wParam, lParam)
                     if DllCall("user32\IsWindowEnabled", "Ptr", hwnd, "Int")
                             && (state.Kind != "button" || state.Interactive) {
-                        this.SetCursor(state.Kind)
+                        cursorKind := state.HasOwnProp("CursorKind")
+                            ? state.CursorKind : state.Kind
+                        cursorKind := state.Kind == "text"
+                                && (this.IsScrollBarHitTestCode(lParam)
+                                    || this.IsPointerOverTextInputScrollBar(
+                                        hwnd))
+                            ? "arrow" : cursorKind
+                        this.SetCursor(cursorKind)
                         return 1
                     }
                 case 0x001F:
@@ -411,6 +490,8 @@ class MappingUiInteractions {
     }
 
     UpdateHover(hwnd) {
+        if this.PointerFeedbackFrozen
+            return
         if !this.Controls.Has(hwnd)
             return
         state := this.Controls[hwnd]
@@ -437,6 +518,8 @@ class MappingUiInteractions {
     }
 
     HandleMouseLeave(hwnd) {
+        if this.PointerFeedbackFrozen
+            return
         if !this.Controls.Has(hwnd)
             return
         state := this.Controls[hwnd]
@@ -499,15 +582,19 @@ class MappingUiInteractions {
     EnsureTextInputCaret(hwnd) {
         if !hwnd || DllCall("user32\GetFocus", "Ptr") != hwnd
             return false
-        ; 原生 Edit 通常已建立 caret；ShowCaret 成功时只需沿用其形状与位置。
-        if DllCall("user32\ShowCaret", "Ptr", hwnd, "Int")
-            return true
         clientRect := Buffer(16, 0)
         if !DllCall("user32\GetClientRect", "Ptr", hwnd,
                 "Ptr", clientRect, "Int")
             return false
         clientHeight := NumGet(clientRect, 12, "Int")
+        formatRect := Buffer(16, 0)
+        SendMessage(0x00B2, 0, formatRect.Ptr, , hwnd) ; EM_GETRECT
+        formatLeft := NumGet(formatRect, 0, "Int")
+        formatTop := NumGet(formatRect, 4, "Int")
+        textLength := SendMessage(0x000E, 0, 0, , hwnd) ; WM_GETTEXTLENGTH
         caretHeight := this.GetTextInputCaretHeight(hwnd, clientHeight)
+        try DllCall("user32\HideCaret", "Ptr", hwnd, "Int")
+        try DllCall("user32\DestroyCaret", "Int")
         if !DllCall("user32\CreateCaret", "Ptr", hwnd, "Ptr", 0,
                 "Int", 1, "Int", caretHeight, "Int")
             return false
@@ -523,9 +610,28 @@ class MappingUiInteractions {
             caretX -= 0x10000
         if caretY & 0x8000
             caretY -= 0x10000
+        if !textLength || (packedPosition & 0xFFFFFFFF) == 0xFFFFFFFF
+                || caretX < formatLeft || caretY < formatTop {
+            caretX := formatLeft
+            caretY := formatTop
+        }
         DllCall("user32\SetCaretPos", "Int", Max(0, caretX),
             "Int", Max(0, caretY), "Int")
         return !!DllCall("user32\ShowCaret", "Ptr", hwnd, "Int")
+    }
+
+    HideTextInputCaret(hwnd) {
+        if !hwnd || DllCall("user32\GetFocus", "Ptr") != hwnd
+            return false
+        info := Buffer(72, 0)
+        NumPut("UInt", info.Size, info, 0)
+        threadId := DllCall("user32\GetWindowThreadProcessId", "Ptr", hwnd,
+            "Ptr", 0, "UInt")
+        if DllCall("user32\GetGUIThreadInfo", "UInt", threadId, "Ptr", info,
+                "Int") && (!(NumGet(info, 4, "UInt") & 0x00000001)
+                    || NumGet(info, 48, "Ptr") != hwnd)
+            return true
+        return !!DllCall("user32\HideCaret", "Ptr", hwnd, "Int")
     }
 
     GetTextInputCaretHeight(hwnd, clientHeight) {
@@ -714,7 +820,8 @@ class MappingUiInteractions {
         state := this.Controls[hwnd]
         if state.Kind != "button" || state.KeyboardGeneration != generation
             return
-        state.Current := state.Interactive && this.IsPointerInside(hwnd)
+        state.Current := !this.PointerFeedbackFrozen
+                && state.Interactive && this.IsPointerInside(hwnd)
             ? state.Hover : state.Normal
         this.Redraw(hwnd)
     }
@@ -767,8 +874,101 @@ class MappingUiInteractions {
         }
     }
 
+    SetPointerFeedbackFrozen(frozen := true) {
+        frozen := !!frozen
+        if this.PointerFeedbackFrozen == frozen
+            return false
+        if frozen {
+            this.PointerFeedbackFrozen := true
+            this.HideTooltip()
+            if this.PressedHwnd
+                this.CancelPress()
+            ; A resize loop can begin while the pointer is still over a button,
+            ; or while a delayed keyboard feedback timer has left another
+            ; button highlighted. Normalize every owner-draw button before the
+            ; first geometry transaction so no stale surface follows the move.
+            this.NormalizeButtonFeedback()
+            return true
+        }
+        this.PointerFeedbackFrozen := false
+        return this.RestorePointerFeedback()
+    }
+
+    NormalizeButtonFeedback() {
+        this.HoveredHwnd := 0
+        changed := false
+        for hwnd, state in this.Controls {
+            if state.Kind != "button"
+                continue
+            if state.Current == state.Normal
+                continue
+            state.Current := state.Normal
+            this.Redraw(hwnd)
+            changed := true
+        }
+        return changed
+    }
+
+    RestorePointerFeedback() {
+        if this.Disposed || this.PressedHwnd
+            return false
+        point := Buffer(8, 0)
+        if !DllCall("user32\GetCursorPos", "Ptr", point, "Int")
+            return false
+        this.RestoreHovered()
+        cursorX := NumGet(point, 0, "Int")
+        cursorY := NumGet(point, 4, "Int")
+        for hwnd, state in this.Controls {
+            if state.Kind != "button" || !state.Interactive
+                continue
+            if !this.IsPointInsideWindow(hwnd, cursorX, cursorY)
+                continue
+            this.HoveredHwnd := hwnd
+            state.Current := state.Hover
+            this.TrackMouseLeave(hwnd)
+            this.Redraw(hwnd)
+            if state.TooltipText != ""
+                this.EnsureTooltip().Schedule(hwnd, state.TooltipText)
+            return true
+        }
+        return false
+    }
+
+    IsPointInsideWindow(hwnd, x, y) {
+        rect := Buffer(16, 0)
+        if !hwnd || !DllCall("user32\GetWindowRect", "Ptr", hwnd,
+                "Ptr", rect, "Int")
+            return false
+        return x >= NumGet(rect, 0, "Int")
+            && x < NumGet(rect, 8, "Int")
+            && y >= NumGet(rect, 4, "Int")
+            && y < NumGet(rect, 12, "Int")
+    }
+
     SetButtonColor(control, normalColor) {
         return this.SetButtonAppearance(control, normalColor)
+    }
+
+    SetButtonPreflight(control, callback) {
+        hwnd := control.Hwnd
+        if !this.Controls.Has(hwnd) || !IsObject(callback)
+            return false
+        state := this.Controls[hwnd]
+        if state.Kind != "button"
+            return false
+        state.Preflight := callback
+        return true
+    }
+
+    SetButtonPointerDownHandler(control, callback) {
+        hwnd := control.Hwnd
+        if !this.Controls.Has(hwnd) || !IsObject(callback)
+            return false
+        state := this.Controls[hwnd]
+        if state.Kind != "button"
+            return false
+        state.PointerDownHandler := callback
+        return true
     }
 
     SetButtonAppearance(control, normalColor, textColor := "",
@@ -779,17 +979,32 @@ class MappingUiInteractions {
         state := this.Controls[hwnd]
         if state.Kind != "button"
             return false
-        state.Normal := normalColor
-        state.Hover := interactive
-            ? (hoverColor != "" ? hoverColor : this.LightenColor(normalColor))
+        resolvedTextColor := textColor != "" ? textColor : state.TextColor
+        resolvedHover := interactive
+            ? (hoverColor != "" ? hoverColor
+                : this.AdjustInteractiveColor(normalColor,
+                    resolvedTextColor))
             : normalColor
-        state.Pressed := interactive
+        resolvedPressed := interactive
             ? (pressedColor != "" ? pressedColor
-                : this.LightenColor(state.Hover, 0.08))
+                : this.AdjustInteractiveColor(resolvedHover,
+                    resolvedTextColor, 0.08))
             : normalColor
-        state.Interactive := !!interactive
-        if textColor != "" {
-            state.TextColor := textColor
+        interactive := !!interactive
+        appearanceChanged := state.Normal != normalColor
+            || state.Hover != resolvedHover
+            || state.Pressed != resolvedPressed
+            || state.TextColor != resolvedTextColor
+            || state.Interactive != interactive
+        if !appearanceChanged
+            return false
+        textColorChanged := state.TextColor != resolvedTextColor
+        state.Normal := normalColor
+        state.Hover := resolvedHover
+        state.Pressed := resolvedPressed
+        state.Interactive := interactive
+        if textColorChanged {
+            state.TextColor := resolvedTextColor
             this.RefreshAutomaticIconTint(state)
         }
         if !state.Interactive {
@@ -806,10 +1021,99 @@ class MappingUiInteractions {
         return true
     }
 
+    SetButtonTextLayout(control, alignment := "center", insetDip := 6,
+            radiusDip := RoundedButtonPainter.RadiusDip) {
+        hwnd := control.Hwnd
+        if !this.Controls.Has(hwnd)
+            return false
+        state := this.Controls[hwnd]
+        if state.Kind != "button"
+            return false
+        alignment := StrLower(Trim(String(alignment)))
+        if alignment != "left" && alignment != "center"
+                && alignment != "right"
+            return false
+        try {
+            insetDip := Max(0, insetDip + 0)
+            radiusDip := Max(1, radiusDip + 0)
+        } catch {
+            return false
+        }
+        state.TextAlign := alignment
+        state.TextInsetDip := insetDip
+        state.RadiusDip := radiusDip
+        this.Redraw(hwnd)
+        return true
+    }
+
+    SetButtonRasterTextAlignment(control, enabled := true) {
+        hwnd := control.Hwnd
+        if !this.Controls.Has(hwnd)
+            return false
+        state := this.Controls[hwnd]
+        if state.Kind != "button"
+            return false
+        state.RasterTextAlignment := !!enabled
+        this.Redraw(hwnd)
+        return true
+    }
+
+    SetButtonClearMark(control, sizeDip := 20, strokeDip := 2) {
+        hwnd := control.Hwnd
+        if !this.Controls.Has(hwnd)
+            return false
+        state := this.Controls[hwnd]
+        if state.Kind != "button"
+            return false
+        try {
+            state.ClearMarkSizeDip := Max(4, sizeDip + 0)
+            state.ClearMarkStrokeDip := Max(1, strokeDip + 0)
+        } catch {
+            return false
+        }
+        this.Redraw(hwnd)
+        return true
+    }
+
+    SetButtonLeadingTextSlot(control, slotDip := 20, gapDip := 4,
+            visualSizeDip := 10) {
+        hwnd := control.Hwnd
+        if !this.Controls.Has(hwnd)
+            return false
+        state := this.Controls[hwnd]
+        if state.Kind != "button"
+            return false
+        try {
+            slotDip := Max(1, slotDip + 0)
+            gapDip := Max(0, gapDip + 0)
+            visualSizeDip := Max(6, visualSizeDip + 0)
+        } catch {
+            return false
+        }
+        state.LeadingTextSlotDip := slotDip
+        state.LeadingTextGapDip := gapDip
+        state.LeadingTextVisualSizeDip := visualSizeDip
+        this.Redraw(hwnd)
+        return true
+    }
+
     SetParentColor(color) {
         this.Painter.SetParentColor(color)
         if IsObject(this.Tooltip)
             this.Tooltip.InvalidateTheme()
+    }
+
+    SetDashedDividerAppearance(control, backgroundColor, lineColor) {
+        hwnd := control.Hwnd
+        if !this.Controls.Has(hwnd)
+            return false
+        state := this.Controls[hwnd]
+        if state.Kind != "divider"
+            return false
+        state.BackgroundColor := backgroundColor
+        state.LineColor := lineColor
+        this.Redraw(hwnd)
+        return true
     }
 
     SetControlSvgIcon(control, svgPath, sizeDip := 14, gapDip := 7,
@@ -851,7 +1155,8 @@ class MappingUiInteractions {
             Width: displaySnapshot.Width, Height: displaySnapshot.Height,
             Pixels: displaySnapshot.Pixels, SizeDip: sizeDip,
             GapDip: gapDip, SourcePath: svgPath,
-            SourceSnapshot: snapshot, TintMode: tintMode
+            SourceSnapshot: snapshot, TintMode: tintMode,
+            TintColor: resolvedTint
         }
     }
 
@@ -975,20 +1280,6 @@ class MappingUiInteractions {
 
     ClearButtonIcon(control) => this.ClearControlIcon(control)
 
-    ClearControlTrailingIcon(control) {
-        hwnd := control.Hwnd
-        if !this.Controls.Has(hwnd)
-            return false
-        state := this.Controls[hwnd]
-        if !state.HasOwnProp("TrailingButtonImage")
-            return false
-        state.DeleteProp("TrailingButtonImage")
-        this.Redraw(hwnd)
-        return true
-    }
-
-    ClearButtonTrailingIcon(control) => this.ClearControlTrailingIcon(control)
-
     RefreshAutomaticIconTint(state) {
         refreshed := false
         for propertyName in ["ButtonImage", "TrailingButtonImage"] {
@@ -1004,6 +1295,7 @@ class MappingUiInteractions {
             image.Width := tinted.Width
             image.Height := tinted.Height
             image.Pixels := tinted.Pixels
+            image.TintColor := state.TextColor
             refreshed := true
         }
         return refreshed
@@ -1044,6 +1336,20 @@ class MappingUiInteractions {
         return Format("{:02X}{:02X}{:02X}", red, green, blue)
     }
 
+    AdjustInteractiveColor(backgroundColor, textColor, ratio := 0.12) {
+        if UiThemeService.IsDark() || !this.IsLightColor(textColor)
+            return this.LightenColor(backgroundColor, ratio)
+        return this.DarkenColor(backgroundColor, 1 - ratio)
+    }
+
+    IsLightColor(color) {
+        value := Integer("0x" color)
+        red := (value >> 16) & 0xFF
+        green := (value >> 8) & 0xFF
+        blue := value & 0xFF
+        return red * 299 + green * 587 + blue * 114 >= 160000
+    }
+
     DarkenColor(color, factor := 0.86) {
         value := Integer("0x" color)
         red := Round(((value >> 16) & 0xFF) * factor)
@@ -1056,12 +1362,12 @@ class MappingUiInteractions {
         if kind == "text" {
             if !this.TextCursor
                 this.TextCursor := DllCall("user32\LoadCursor", "Ptr", 0,
-                    "Ptr", 32513, "Ptr")
+                    "Ptr", Win32.IDC_IBEAM, "Ptr")
             cursor := this.TextCursor
-        } else if kind == "focusRedirect" {
+        } else if kind == "focusRedirect" || kind == "arrow" {
             if !this.ArrowCursor
                 this.ArrowCursor := DllCall("user32\LoadCursor", "Ptr", 0,
-                    "Ptr", 32512, "Ptr")
+                    "Ptr", Win32.IDC_ARROW, "Ptr")
             cursor := this.ArrowCursor
         } else {
             if !this.HandCursor
@@ -1071,6 +1377,71 @@ class MappingUiInteractions {
         }
         if cursor
             DllCall("user32\SetCursor", "Ptr", cursor)
+    }
+
+    IsScrollBarHitTestCode(lParam) {
+        hitTestCode := lParam & 0xFFFF
+        return hitTestCode == Win32.HTHSCROLL
+            || hitTestCode == Win32.HTVSCROLL
+    }
+
+    GetVisibleScrollBarRectangle(hwnd, objectId) {
+        if !hwnd || !DllCall("user32\IsWindow", "Ptr", hwnd, "Int")
+            return ""
+        scrollBarInfo := Buffer(60, 0)
+        NumPut("UInt", scrollBarInfo.Size, scrollBarInfo, 0)
+        if !DllCall("user32\GetScrollBarInfo", "Ptr", hwnd, "Int",
+                objectId, "Ptr", scrollBarInfo, "Int")
+            return ""
+        state := NumGet(scrollBarInfo, 36, "UInt")
+        if state & (Win32.STATE_SYSTEM_INVISIBLE
+                | Win32.STATE_SYSTEM_OFFSCREEN)
+            return ""
+        left := NumGet(scrollBarInfo, 4, "Int")
+        top := NumGet(scrollBarInfo, 8, "Int")
+        right := NumGet(scrollBarInfo, 12, "Int")
+        bottom := NumGet(scrollBarInfo, 16, "Int")
+        if right <= left || bottom <= top
+            return ""
+        return {Left: left, Top: top, Right: right, Bottom: bottom}
+    }
+
+    PointInsideScreenRectangle(x, y, rectangle) {
+        return IsObject(rectangle)
+            && x >= rectangle.Left && x < rectangle.Right
+            && y >= rectangle.Top && y < rectangle.Bottom
+    }
+
+    IsPointerOverTextInputScrollBar(editHwnd, cursorX?, cursorY?) {
+        if !editHwnd || !DllCall("user32\IsWindow", "Ptr", editHwnd,
+                "Int")
+            return false
+        if !IsSet(cursorX) || !IsSet(cursorY) {
+            cursorPoint := Buffer(8, 0)
+            if !DllCall("user32\GetCursorPos", "Ptr", cursorPoint, "Int")
+                return false
+            cursorX := NumGet(cursorPoint, 0, "Int")
+            cursorY := NumGet(cursorPoint, 4, "Int")
+        }
+        horizontalBar := this.GetVisibleScrollBarRectangle(editHwnd,
+            Win32.OBJID_HSCROLL)
+        if this.PointInsideScreenRectangle(cursorX, cursorY, horizontalBar)
+            return true
+        verticalBar := this.GetVisibleScrollBarRectangle(editHwnd,
+            Win32.OBJID_VSCROLL)
+        if this.PointInsideScreenRectangle(cursorX, cursorY, verticalBar)
+            return true
+        if IsObject(horizontalBar) && IsObject(verticalBar) {
+            cornerRectangle := {
+                Left: verticalBar.Left,
+                Top: horizontalBar.Top,
+                Right: verticalBar.Right,
+                Bottom: horizontalBar.Bottom
+            }
+            return this.PointInsideScreenRectangle(cursorX, cursorY,
+                cornerRectangle)
+        }
+        return false
     }
 
     IsPointerInside(hwnd) {

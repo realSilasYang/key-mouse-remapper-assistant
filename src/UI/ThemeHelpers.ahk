@@ -1,14 +1,24 @@
 ApplyDarkWindow(hwnd) {
-    if !IsThemeableWindow(hwnd)
+    if !hwnd || !DllCall("user32\IsWindow", "Ptr", hwnd, "Int")
         return false
-    attribute := VerCompare(A_OSVersion, "10.0.18985") >= 0 ? 20 : 19
+    RegisterNativeWindowBackground(hwnd, UiThemeService.Color("Window"))
+    if !IsThemeableWindow(hwnd)
+        return true
+    UiThemeService.ApplyProcessPreference()
     darkValue := UiThemeService.IsDark() ? 1 : 0
     titleApplied := false
-    try titleApplied := DllCall("dwmapi\DwmSetWindowAttribute", "Ptr", hwnd,
-        "Int", attribute, "Int*", darkValue, "Int", 4) >= 0
+    attributes := VerCompare(A_OSVersion, "10.0.18985") >= 0
+        ? [20, 19] : [19, 20]
+    for attribute in attributes {
+        try titleApplied := DllCall("dwmapi\DwmSetWindowAttribute",
+            "Ptr", hwnd, "Int", attribute, "Int*", darkValue,
+            "Int", 4, "Int") >= 0
+        if titleApplied
+            break
+    }
     modeAllowed := AllowDarkModeForWindow(hwnd, darkValue)
-    ; 顶层窗口使用各自的 Gui.BackColor。DarkMode_Explorer 会安装系统背景刷，
-    ; 覆盖应用调色板；原生子控件在各自的 ApplyDarkControl 中单独设置主题。
+    ; 顶层窗口使用各自的 Gui.BackColor；原生子控件在各自入口设置主题。
+    try DllCall("dwmapi\DwmFlush", "Int")
     RedrawNativeTheme(hwnd, true)
     return titleApplied || modeAllowed
 }
@@ -133,6 +143,8 @@ ActivatePreparedWindow(guiObj) {
         return false
     if !hwnd || !DllCall("user32\IsWindow", "Ptr", hwnd, "Int")
         return false
+    if WindowHierarchy.RestoreChildFromTaskbar(hwnd)
+        return true
     WindowHierarchy.PrepareChildRestore(hwnd)
     if WindowHierarchy.IsOwnerLocked(guiObj)
             && WindowHierarchy.ActivateTopOwned(guiObj)
@@ -140,35 +152,6 @@ ActivatePreparedWindow(guiObj) {
     guiObj.Show()
     try WinActivate("ahk_id " hwnd)
     return true
-}
-
-MoveAndRefreshResizableText(control, x := "", y := "", width := "",
-        height := "") {
-    ; STATIC 扩大后可能不会重绘先前位于裁剪区外的文字。只刷新扩大的
-    ; 控件本身，避免窗口缩放期间反复擦除整个客户区。
-    if !IsObject(control)
-        return false
-    try controlHwnd := control.Hwnd
-    catch
-        return false
-    if !controlHwnd || !DllCall("user32\IsWindow", "Ptr", controlHwnd,
-            "Int")
-        return false
-    try control.GetPos(,, &oldWidth, &oldHeight)
-    catch
-        return false
-    try control.Move(x, y, width, height)
-    catch
-        return false
-    try control.GetPos(,, &newWidth, &newHeight)
-    catch
-        return false
-    if newWidth <= oldWidth && newHeight <= oldHeight
-        return true
-
-    ; RDW_INVALIDATE | RDW_ERASE | RDW_UPDATENOW
-    return DllCall("user32\RedrawWindow", "Ptr", controlHwnd, "Ptr", 0,
-        "Ptr", 0, "UInt", 0x0105, "Int") != 0
 }
 
 DarkExplorerThemeName() {
@@ -194,6 +177,130 @@ GetUxThemeFunction(ordinal) {
 ColorRef(hexColor) {
     value := Integer("0x" hexColor)
     return ((value & 0xFF) << 16) | (value & 0xFF00) | ((value >> 16) & 0xFF)
+}
+
+RegisterNativeWindowBackground(hwnd, color) {
+    return NativeWindowBackgroundRegistry.Register(hwnd, color)
+}
+
+UnregisterNativeWindowBackground(hwnd) {
+    return NativeWindowBackgroundRegistry.Unregister(hwnd)
+}
+
+class NativeWindowBackgroundRegistry {
+    static Windows := Map()
+    static MessageRegistered := false
+    static MessageCallback := ""
+    static DestroyMessageCallback := ""
+
+    static Register(hwnd, color) {
+        if !hwnd || !DllCall("user32\IsWindow", "Ptr", hwnd, "Int")
+            return false
+        normalizedColor := RegExReplace(String(color), "i)^(#|0x)", "")
+        if !RegExMatch(normalizedColor, "i)^[0-9a-f]{6}$")
+            return false
+        if !this.Windows.Has(hwnd) {
+            brush := this.CreateBrush(normalizedColor)
+            if !brush
+                return false
+            if !this.EnsureMessageRegistration() {
+                this.DeleteBrush(brush)
+                return false
+            }
+            this.Windows[hwnd] := {Color: normalizedColor, Brush: brush}
+        } else {
+            state := this.Windows[hwnd]
+            if StrLower(state.Color) != StrLower(normalizedColor) {
+                brush := this.CreateBrush(normalizedColor)
+                if !brush
+                    return false
+                previousBrush := state.Brush
+                state.Color := normalizedColor
+                state.Brush := brush
+                this.DeleteBrush(previousBrush)
+            }
+        }
+        return true
+    }
+
+    static Unregister(hwnd) {
+        if !hwnd || !this.Windows.Has(hwnd)
+            return false
+        state := this.Windows[hwnd]
+        this.DeleteBrush(state.Brush)
+        this.Windows.Delete(hwnd)
+        this.UnregisterMessageIfUnused()
+        return true
+    }
+
+    static EnsureMessageRegistration() {
+        if this.MessageRegistered
+            return true
+        this.MessageCallback := ObjBindMethod(this, "HandleEraseBackground")
+        this.DestroyMessageCallback := ObjBindMethod(this,
+            "HandleWindowDestroyed")
+        eraseRegistered := false
+        try {
+            OnMessage(Win32.WM_ERASEBKGND, this.MessageCallback)
+            eraseRegistered := true
+            OnMessage(Win32.WM_NCDESTROY, this.DestroyMessageCallback)
+            this.MessageRegistered := true
+            return true
+        } catch {
+            if eraseRegistered
+                try OnMessage(Win32.WM_ERASEBKGND,
+                    this.MessageCallback, 0)
+            this.MessageCallback := ""
+            this.DestroyMessageCallback := ""
+            return false
+        }
+    }
+
+    static UnregisterMessageIfUnused() {
+        if this.Windows.Count || !this.MessageRegistered
+            return false
+        try OnMessage(Win32.WM_ERASEBKGND, this.MessageCallback, 0)
+        try OnMessage(Win32.WM_NCDESTROY,
+            this.DestroyMessageCallback, 0)
+        this.MessageRegistered := false
+        this.MessageCallback := ""
+        this.DestroyMessageCallback := ""
+        return true
+    }
+
+    static HandleEraseBackground(deviceContext, lParam, message, hwnd) {
+        if !deviceContext || !this.Windows.Has(hwnd)
+            return
+        state := this.Windows[hwnd]
+        clientRect := Buffer(16, 0)
+        if !DllCall("user32\GetClientRect", "Ptr", hwnd,
+                "Ptr", clientRect, "Int")
+            return
+        DllCall("user32\FillRect", "Ptr", deviceContext, "Ptr",
+            clientRect, "Ptr", state.Brush, "Int")
+        return 1
+    }
+
+    static HandleWindowDestroyed(wParam, lParam, message, hwnd) {
+        if !this.Windows.Has(hwnd)
+            return
+        state := this.Windows[hwnd]
+        this.Windows.Delete(hwnd)
+        this.DeleteBrush(state.Brush)
+        if !this.Windows.Count
+            SetTimer(ObjBindMethod(this,
+                "UnregisterMessageIfUnused"), -1)
+    }
+
+    static CreateBrush(color) {
+        return DllCall("gdi32\CreateSolidBrush", "UInt", ColorRef(color),
+            "Ptr")
+    }
+
+    static DeleteBrush(brush) {
+        if brush
+            try DllCall("gdi32\DeleteObject", "Ptr", brush, "Int")
+    }
 }
 
 GetComboBoxThemeHandles(comboHwnd) {
@@ -265,10 +372,6 @@ class DarkComboBoxListThemeRegistry {
         this.MessageCallback := ""
         this.MessageRegistered := false
         return true
-    }
-
-    static IsRegistered(listHwnd) {
-        return listHwnd && this.ListHandles.Has(listHwnd)
     }
 
     static HandleListColor(deviceContext, listHwnd, *) {
@@ -362,21 +465,19 @@ AddCenteredSingleLineEdit(guiObj, x, y, width, outerHeight,
     innerHeight := GetCenteredSingleLineEditHeight(outerHeight)
     innerY := y + Floor((outerHeight - innerHeight) / 2)
     background := guiObj.Add("Text", "x" x " y" y " w" width
-        " h" outerHeight " Background" backgroundColor)
+        " h" outerHeight " +0x04000000 Background" backgroundColor)
     inputEdit := guiObj.Add("Edit", "x" x " y" innerY " w" width
         " h" innerHeight " Background" backgroundColor " c" textColor
         " -E0x200", value)
+    ; Build the backing surface first so it participates in the initial paint,
+    ; then explicitly put the Edit above it for native mouse selection.
+    DllCall("user32\SetWindowPos", "Ptr", inputEdit.Hwnd, "Ptr", 0,
+        "Int", 0, "Int", 0, "Int", 0, "Int", 0,
+        "UInt", 0x0213, "Int")
     SetEditMargins(inputEdit.Hwnd, 8, 8)
     background.OnEvent("Click",
         PlaceSingleLineEditCaretAtPointer.Bind(inputEdit))
     return {Background: background, Edit: inputEdit}
-}
-
-MoveCenteredSingleLineEdit(inputControl, x, y, width, outerHeight) {
-    innerHeight := GetCenteredSingleLineEditHeight(outerHeight)
-    innerY := y + Floor((outerHeight - innerHeight) / 2)
-    inputControl.Background.Move(x, y, width, outerHeight)
-    inputControl.Edit.Move(x, innerY, width, innerHeight)
 }
 
 SetMultilineEditPadding(hwnd, left := 8, top := 5, right := 8,
@@ -403,13 +504,90 @@ SetMultilineEditPadding(hwnd, left := 8, top := 5, right := 8,
     return true
 }
 
+GetMultilineEditLineMetrics(hwnd, visibleLines := 2,
+        horizontalPadding := 8, verticalPadding := 6, dpi := 0) {
+    if !hwnd || visibleLines < 1
+            || !DllCall("user32\IsWindow", "Ptr", hwnd, "Int")
+        return ""
+    if !dpi
+        dpi := DllCall("user32\GetDpiForWindow", "Ptr", hwnd, "UInt")
+    if !dpi
+        dpi := 96
+    deviceContext := DllCall("user32\GetDC", "Ptr", hwnd, "Ptr")
+    if !deviceContext
+        return ""
+    fontHandle := SendMessage(Win32.WM_GETFONT, 0, 0, , hwnd)
+    previousFont := fontHandle ? DllCall("gdi32\SelectObject", "Ptr",
+        deviceContext, "Ptr", fontHandle, "Ptr") : 0
+    textMetrics := Buffer(60, 0)
+    try {
+        if !DllCall("gdi32\GetTextMetricsW", "Ptr", deviceContext,
+                "Ptr", textMetrics, "Int")
+            return ""
+        lineHeight := Max(1, NumGet(textMetrics, 0, "Int"))
+    } finally {
+        if previousFont
+            DllCall("gdi32\SelectObject", "Ptr", deviceContext,
+                "Ptr", previousFont, "Ptr")
+        DllCall("user32\ReleaseDC", "Ptr", hwnd, "Ptr", deviceContext)
+    }
+    horizontalPaddingPx := Max(1,
+        Round(horizontalPadding * dpi / 96))
+    verticalPaddingPx := Max(1, Round(verticalPadding * dpi / 96))
+    clientHeightPx := lineHeight * visibleLines + verticalPaddingPx * 2
+    editHeightDip := Max(1, Round(clientHeightPx * 96 / dpi))
+    return {
+        Dpi: dpi,
+        VisibleLines: visibleLines,
+        LineHeightPx: lineHeight,
+        HorizontalPaddingPx: horizontalPaddingPx,
+        VerticalPaddingPx: verticalPaddingPx,
+        ClientHeightPx: clientHeightPx,
+        EditHeightDip: editHeightDip,
+        OuterHeightDip: editHeightDip + 2
+    }
+}
+
+ApplyMultilineEditLineMetrics(hwnd, metrics) {
+    if !hwnd || !IsObject(metrics)
+            || !DllCall("user32\IsWindow", "Ptr", hwnd, "Int")
+        return false
+    clientRect := Buffer(16, 0)
+    if !DllCall("user32\GetClientRect", "Ptr", hwnd, "Ptr", clientRect,
+            "Int")
+        return false
+    width := NumGet(clientRect, 8, "Int")
+    height := NumGet(clientRect, 12, "Int")
+    leftPx := metrics.HorizontalPaddingPx
+    rightPx := metrics.HorizontalPaddingPx
+    topPx := metrics.VerticalPaddingPx
+    bottomPx := Min(height - metrics.VerticalPaddingPx,
+        topPx + metrics.LineHeightPx * metrics.VisibleLines)
+    NumPut("Int", leftPx, "Int", topPx, "Int",
+        Max(leftPx + 1, width - rightPx), "Int",
+        Max(topPx + 1, bottomPx), clientRect)
+    SendMessage(Win32.EM_SETRECT, 0, clientRect.Ptr, , hwnd)
+    return true
+}
+
+SetMultilineEditVisibleLines(hwnd, visibleLines := 2,
+        horizontalPadding := 8, verticalPadding := 6, dpi := 0) {
+    metrics := GetMultilineEditLineMetrics(hwnd, visibleLines,
+        horizontalPadding, verticalPadding, dpi)
+    return IsObject(metrics)
+        && ApplyMultilineEditLineMetrics(hwnd, metrics)
+}
+
 AddPaddedMultilineEdit(guiObj, x, y, width, outerHeight,
         backgroundColor, textColor, value := "") {
     background := guiObj.Add("Text", "x" x " y" y " w" width
-        " h" outerHeight " Background" backgroundColor)
+        " h" outerHeight " +0x04000000 Background" backgroundColor)
     inputEdit := guiObj.Add("Edit", "x" x " y" (y + 1) " w" width
         " h" Max(1, outerHeight - 2) " Multi WantReturn -VScroll -HScroll"
         " Background" backgroundColor " c" textColor " -E0x200", value)
+    DllCall("user32\SetWindowPos", "Ptr", inputEdit.Hwnd, "Ptr", 0,
+        "Int", 0, "Int", 0, "Int", 0, "Int", 0,
+        "UInt", 0x0213, "Int")
     SetMultilineEditPadding(inputEdit.Hwnd)
     background.OnEvent("Click",
         PlaceMultilineEditCaretAtPointer.Bind(inputEdit))
