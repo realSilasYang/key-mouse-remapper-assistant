@@ -238,7 +238,15 @@ RunMappingHistoryIntegrationTests() {
                 && app.MappingHistory.GetUndoCount() == 0,
             "A failed last-rule deletion did not restore an empty region body.")
 
-        editableMapping := app.Repository.Load()[1]
+        editableMapping := ""
+        for candidateMapping in app.Repository.Load() {
+            if candidateMapping.Mode != "script" {
+                editableMapping := candidateMapping
+                break
+            }
+        }
+        MappingHistoryIntegrationAssert(IsObject(editableMapping),
+            "The integration fixture does not contain a rule block.")
         renamedMappingId := "编辑保存后立即同步回归"
         renamedEditorText := RegExReplace(editableMapping.EditorText,
             "m)^; @名称=.*$", "; @名称=" renamedMappingId, , 1)

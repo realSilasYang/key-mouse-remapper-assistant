@@ -141,11 +141,17 @@ try {
                 . "icon, arguments, or its product AppUserModelID.")
         Run(chainPaths.Desktop, chainRoot)
         deadline := A_TickCount + 10000
-        while !FileExist(probeOutput) && A_TickCount < deadline
+        expectedProbeOutput := chainRoot "|2|--chain|two words"
+        actualProbeOutput := ""
+        while A_TickCount < deadline {
+            try actualProbeOutput := FileRead(probeOutput, "UTF-8")
+            catch
+                actualProbeOutput := ""
+            if actualProbeOutput == expectedProbeOutput
+                break
             Sleep(50)
-        IntegrationAssertTrue(FileExist(probeOutput)
-            && FileRead(probeOutput, "UTF-8")
-                == chainRoot "|2|--chain|two words",
+        }
+        IntegrationAssertTrue(actualProbeOutput == expectedProbeOutput,
             "The source shortcut did not preserve its directory or arguments "
                 . "through the system file association.")
     } finally {

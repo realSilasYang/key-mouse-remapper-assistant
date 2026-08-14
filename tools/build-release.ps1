@@ -441,7 +441,7 @@ foreach ($output in $outputsToBackup) {
 }
 $stageRoot = Join-Path $scratchRoot 'stage'
 New-Item -ItemType Directory -Force -Path $stageRoot | Out-Null
-foreach ($directory in @('app', 'assets', 'src', 'third_party')) {
+foreach ($directory in @('app', 'assets', 'docs', 'src', 'third_party')) {
     $sourceDirectory = Join-Path $projectRoot $directory
     Assert-NoReparsePointTree $sourceDirectory `
         "Release source directory $directory" | Out-Null
@@ -601,14 +601,14 @@ Copy-Item -LiteralPath $stageExecutable `
     -Destination (Join-Path $packageDirectory '键鼠重映射小助手.exe')
 Copy-Item -LiteralPath $entrySourcePath `
     -Destination $packageDirectory
-foreach ($directory in @('app', 'assets', 'src', 'third_party')) {
+foreach ($directory in @('app', 'assets', 'docs', 'src', 'third_party')) {
     $sourceDirectory = Join-Path $projectRoot $directory
     Assert-NoReparsePointTree $sourceDirectory `
         "Release source directory $directory" | Out-Null
     Copy-Item -LiteralPath $sourceDirectory `
         -Destination $packageDirectory -Recurse
 }
-foreach ($file in @('README.md', 'LICENSE', 'VERSION',
+foreach ($file in @('CHANGELOG.md', 'README.md', 'LICENSE', 'VERSION',
         'THIRD_PARTY_NOTICES.md')) {
     Copy-Item -LiteralPath (Join-Path $projectRoot $file) `
         -Destination $packageDirectory
@@ -713,6 +713,8 @@ $updateManifestJson = (@(
     '    "third_party",'
     '    "tools",'
     '    "runtime",'
+    '    "docs",'
+    '    "CHANGELOG.md",'
     '    "README.md",'
     '    "LICENSE",'
     '    "VERSION",'
@@ -734,7 +736,7 @@ Assert-SafeBuildRoot $sourcePackageDirectory `
     'Release source package directory' | Out-Null
 $sourcePackageFiles = @(
     '.editorconfig', '.gitattributes', '.gitignore',
-    'LICENSE', 'README.md', 'THIRD_PARTY_NOTICES.md', 'VERSION',
+    'CHANGELOG.md', 'LICENSE', 'README.md', 'THIRD_PARTY_NOTICES.md', 'VERSION',
     '键鼠重映射小助手.ahk'
 )
 foreach ($relativePath in $sourcePackageFiles) {
@@ -743,8 +745,8 @@ foreach ($relativePath in $sourcePackageFiles) {
         "Release source file $relativePath" | Out-Null
     Copy-Item -LiteralPath $sourcePath -Destination $sourcePackageDirectory
 }
-foreach ($directory in @('app', 'assets', 'src',
-        'third_party', 'tools', 'runtime')) {
+foreach ($directory in @('app', 'assets', 'docs', 'src',
+        'tests', 'third_party', 'tools', 'runtime')) {
     $sourceDirectory = Join-Path $projectRoot $directory
     Assert-NoReparsePointTree $sourceDirectory `
         "Release source directory $directory" | Out-Null
@@ -770,6 +772,9 @@ $sourceUpdateManifestJson = (@(
     '    "third_party",'
     '    "tools",'
     '    "runtime",'
+    '    "docs",'
+    '    "tests",'
+    '    "CHANGELOG.md",'
     '    "README.md",'
     '    "LICENSE",'
     '    "VERSION",'

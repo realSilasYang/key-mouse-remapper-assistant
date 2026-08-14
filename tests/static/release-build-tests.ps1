@@ -96,4 +96,51 @@ if ($scriptRuntime -notmatch
     throw 'Script-rule workers no longer use the application interpreter.'
 }
 
+$localizedReadmes = @(
+    'README.md',
+    'docs\README.zh-HK.md',
+    'docs\README.zh-TW.md',
+    'docs\README.en.md',
+    'docs\README.ja.md',
+    'docs\README.vi.md',
+    'docs\README.ko.md',
+    'docs\README.es.md',
+    'docs\README.fr.md',
+    'docs\README.pt-BR.md',
+    'docs\README.ru.md',
+    'docs\README.de.md',
+    'docs\README.it.md'
+)
+foreach ($relativePath in $localizedReadmes) {
+    $readmePath = Join-Path $projectRoot $relativePath
+    if (-not (Test-Path -LiteralPath $readmePath -PathType Leaf)) {
+        throw "Localized README is missing: $relativePath"
+    }
+    $readme = Get-Content -LiteralPath $readmePath -Raw -Encoding UTF8
+    $levelOneCount = [regex]::Matches($readme, '(?m)^# ').Count
+    $levelTwoCount = [regex]::Matches($readme, '(?m)^## ').Count
+    if ($levelOneCount -ne 5 -or $levelTwoCount -ne 12 -or
+            $readme -notmatch
+                'docs/images/key-mouse-remapper-assistant-overview\.png|images/key-mouse-remapper-assistant-overview\.png' -or
+            $readme -notmatch '(?m)^# Star History$') {
+        throw "Localized README structure is incomplete: $relativePath"
+    }
+}
+$releaseNotesPath = Join-Path $projectRoot `
+    'docs\release-notes\v1.0.0.md'
+$releaseNotes = Get-Content -LiteralPath $releaseNotesPath -Raw `
+    -Encoding UTF8
+if ($releaseNotes -match '(?i)sha-?256|sha256sums') {
+    throw 'Release Notes must not publish SHA-256 values or checksum assets.'
+}
+if ($buildScript -notmatch "'CHANGELOG\.md'" -or
+        $buildScript -notmatch "'docs'" -or
+        $buildScript -notmatch "'tests'") {
+    throw 'Release packages no longer include the documented public files.'
+}
+if ($buildScript -notmatch
+        "foreach \(\`$directory in @\('app', 'assets', 'docs', 'src', 'third_party'\)\)") {
+    throw 'The portable package no longer copies the localized documentation.'
+}
+
 Write-Host 'PASS release-build-tests.ps1'
