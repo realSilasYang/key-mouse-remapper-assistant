@@ -1829,8 +1829,10 @@ ValidateMainWindowResponsiveLayout(window) {
         "Ending capture after resizing corrupted toolbar painting.")
     MappingWindowVisualCheckpoint(window, "capture-ended")
 
-    window.Gui.Show("NA w" baseWidth " h" baseHeight)
-    Sleep(100)
+    MappingWindowVisualAssert(ResizeMappingWindowClient(window.Gui.Hwnd,
+            baseWidth, baseHeight),
+        "Could not restore the previous main-window client size.")
+    Sleep(50)
     window.Gui.GetClientPos(, , &restoredWidth, &restoredHeight)
     window.List.GetPos(, , , &restoredListHeight)
     MappingWindowVisualAssert(restoredWidth == baseWidth
