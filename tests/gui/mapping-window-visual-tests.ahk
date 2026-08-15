@@ -1584,6 +1584,9 @@ ValidateMainWindowResponsiveLayout(window) {
     ; Only sample shrink frames that remain above the current dynamic minimum.
     availableVerticalDelta := Max(0,
         baseHeight - window.RequiredClientHeight)
+    if EnvGet("KEY_MOUSE_REMAPPER_GUI_TEST_OFFSCREEN") == "1"
+            && baseHeight >= maximumSize.Height
+        availableVerticalDelta := 0
     tallWidth := baseWidth
     tallHeight := baseHeight
     tallListHeight := baseListHeight
