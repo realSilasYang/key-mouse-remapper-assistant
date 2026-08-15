@@ -11,13 +11,13 @@
   <p><a href="#visão-geral-da-interface">Interface</a> · <a href="#guia-do-usuário">Guia</a> · <a href="#4-blocos-de-regras-scripts-gerenciados-e-ia">Formas de regra</a> · <a href="https://github.com/realSilasYang/key-mouse-remapper-assistant/releases">Versões</a> · <a href="./CHANGELOG.en.md">Alterações</a> · <a href="https://github.com/realSilasYang/key-mouse-remapper-assistant/issues/new">Feedback</a> · <a href="#guia-do-desenvolvedor">Desenvolvimento</a></p>
 </div>
 
-O Assistente de remapeamento de teclado e mouse é uma ferramenta AutoHotkey v2 para Windows 10 e 11 x64. Ele reúne captura de entrada, gerenciamento de regras, edição de código, geração e otimização por IA, validação local e estado de execução. A versão 1.0.0 inclui 18 regras editáveis: 13 blocos de regras e 5 scripts gerenciados.
+O Assistente de remapeamento de teclado e mouse é uma ferramenta AutoHotkey v2 para Windows 10 e 11 x64. Ele reúne captura de entrada, gerenciamento de regras, edição de código, geração e otimização por IA, validação local e estado de execução. A versão 1.0.1 inclui 18 regras editáveis: 13 blocos de regras e 5 scripts gerenciados.
 
 As regras ficam na região comentada `@mapping`, que pode ser lida e copiada. Nenhum driver ou serviço do Windows é instalado; os mapeamentos só funcionam enquanto o assistente está em execução. Os pacotes oficiais nunca incluem endereço de IA, chave de API, modelo, prompts personalizados ou outras configurações pessoais da máquina de compilação.
 
 # Visão geral da interface
 
-<p align="center"><img src="images/key-mouse-remapper-assistant-overview.png" alt="Janela principal" width="100%"></p>
+<p align="center"><img src="images/key-mouse-remapper-assistant-overview.png" alt="Janela principal escura" width="49%"> <img src="images/key-mouse-remapper-assistant-overview-light.png" alt="Janela principal clara" width="49%"></p>
 
 A barra superior adiciona, pausa／retoma em lote e exclui regras. A lista exibe ordem, nome, entrada de origem, resultado, escopo e estado. A área inferior grava origem e destino diretamente. Há seleção múltipla, arraste em lote, ordenação visual temporária, dicas para texto cortado, pontos coloridos e seleção arredondada estável.
 

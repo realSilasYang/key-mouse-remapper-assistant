@@ -1,8 +1,4 @@
 class KeyMouseRemapperAssistantApp {
-    static TrayIconId := 0x404
-    static TrayRecoveryIntervalMs := 500
-    static TrayRecoveryAttempts := 120
-
     __New() {
         this.UpdateService := ""
         this.Capture := ""
@@ -64,8 +60,6 @@ class KeyMouseRemapperAssistantApp {
             "ApplyPendingScriptMappings")
         this.ElevationRestartTimer := ObjBindMethod(this,
             "RestartWithConfiguredElevation")
-        this.TrayRecoveryTimer := ObjBindMethod(this, "RecoverTrayIcon")
-        this.TrayRecoveryAttemptsRemaining := 0
         this.RawObservationDepth := 0
         this.ShuttingDown := false
         this.CallbacksRegistered := false
@@ -112,11 +106,6 @@ class KeyMouseRemapperAssistantApp {
         this.ShowApplicationMessage := GetApplicationShowMessage()
         this.ShowApplicationCallback := ObjBindMethod(this,
             "OnShowApplicationRequest")
-        this.TaskbarCreatedMessage := DllCall(
-            "user32\RegisterWindowMessageW", "WStr", "TaskbarCreated",
-            "UInt")
-        this.TaskbarCreatedCallback := ObjBindMethod(this,
-            "OnTaskbarCreated")
         this.ExitCallback := ObjBindMethod(this, "HandleExit")
         this.StartupUpdateTimer := ObjBindMethod(this,
             "BeginApplicationUpdateCheck")
@@ -248,80 +237,14 @@ class KeyMouseRemapperAssistantApp {
         A_TrayMenu.Add(Tr("退出程序"), (*) => ExitApp())
         A_TrayMenu.Default := Tr("显示主界面")
         A_TrayMenu.ClickCount := 1
-        this.RequestTrayIconRecovery()
-        return true
-    }
-
-    RequestTrayIconRecovery(
-            attempts := KeyMouseRemapperAssistantApp.TrayRecoveryAttempts) {
-        if this.ShuttingDown
-            return false
-        this.TrayRecoveryAttemptsRemaining := Max(
-            this.TrayRecoveryAttemptsRemaining, Max(1, Integer(attempts)))
-        return this.RecoverTrayIcon()
-    }
-
-    RecoverTrayIcon(*) {
-        this.StopTrayIconRecoveryTimer()
-        if this.ShuttingDown
-            return false
-        try this.ApplyTrayIconRegistration()
-        if this.IsTrayIconRegistered() {
-            this.TrayRecoveryAttemptsRemaining := 0
-            return true
-        }
-        this.TrayRecoveryAttemptsRemaining := Max(0,
-            this.TrayRecoveryAttemptsRemaining - 1)
-        if this.TrayRecoveryAttemptsRemaining > 0
-            this.ScheduleTrayIconRecovery(
-                KeyMouseRemapperAssistantApp.TrayRecoveryIntervalMs)
-        return false
-    }
-
-    ApplyTrayIconRegistration() {
-        ; Setting this to false calls AutoHotkey's create path even when its
-        ; first NIM_ADD ran before Explorer's notification area was ready.
+        A_IconHidden := true
+        Sleep(50)
         A_IconHidden := false
         A_IconTip := Tr("键鼠重映射小助手")
         iconPath := GetApplicationIconPath()
         if FileExist(iconPath)
             TraySetIcon(iconPath)
         return true
-    }
-
-    IsTrayIconRegistered() {
-        if !A_ScriptHwnd
-            return false
-        identifierSize := A_PtrSize == 8 ? 40 : 28
-        hwndOffset := A_PtrSize == 8 ? 8 : 4
-        idOffset := A_PtrSize == 8 ? 16 : 8
-        identifier := Buffer(identifierSize, 0)
-        NumPut("UInt", identifierSize, identifier, 0)
-        NumPut("Ptr", A_ScriptHwnd, identifier, hwndOffset)
-        ; The locked AutoHotkey runtime uses WM_USER + 4 for its tray ID.
-        NumPut("UInt", KeyMouseRemapperAssistantApp.TrayIconId,
-            identifier, idOffset)
-        iconRect := Buffer(16, 0)
-        try return DllCall("shell32\Shell_NotifyIconGetRect", "Ptr",
-            identifier.Ptr, "Ptr", iconRect.Ptr, "Int") == 0
-        catch
-            return false
-    }
-
-    ScheduleTrayIconRecovery(delayMs) {
-        SetTimer(this.TrayRecoveryTimer, -Max(1, Integer(delayMs)))
-        return true
-    }
-
-    StopTrayIconRecoveryTimer() {
-        if IsObject(this.TrayRecoveryTimer)
-            try SetTimer(this.TrayRecoveryTimer, 0)
-        return true
-    }
-
-    OnTaskbarCreated(*) {
-        if !this.ShuttingDown
-            this.RequestTrayIconRecovery()
     }
 
     NormalizeSignature(displayName) {
@@ -1554,9 +1477,6 @@ class KeyMouseRemapperAssistantApp {
         if this.ShowApplicationMessage
             registrations.Push({Message: this.ShowApplicationMessage,
                 Callback: this.ShowApplicationCallback})
-        if this.TaskbarCreatedMessage
-            registrations.Push({Message: this.TaskbarCreatedMessage,
-                Callback: this.TaskbarCreatedCallback})
         completed := []
         exitRegistered := false
         try {
@@ -1596,9 +1516,6 @@ class KeyMouseRemapperAssistantApp {
         if this.ShowApplicationMessage
             cleanup.Run("注销单实例唤醒消息", () => OnMessage(
                 this.ShowApplicationMessage, this.ShowApplicationCallback, 0))
-        if this.TaskbarCreatedMessage
-            cleanup.Run("注销任务栏重建消息", () => OnMessage(
-                this.TaskbarCreatedMessage, this.TaskbarCreatedCallback, 0))
         cleanup.Run("注销退出回调", () => OnExit(this.ExitCallback, 0))
         if !cleanup.Failures.Length
             this.CallbacksRegistered := false
@@ -1740,7 +1657,6 @@ class KeyMouseRemapperAssistantApp {
             try SetTimer(this.PendingScriptApplyTimer, 0)
         if IsObject(this.ElevationRestartTimer)
             try SetTimer(this.ElevationRestartTimer, 0)
-        this.StopTrayIconRecoveryTimer()
         this.PendingScriptApply := ""
         this.TrySaveMainWindowLayout()
         ; Runtime shutdown may wait for isolated script-rule processes. Hide

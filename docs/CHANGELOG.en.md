@@ -7,6 +7,27 @@ categories based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## 🚧 [Unreleased]
 
+## 🎉 Version [1.0.1] - 2026-08-15
+
+### 📦 Release Assets
+
+- **`key-mouse-remapper-assistant-1.0.1-source.zip` (complete source package):** Includes runnable AHK source, application modules, assets, all thirteen README languages, bilingual changelogs, tests, and build tools; intended for review, development, or source execution and requires AutoHotkey v2 x64.
+- **`key-mouse-remapper-assistant-1.0.1-windows-x64.zip` (complete portable package, recommended):** Includes the compiled EXE, editable mapping source, all thirteen README languages, bilingual changelogs, licenses, application modules, UI assets, fixed AutoHotkey v2.0.26 x64 runtime, and matching source archive; requires no AutoHotkey installation and is intended for long-term use after full extraction.
+
+---
+
+### 🚀 Improvements
+
+- **Release verification pipeline:** Restored Windows GitHub Actions CI, reused verified locked toolchain and font assets, and fully validates the GUI, portable package, and source package on `main` changes so official assets continue through the same release gate.
+- **Interface preview documentation:** All thirteen README languages now show the dark and light main windows side by side so both themes can be compared before download.
+
+---
+
+### 🐛 Fixed
+
+- **Tray icon startup:** The application now hides and recreates its tray icon during startup to retry registration after the Explorer notification area becomes ready, fixing occasional cases where the assistant was running without a visible tray icon.
+- **Shortcut recognition:** Shortcut target comparison now expands Windows 8.3 short paths before matching, preventing the same entry from being misidentified under different long- and short-path forms and reducing unnecessary Desktop or Start Menu shortcut reconstruction and validation failures.
+
 ## 🎉 Version [1.0.0] - 2026-08-14
 
 ### 📦 Release Assets
@@ -100,7 +121,8 @@ categories based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Product and data location:** Standardized product identifiers and `%APPDATA%\KeyMouseRemapperAssistant`.
 - **Release compatibility:** Locked AutoHotkey and build tools and aligned UTF-8 behavior across Windows PowerShell 5.1 and PowerShell 7.
 
-[Unreleased]: https://github.com/realSilasYang/key-mouse-remapper-assistant/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/realSilasYang/key-mouse-remapper-assistant/compare/v1.0.1...HEAD
+[1.0.1]: https://github.com/realSilasYang/key-mouse-remapper-assistant/releases/tag/v1.0.1
 [1.0.0]: https://github.com/realSilasYang/key-mouse-remapper-assistant/releases/tag/v1.0.0
 [0.1.1]: https://github.com/realSilasYang/key-mouse-remapper-assistant/releases/tag/v0.1.1
 [0.1.0]: https://github.com/realSilasYang/key-mouse-remapper-assistant/releases/tag/v0.1.0

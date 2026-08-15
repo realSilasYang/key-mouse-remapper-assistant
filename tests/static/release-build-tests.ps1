@@ -122,12 +122,16 @@ foreach ($relativePath in $localizedReadmes) {
     if ($levelOneCount -ne 5 -or $levelTwoCount -ne 12 -or
             $readme -notmatch
                 'docs/images/key-mouse-remapper-assistant-overview\.png|images/key-mouse-remapper-assistant-overview\.png' -or
+            $readme -notmatch
+                'key-mouse-remapper-assistant-overview-light\.png' -or
             $readme -notmatch '(?m)^# Star History$') {
         throw "Localized README structure is incomplete: $relativePath"
     }
 }
+$releaseVersion = (Get-Content -LiteralPath (Join-Path $projectRoot 'VERSION') `
+    -Raw -Encoding UTF8).Trim()
 $releaseNotesPath = Join-Path $projectRoot `
-    'docs\release-notes\v1.0.0.md'
+    "docs\release-notes\v$releaseVersion.md"
 $releaseNotes = Get-Content -LiteralPath $releaseNotesPath -Raw `
     -Encoding UTF8
 if ($releaseNotes -match '(?i)sha-?256|sha256sums') {

@@ -11,13 +11,13 @@
   <p><a href="#panoramica-dellinterfaccia">Interfaccia</a> · <a href="#guida-utente">Guida</a> · <a href="#4-blocchi-di-regole-script-gestiti-e-ia">Forme delle regole</a> · <a href="https://github.com/realSilasYang/key-mouse-remapper-assistant/releases">Versioni</a> · <a href="./CHANGELOG.en.md">Modifiche</a> · <a href="https://github.com/realSilasYang/key-mouse-remapper-assistant/issues/new">Feedback</a> · <a href="#guida-per-sviluppatori">Sviluppo</a></p>
 </div>
 
-L’Assistente di rimappatura tastiera e mouse è uno strumento AutoHotkey v2 per Windows 10 e 11 x64. Riunisce acquisizione degli input, gestione delle regole, modifica del codice, generazione e ottimizzazione IA, convalida locale e stato di esecuzione. La versione 1.0.0 include 18 regole modificabili: 13 blocchi di regole e 5 script gestiti.
+L’Assistente di rimappatura tastiera e mouse è uno strumento AutoHotkey v2 per Windows 10 e 11 x64. Riunisce acquisizione degli input, gestione delle regole, modifica del codice, generazione e ottimizzazione IA, convalida locale e stato di esecuzione. La versione 1.0.1 include 18 regole modificabili: 13 blocchi di regole e 5 script gestiti.
 
 Le regole sono salvate nell’area commentata `@mapping`, leggibile e copiabile. Non vengono installati driver o servizi Windows; le mappature funzionano solo mentre l’assistente è in esecuzione. I pacchetti ufficiali non includono mai indirizzo IA, chiave API, modello, prompt personalizzati o altre impostazioni personali del computer di compilazione.
 
 # Panoramica dell’interfaccia
 
-<p align="center"><img src="images/key-mouse-remapper-assistant-overview.png" alt="Finestra principale" width="100%"></p>
+<p align="center"><img src="images/key-mouse-remapper-assistant-overview.png" alt="Finestra principale scura" width="49%"> <img src="images/key-mouse-remapper-assistant-overview-light.png" alt="Finestra principale chiara" width="49%"></p>
 
 La barra superiore aggiunge, sospende／riprende in gruppo ed elimina le regole. L’elenco mostra ordine, nome, input origine, risultato, ambito e stato. L’area inferiore registra direttamente origine e destinazione. Sono disponibili selezione multipla, trascinamento in gruppo, ordinamento visivo temporaneo, suggerimenti per testo troncato, punti colorati e selezione arrotondata stabile.
 

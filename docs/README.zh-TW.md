@@ -18,13 +18,13 @@
   <p><a href="#介面概覽">介面概覽</a> · <a href="#使用指南">使用指南</a> · <a href="#4-規則區塊與受控指令碼">規則形式</a> · <a href="https://github.com/realSilasYang/key-mouse-remapper-assistant/releases">版本發布</a> · <a href="../CHANGELOG.md">更新日誌</a> · <a href="https://github.com/realSilasYang/key-mouse-remapper-assistant/issues/new">問題回報</a> · <a href="#開發者指南">開發者指南</a></p>
 </div>
 
-鍵鼠重映射小助手是適用於 Windows 10／11 x64 的 AutoHotkey v2 桌面工具，將按鍵錄製、規則管理、程式碼編輯、AI 產生與最佳化、本機驗證及執行狀態整合在同一介面。版本 1.0.0 內建 18 條可編輯規則，包括 13 條規則區塊與 5 條受控指令碼。
+鍵鼠重映射小助手是適用於 Windows 10／11 x64 的 AutoHotkey v2 桌面工具，將按鍵錄製、規則管理、程式碼編輯、AI 產生與最佳化、本機驗證及執行狀態整合在同一介面。版本 1.0.1 內建 18 條可編輯規則，包括 13 條規則區塊與 5 條受控指令碼。
 
 規則儲存在可讀、可備份的 `@mapping` 註解區域。程式不安裝驅動程式或 Windows 服務，映射只會在小助手執行時生效。正式發布包不會包含建置電腦的 AI 位址、API 金鑰、模型、自訂提示詞或其他個人設定。
 
 # 介面概覽
 
-<p align="center"><img src="images/key-mouse-remapper-assistant-overview.png" alt="鍵鼠重映射小助手主介面" width="100%"></p>
+<p align="center"><img src="images/key-mouse-remapper-assistant-overview.png" alt="鍵鼠重映射小助手深色主介面" width="49%"> <img src="images/key-mouse-remapper-assistant-overview-light.png" alt="鍵鼠重映射小助手淺色主介面" width="49%"></p>
 
 上方命令列用於新增、批次暫停／恢復及刪除規則；中央清單顯示順序、名稱、來源按鍵、映射結果、生效範圍與即時狀態；下方可直接錄製來源與目標。清單支援多選、批次拖曳、暫時排序、完整內容提示、彩色順序圓點及穩定的圓角選取背景。
 

@@ -35,7 +35,8 @@
 # 界面概览
 
 <p align="center">
-  <img src="docs/images/key-mouse-remapper-assistant-overview.png" alt="键鼠重映射小助手主界面" width="100%">
+  <img src="docs/images/key-mouse-remapper-assistant-overview.png" alt="键鼠重映射小助手深色主界面" width="49%">
+  <img src="docs/images/key-mouse-remapper-assistant-overview-light.png" alt="键鼠重映射小助手浅色主界面" width="49%">
 </p>
 
 主窗口上方用于新增、批量暂停／恢复和删除规则，中间列表集中显示序号、名称、来源按键、映射结果、生效范围和实时状态，下方可以直接录制来源按键与目标按键。列表支持多选、批量拖动排序、临时表头排序、悬浮完整内容、序号彩色圆点和圆角选中状态；底部状态栏只显示当前操作或所选规则的结果。

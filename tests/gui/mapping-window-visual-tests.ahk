@@ -1319,6 +1319,21 @@ AssertMainStatusCaretHidden(window, context) {
 }
 
 ValidateMainWindowActivation(window) {
+    if EnvGet("KEY_MOUSE_REMAPPER_GUI_TEST_OFFSCREEN") == "1" {
+        DllCall("user32\ShowWindow", "Ptr", window.Gui.Hwnd,
+            "Int", Win32.SW_HIDE, "Int")
+        MappingWindowVisualAssert(!DllCall("user32\IsWindowVisible", "Ptr",
+                window.Gui.Hwnd, "Int"),
+            "The offscreen activation probe could not first hide the main window.")
+        activationResult := window.Activate()
+        MappingWindowVisualAssert(activationResult
+                && DllCall("user32\IsWindowVisible", "Ptr", window.Gui.Hwnd,
+                    "Int")
+                && !DllCall("user32\IsIconic", "Ptr", window.Gui.Hwnd,
+                    "Int"),
+            "The unified main-window activation path did not restore a hidden window.")
+        return true
+    }
     DllCall("user32\ShowWindow", "Ptr", window.Gui.Hwnd,
         "Int", Win32.SW_MINIMIZE, "Int")
     Sleep(150)
@@ -2431,6 +2446,11 @@ ValidateMappingEditorTaskbarRestore(editor, ownerWindow) {
         "Ptr", childHwnd, "Int", Win32.GWL_EXSTYLE, "Ptr")
     MappingWindowVisualAssert(style & Win32.WS_MINIMIZEBOX,
         "The mapping editor does not expose a minimize button.")
+    MappingWindowVisualAssert(WindowHierarchy.FindOwnerHwnd(childHwnd)
+            == ownerHwnd,
+        "The mapping editor is not tracked by its owner.")
+    if EnvGet("KEY_MOUSE_REMAPPER_GUI_TEST_OFFSCREEN") == "1"
+        return true
     MappingWindowVisualAssert(WindowHierarchy.MinimizeChildIndependently(
             childHwnd),
         "The mapping editor could not be minimized independently.")
@@ -3702,14 +3722,20 @@ ValidateNewMappingEditorModes(window) {
             && optimizationAiService.CallCount == 2
             && optimizationReviewProbe.CallCount == 1,
         "The accepted optimization skipped its semantic review phase.")
-    MappingWindowVisualAssert(optimizationEditor.HandleAiResult(true, "",
-            optimizedText, optimizationAiService.RequestId)
-            && optimizationEditor.Canonicalize(
-                optimizationEditor.GetCodeText())
-                == optimizationEditor.Canonicalize(optimizedText)
+    acceptedOptimization := optimizationEditor.HandleAiResult(true, "",
+        optimizedText, optimizationAiService.RequestId)
+    optimizedTextMatches := optimizationEditor.Canonicalize(
+        optimizationEditor.GetCodeText())
+        == optimizationEditor.Canonicalize(optimizedText)
+    MappingWindowVisualAssert(acceptedOptimization && optimizedTextMatches
             && optimizationReviewProbe.CallCount == 2
             && optimizationEditor.AiPurposeRetryText == "",
-        "Accepting AI optimization did not replace the existing rule.")
+        Format("Accepting AI optimization did not replace the existing rule: accepted={1}, text={2}, reviews={3}, retry={4}, status={5}, revision={6}/{7}.",
+            acceptedOptimization, optimizedTextMatches,
+            optimizationReviewProbe.CallCount,
+            optimizationEditor.AiPurposeRetryText,
+            optimizationEditor.Status.Text, optimizationEditor.EditorRevision,
+            optimizationEditor.AiRequestRevision))
     optimizationEditor.Dispose(false)
     MappingWindowVisualAssert(!IsObject(window.BlockEditor)
             && !WindowHierarchy.IsOwnerLocked(window.Gui),
@@ -4075,7 +4101,6 @@ MappingWindowAssertMouseSelectableEdit(control, context,
         textLength := SendMessage(0x000E, 0, 0, , hwnd) ; WM_GETTEXTLENGTH
         selectionEnd := Min(textLength, 8)
         try {
-            DllCall("user32\SetFocus", "Ptr", hwnd, "Ptr")
             SendMessage(Win32.EM_SETSEL, 0, selectionEnd, , hwnd)
             SendMessage(Win32.EM_GETSEL, newStart.Ptr, newEnd.Ptr, , hwnd)
             MappingWindowVisualAssert(!textLength

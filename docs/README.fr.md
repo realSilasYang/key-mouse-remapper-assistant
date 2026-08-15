@@ -11,13 +11,13 @@
   <p><a href="#aperçu-de-linterface">Interface</a> · <a href="#guide-dutilisation">Guide</a> · <a href="#4-blocs-de-règles-scripts-gérés-et-ia">Types de règle</a> · <a href="https://github.com/realSilasYang/key-mouse-remapper-assistant/releases">Versions</a> · <a href="./CHANGELOG.en.md">Historique</a> · <a href="https://github.com/realSilasYang/key-mouse-remapper-assistant/issues/new">Retours</a> · <a href="#guide-de-développement">Développement</a></p>
 </div>
 
-L’Assistant de remappage clavier et souris est un outil AutoHotkey v2 pour Windows 10 et 11 x64. Il réunit l’enregistrement des entrées, la gestion des règles, l’édition de code, la génération et l’optimisation par IA, la validation locale et l’état d’exécution. La version 1.0.0 contient 18 règles modifiables : 13 blocs de règles et 5 scripts gérés.
+L’Assistant de remappage clavier et souris est un outil AutoHotkey v2 pour Windows 10 et 11 x64. Il réunit l’enregistrement des entrées, la gestion des règles, l’édition de code, la génération et l’optimisation par IA, la validation locale et l’état d’exécution. La version 1.0.1 contient 18 règles modifiables : 13 blocs de règles et 5 scripts gérés.
 
 Les règles sont enregistrées dans la zone commentée `@mapping`, lisible et sauvegardable. Aucun pilote ni service Windows n’est installé ; les remappages ne fonctionnent que pendant l’exécution de l’assistant. Les paquets officiels n’intègrent jamais l’adresse IA, la clé API, le modèle, les invites personnalisées ou les réglages personnels de la machine de compilation.
 
 # Aperçu de l’interface
 
-<p align="center"><img src="images/key-mouse-remapper-assistant-overview.png" alt="Fenêtre principale" width="100%"></p>
+<p align="center"><img src="images/key-mouse-remapper-assistant-overview.png" alt="Fenêtre principale sombre" width="49%"> <img src="images/key-mouse-remapper-assistant-overview-light.png" alt="Fenêtre principale claire" width="49%"></p>
 
 La barre supérieure ajoute, suspend／reprend par lot et supprime les règles. La liste affiche l’ordre, le nom, l’entrée source, le résultat, la portée et l’état. La zone inférieure enregistre directement la source et la cible. La sélection multiple, le glisser groupé, le tri visuel temporaire, les infobulles de texte tronqué, les pastilles colorées et la sélection arrondie sont pris en charge.
 

@@ -18,13 +18,13 @@
   <p><a href="#画面概要">画面概要</a> · <a href="#ユーザーガイド">ユーザーガイド</a> · <a href="#4-ルールブロックと管理スクリプト">ルール形式</a> · <a href="https://github.com/realSilasYang/key-mouse-remapper-assistant/releases">リリース</a> · <a href="./CHANGELOG.en.md">変更履歴</a> · <a href="https://github.com/realSilasYang/key-mouse-remapper-assistant/issues/new">フィードバック</a> · <a href="#開発者ガイド">開発者ガイド</a></p>
 </div>
 
-キーボード・マウス再マッピングアシスタントは、Windows 10／11 x64 向けの AutoHotkey v2 デスクトップツールです。入力記録、ルール管理、コード編集、AI による生成と最適化、ローカル検証、実行状態を一つの画面にまとめています。バージョン 1.0.0 には、13 個のルールブロックと 5 個の管理スクリプト、合計 18 個の編集可能な組み込みルールが含まれます。
+キーボード・マウス再マッピングアシスタントは、Windows 10／11 x64 向けの AutoHotkey v2 デスクトップツールです。入力記録、ルール管理、コード編集、AI による生成と最適化、ローカル検証、実行状態を一つの画面にまとめています。バージョン 1.0.1 には、13 個のルールブロックと 5 個の管理スクリプト、合計 18 個の編集可能な組み込みルールが含まれます。
 
 ルールは読み取り・バックアップ可能な `@mapping` コメント領域に保存されます。ドライバーや Windows サービスは導入せず、マッピングはアシスタントの実行中だけ有効です。公式パッケージに、ビルド環境の AI アドレス、API キー、モデル、独自プロンプト、個人設定が入ることはありません。
 
 # 画面概要
 
-<p align="center"><img src="images/key-mouse-remapper-assistant-overview.png" alt="メイン画面" width="100%"></p>
+<p align="center"><img src="images/key-mouse-remapper-assistant-overview.png" alt="ダークテーマのメイン画面" width="49%"> <img src="images/key-mouse-remapper-assistant-overview-light.png" alt="ライトテーマのメイン画面" width="49%"></p>
 
 上部でルールの追加、一括停止／再開、削除を行い、中央の一覧で順番、名前、入力元、割り当て先、適用範囲、状態を確認します。下部では入力元と割り当て先を直接記録できます。複数選択、一括ドラッグ、表示だけの並べ替え、省略内容のツールチップ、色付き番号ドット、角丸の選択表示に対応します。
 

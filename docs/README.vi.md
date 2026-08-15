@@ -11,13 +11,13 @@
   <p><a href="#tổng-quan-giao-diện">Giao diện</a> · <a href="#hướng-dẫn-người-dùng">Hướng dẫn</a> · <a href="#4-khối-quy-tắc-và-tập-lệnh-được-quản-lý">Dạng quy tắc</a> · <a href="https://github.com/realSilasYang/key-mouse-remapper-assistant/releases">Bản phát hành</a> · <a href="./CHANGELOG.en.md">Nhật ký thay đổi</a> · <a href="https://github.com/realSilasYang/key-mouse-remapper-assistant/issues/new">Phản hồi</a> · <a href="#hướng-dẫn-nhà-phát-triển">Phát triển</a></p>
 </div>
 
-Trợ lý ánh xạ lại bàn phím và chuột là công cụ AutoHotkey v2 dành cho Windows 10／11 x64. Ứng dụng tập hợp ghi đầu vào, quản lý quy tắc, chỉnh sửa mã, tạo và tối ưu bằng AI, kiểm tra cục bộ và trạng thái chạy trong một giao diện. Phiên bản 1.0.0 có 18 quy tắc dựng sẵn có thể sửa: 13 khối quy tắc và 5 tập lệnh được quản lý.
+Trợ lý ánh xạ lại bàn phím và chuột là công cụ AutoHotkey v2 dành cho Windows 10／11 x64. Ứng dụng tập hợp ghi đầu vào, quản lý quy tắc, chỉnh sửa mã, tạo và tối ưu bằng AI, kiểm tra cục bộ và trạng thái chạy trong một giao diện. Phiên bản 1.0.1 có 18 quy tắc dựng sẵn có thể sửa: 13 khối quy tắc và 5 tập lệnh được quản lý.
 
 Quy tắc nằm trong vùng chú thích `@mapping`, có thể đọc và sao lưu. Ứng dụng không cài trình điều khiển hay dịch vụ Windows; ánh xạ chỉ hoạt động khi trợ lý đang chạy. Gói chính thức không chứa địa chỉ AI, khóa API, mô hình, lời nhắc tùy chỉnh hoặc thiết lập cá nhân của máy dựng.
 
 # Tổng quan giao diện
 
-<p align="center"><img src="images/key-mouse-remapper-assistant-overview.png" alt="Cửa sổ chính" width="100%"></p>
+<p align="center"><img src="images/key-mouse-remapper-assistant-overview.png" alt="Cửa sổ chính ở chế độ tối" width="49%"> <img src="images/key-mouse-remapper-assistant-overview-light.png" alt="Cửa sổ chính ở chế độ sáng" width="49%"></p>
 
 Thanh lệnh phía trên thêm, tạm dừng／tiếp tục hàng loạt và xóa quy tắc. Danh sách hiển thị thứ tự, tên, đầu vào nguồn, kết quả, phạm vi và trạng thái; vùng phía dưới ghi trực tiếp nguồn và đích. Danh sách hỗ trợ chọn nhiều, kéo theo nhóm, sắp xếp tạm thời, chú giải nội dung bị cắt, chấm thứ tự màu và nền chọn bo góc ổn định.
 

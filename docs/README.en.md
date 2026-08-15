@@ -28,14 +28,15 @@
 
 Key Mouse Remapper Assistant is an AutoHotkey v2 desktop tool for Windows 10 and 11 x64. It brings input capture, rule management, code editing, AI generation and optimization, local validation, and runtime status into one interface. It handles simple key substitutions while still allowing full AHK v2 automation through managed scripts.
 
-Version 1.0.0 ships with 18 editable built-in rules: 13 rule blocks and 5 managed scripts. Rules live in the comment-only `@mapping` region, where both portable and source users can inspect, back up, and modify them. The application installs no driver or Windows service; enabled mappings work only while the assistant is running.
+Version 1.0.1 ships with 18 editable built-in rules: 13 rule blocks and 5 managed scripts. Rules live in the comment-only `@mapping` region, where both portable and source users can inspect, back up, and modify them. The application installs no driver or Windows service; enabled mappings work only while the assistant is running.
 
 The interface supports 13 languages, light and dark themes, elevated startup, scheduled startup, application updates, event inspection, and rule-package import and export. Official packages never include the build computer's AI address, API key, model, custom prompts, or other personal settings.
 
 # Interface overview
 
 <p align="center">
-  <img src="images/key-mouse-remapper-assistant-overview.png" alt="Key Mouse Remapper Assistant main window" width="100%">
+  <img src="images/key-mouse-remapper-assistant-overview.png" alt="Key Mouse Remapper Assistant dark main window" width="49%">
+  <img src="images/key-mouse-remapper-assistant-overview-light.png" alt="Key Mouse Remapper Assistant light main window" width="49%">
 </p>
 
 The top command bar adds, pauses or resumes, and deletes rules. The list shows sequence, name, source input, mapped result, scope, and live status. The lower section records a source and target directly. The list supports multi-selection, batch drag reordering, temporary header sorting, overflow tooltips, colored sequence dots, and stable rounded selection feedback.

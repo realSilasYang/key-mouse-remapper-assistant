@@ -11,13 +11,13 @@
   <p><a href="#vista-general-de-la-interfaz">Interfaz</a> · <a href="#guía-de-usuario">Guía</a> · <a href="#4-bloques-de-reglas-scripts-administrados-e-ia">Tipos de regla</a> · <a href="https://github.com/realSilasYang/key-mouse-remapper-assistant/releases">Versiones</a> · <a href="./CHANGELOG.en.md">Cambios</a> · <a href="https://github.com/realSilasYang/key-mouse-remapper-assistant/issues/new">Comentarios</a> · <a href="#guía-para-desarrolladores">Desarrollo</a></p>
 </div>
 
-El Asistente de reasignación de teclado y ratón es una aplicación AutoHotkey v2 para Windows 10 y 11 x64. Reúne captura de entradas, administración de reglas, edición de código, generación y optimización con IA, validación local y estado de ejecución. La versión 1.0.0 incluye 18 reglas editables: 13 bloques de reglas y 5 scripts administrados.
+El Asistente de reasignación de teclado y ratón es una aplicación AutoHotkey v2 para Windows 10 y 11 x64. Reúne captura de entradas, administración de reglas, edición de código, generación y optimización con IA, validación local y estado de ejecución. La versión 1.0.1 incluye 18 reglas editables: 13 bloques de reglas y 5 scripts administrados.
 
 Las reglas se guardan en la región comentada `@mapping`, que se puede leer y respaldar. La aplicación no instala controladores ni servicios de Windows; las asignaciones solo funcionan mientras el asistente está abierto. Los paquetes oficiales nunca incluyen la dirección de IA, la clave de API, el modelo, las indicaciones personalizadas ni otros ajustes del equipo de compilación.
 
 # Vista general de la interfaz
 
-<p align="center"><img src="images/key-mouse-remapper-assistant-overview.png" alt="Ventana principal" width="100%"></p>
+<p align="center"><img src="images/key-mouse-remapper-assistant-overview.png" alt="Ventana principal oscura" width="49%"> <img src="images/key-mouse-remapper-assistant-overview-light.png" alt="Ventana principal clara" width="49%"></p>
 
 La barra superior añade, pausa／reanuda por lotes y elimina reglas. La lista muestra orden, nombre, entrada de origen, resultado, ámbito y estado. La zona inferior graba el origen y el destino. Hay selección múltiple, arrastre por lotes, orden visual temporal, ayudas para texto recortado, puntos de color y una selección redondeada estable.
 

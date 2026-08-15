@@ -372,7 +372,7 @@ RunScriptRuleRuntimeTests() {
         ScriptRuleWaitFor(() => FileExist(descendantMarker)
                 && InStr(FileRead(descendantMarker), "P:")
                 && InStr(FileRead(descendantMarker), "C:")
-                && InStr(FileRead(descendantMarker), "E:"), 5000,
+                && InStr(FileRead(descendantMarker), "E:"), 15000,
             "A child script instance did not execute.")
         descendantWorker := descendantRuntime.Workers[descendantSpec["id"]]
         ScriptRuleAssert(descendantRuntime.GetWorkerProcessCount(

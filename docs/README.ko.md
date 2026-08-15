@@ -11,13 +11,13 @@
   <p><a href="#인터페이스-개요">인터페이스</a> · <a href="#사용자-안내서">사용자 안내서</a> · <a href="#4-규칙-블록과-관리형-스크립트">규칙 형식</a> · <a href="https://github.com/realSilasYang/key-mouse-remapper-assistant/releases">릴리스</a> · <a href="./CHANGELOG.en.md">변경 기록</a> · <a href="https://github.com/realSilasYang/key-mouse-remapper-assistant/issues/new">피드백</a> · <a href="#개발자-안내서">개발자 안내서</a></p>
 </div>
 
-키보드·마우스 리매핑 도우미는 Windows 10／11 x64용 AutoHotkey v2 데스크톱 도구입니다. 입력 기록, 규칙 관리, 코드 편집, AI 생성·최적화, 로컬 검증과 실행 상태를 한 인터페이스에 제공합니다. 1.0.0에는 규칙 블록 13개와 관리형 스크립트 5개, 총 18개의 편집 가능한 내장 규칙이 포함됩니다.
+키보드·마우스 리매핑 도우미는 Windows 10／11 x64용 AutoHotkey v2 데스크톱 도구입니다. 입력 기록, 규칙 관리, 코드 편집, AI 생성·최적화, 로컬 검증과 실행 상태를 한 인터페이스에 제공합니다. 1.0.1에는 규칙 블록 13개와 관리형 스크립트 5개, 총 18개의 편집 가능한 내장 규칙이 포함됩니다.
 
 규칙은 읽고 백업할 수 있는 `@mapping` 주석 영역에 저장됩니다. 드라이버나 Windows 서비스를 설치하지 않으며 도우미가 실행 중일 때만 매핑이 작동합니다. 공식 패키지는 빌드 컴퓨터의 AI 주소, API 키, 모델, 사용자 프롬프트 또는 개인 설정을 포함하지 않습니다.
 
 # 인터페이스 개요
 
-<p align="center"><img src="images/key-mouse-remapper-assistant-overview.png" alt="키보드·마우스 리매핑 도우미 기본 창" width="100%"></p>
+<p align="center"><img src="images/key-mouse-remapper-assistant-overview.png" alt="키보드·마우스 리매핑 도우미 어두운 기본 창" width="49%"> <img src="images/key-mouse-remapper-assistant-overview-light.png" alt="키보드·마우스 리매핑 도우미 밝은 기본 창" width="49%"></p>
 
 위 명령 모음에서 규칙을 추가하고 여러 규칙을 일시 중지／재개하거나 삭제합니다. 목록은 순서, 이름, 원본 입력, 매핑 결과, 범위와 상태를 표시하고, 아래 영역에서 원본과 대상을 직접 기록합니다. 다중 선택, 묶음 끌기, 임시 열 정렬, 잘린 내용 도움말, 색상 순번 점과 둥근 선택 배경을 지원합니다.
 
