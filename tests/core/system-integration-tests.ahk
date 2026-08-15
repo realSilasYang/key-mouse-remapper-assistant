@@ -37,6 +37,17 @@ try {
         "C:/Program Files/Remapper/app.exe",
         "c:\Program Files\Remapper\app.exe"),
         "Equivalent Windows paths did not compare equally.")
+    pathAliasRoot := A_Temp "\remapper-path-alias-with-long-name-"
+        . A_TickCount
+    DirCreate(pathAliasRoot)
+    try {
+        shortPath := IntegrationGetShortPath(pathAliasRoot)
+        if shortPath != pathAliasRoot {
+            IntegrationAssertTrue(integrationService.PathsEqual(
+                    shortPath, pathAliasRoot),
+                "Equivalent short and long Windows paths did not compare equally.")
+        }
+    } finally DirDelete(pathAliasRoot)
     settingsWindowSource := FileRead(A_ScriptDir
         "\..\..\app\Windows\SettingsWindow.ahk", "UTF-8")
     applicationSource := FileRead(A_ScriptDir
@@ -271,6 +282,17 @@ IntegrationCountFiles(directory, pattern) {
     Loop Files directory "\" pattern, "F"
         count++
     return count
+}
+
+IntegrationGetShortPath(path) {
+    required := DllCall("kernel32\GetShortPathNameW", "WStr", path,
+        "Ptr", 0, "UInt", 0, "UInt")
+    if !required
+        return path
+    pathBuffer := Buffer((required + 1) * 2, 0)
+    length := DllCall("kernel32\GetShortPathNameW", "WStr", path,
+        "Ptr", pathBuffer, "UInt", required + 1, "UInt")
+    return length ? StrGet(pathBuffer, length, "UTF-16") : path
 }
 
 class FailingShortcutIntegrationService extends SystemIntegrationService {

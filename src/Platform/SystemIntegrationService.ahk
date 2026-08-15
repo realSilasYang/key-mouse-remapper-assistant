@@ -567,7 +567,26 @@ class SystemIntegrationService {
     }
 
     PathsEqual(left, right) {
-        return StrLower(StrReplace(Trim(String(left)), "/", "\"))
-            == StrLower(StrReplace(Trim(String(right)), "/", "\"))
+        return this.NormalizePathForComparison(left)
+            == this.NormalizePathForComparison(right)
+    }
+
+    NormalizePathForComparison(path) {
+        normalized := StrReplace(Trim(String(path)), "/", "\")
+        if normalized == ""
+            return ""
+        try {
+            required := DllCall("kernel32\GetLongPathNameW", "WStr",
+                normalized, "Ptr", 0, "UInt", 0, "UInt")
+            if required {
+                pathBuffer := Buffer((required + 1) * 2, 0)
+                length := DllCall("kernel32\GetLongPathNameW", "WStr",
+                    normalized, "Ptr", pathBuffer, "UInt", required + 1,
+                    "UInt")
+                if length
+                    normalized := StrGet(pathBuffer, length, "UTF-16")
+            }
+        }
+        return StrLower(normalized)
     }
 }
