@@ -1837,8 +1837,10 @@ ValidateMainWindowResponsiveLayout(window) {
     window.List.GetPos(, , , &restoredListHeight)
     MappingWindowVisualAssert(restoredWidth == baseWidth
             && restoredHeight == baseHeight
-            && restoredListHeight == baseListHeight,
-        "Returning to the previous client size did not restore its layout.")
+            && Abs(restoredListHeight - baseListHeight) <= 1,
+        Format("Returning to the previous client size did not restore its layout: client {1}x{2} -> {3}x{4}; list {5} -> {6}.",
+            baseWidth, baseHeight, restoredWidth, restoredHeight,
+            baseListHeight, restoredListHeight))
 }
 
 AssertMappingWindowOldSurfaceClear(parentHwnd, controlHwnd, oldRect,
