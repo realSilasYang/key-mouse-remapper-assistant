@@ -1581,11 +1581,22 @@ ValidateMainWindowResponsiveLayout(window) {
     MappingWindowVisualAssert(baseColumns.Source == baseColumns.Target,
         "The source and target list columns do not start with equal widths.")
 
-    ; The earlier wrapped-text checks may grow this window close to the work
-    ; area limit. Exercise four shrinking frames so the sampled CS_PARENTDC
-    ; surface stays above the taskbar exclusion on every DPI.
+    ; Only sample shrink frames that remain above the current dynamic minimum.
+    availableVerticalDelta := Max(0,
+        baseHeight - window.RequiredClientHeight)
+    tallWidth := baseWidth
+    tallHeight := baseHeight
+    tallListHeight := baseListHeight
+    tallSourceY := baseSourceY
+    tallSourceHeight := baseSourceHeight
+    tallTargetHeight := baseTargetHeight
+    tallNameHeight := baseNameHeight
+    tallDetailHeight := baseDetailHeight
+    tallCommandHeight := baseSaveHeight
     for heightDelta in [4, 8, 12, 16, 20, 24, 20, 16, 12, 8, 4,
             8, 12, 16, 20, 24, 20, 16, 12, 8, 4] {
+        if heightDelta > availableVerticalDelta
+            continue
         oldSaveRect := AtomicControlLayout.GetControlBounds(
             window.SaveButton.Hwnd, window.Gui.Hwnd)
         oldClearRect := AtomicControlLayout.GetControlBounds(
