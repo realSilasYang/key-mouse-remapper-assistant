@@ -35,8 +35,10 @@ The interface supports 13 languages, light and dark themes, elevated startup, sc
 # Interface overview
 
 <p align="center">
-  <img src="images/key-mouse-remapper-assistant-overview.png" alt="Key Mouse Remapper Assistant dark main window" width="49%">
-  <img src="images/key-mouse-remapper-assistant-overview-light.png" alt="Key Mouse Remapper Assistant light main window" width="49%">
+  <img src="images/key-mouse-remapper-assistant-overview.png" alt="Key Mouse Remapper Assistant dark main window" width="100%">
+</p>
+<p align="center">
+  <img src="images/key-mouse-remapper-assistant-overview-light.png" alt="Key Mouse Remapper Assistant light main window" width="100%">
 </p>
 
 The top command bar adds, pauses or resumes, and deletes rules. The list shows sequence, name, source input, mapped result, scope, and live status. The lower section records a source and target directly. The list supports multi-selection, batch drag reordering, temporary header sorting, overflow tooltips, colored sequence dots, and stable rounded selection feedback.

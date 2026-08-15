@@ -17,7 +17,12 @@ Regeln liegen im les- und sicherbaren `@mapping`-Kommentarbereich. Es werden wed
 
 # Oberflächenübersicht
 
-<p align="center"><img src="images/key-mouse-remapper-assistant-overview.png" alt="Dunkles Hauptfenster" width="49%"> <img src="images/key-mouse-remapper-assistant-overview-light.png" alt="Helles Hauptfenster" width="49%"></p>
+<p align="center">
+  <img src="images/key-mouse-remapper-assistant-overview.png" alt="Dunkles Hauptfenster" width="100%">
+</p>
+<p align="center">
+  <img src="images/key-mouse-remapper-assistant-overview-light.png" alt="Helles Hauptfenster" width="100%">
+</p>
 
 Die obere Leiste fügt Regeln hinzu, pausiert／setzt mehrere fort und löscht sie. Die Liste zeigt Reihenfolge, Name, Quelleingabe, Ergebnis, Geltungsbereich und Status. Unten werden Quelle und Ziel direkt aufgenommen. Mehrfachauswahl, gruppiertes Ziehen, temporäre Ansichtssortierung, Hinweise für gekürzten Text, farbige Nummernpunkte und stabile abgerundete Auswahl werden unterstützt.
 

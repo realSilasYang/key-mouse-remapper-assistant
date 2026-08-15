@@ -119,11 +119,21 @@ foreach ($relativePath in $localizedReadmes) {
     $readme = Get-Content -LiteralPath $readmePath -Raw -Encoding UTF8
     $levelOneCount = [regex]::Matches($readme, '(?m)^# ').Count
     $levelTwoCount = [regex]::Matches($readme, '(?m)^## ').Count
+    $stackedPreviewPattern =
+        '(?s)<p align="center">\s*' +
+        '<img src="(?:docs/)?images/' +
+        'key-mouse-remapper-assistant-overview\.png"[^>]*' +
+        'width="100%">\s*</p>\s*' +
+        '<p align="center">\s*' +
+        '<img src="(?:docs/)?images/' +
+        'key-mouse-remapper-assistant-overview-light\.png"[^>]*' +
+        'width="100%">\s*</p>'
     if ($levelOneCount -ne 5 -or $levelTwoCount -ne 12 -or
             $readme -notmatch
                 'docs/images/key-mouse-remapper-assistant-overview\.png|images/key-mouse-remapper-assistant-overview\.png' -or
             $readme -notmatch
                 'key-mouse-remapper-assistant-overview-light\.png' -or
+            $readme -notmatch $stackedPreviewPattern -or
             $readme -notmatch '(?m)^# Star History$') {
         throw "Localized README structure is incomplete: $relativePath"
     }

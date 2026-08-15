@@ -24,7 +24,12 @@
 
 # 画面概要
 
-<p align="center"><img src="images/key-mouse-remapper-assistant-overview.png" alt="ダークテーマのメイン画面" width="49%"> <img src="images/key-mouse-remapper-assistant-overview-light.png" alt="ライトテーマのメイン画面" width="49%"></p>
+<p align="center">
+  <img src="images/key-mouse-remapper-assistant-overview.png" alt="ダークテーマのメイン画面" width="100%">
+</p>
+<p align="center">
+  <img src="images/key-mouse-remapper-assistant-overview-light.png" alt="ライトテーマのメイン画面" width="100%">
+</p>
 
 上部でルールの追加、一括停止／再開、削除を行い、中央の一覧で順番、名前、入力元、割り当て先、適用範囲、状態を確認します。下部では入力元と割り当て先を直接記録できます。複数選択、一括ドラッグ、表示だけの並べ替え、省略内容のツールチップ、色付き番号ドット、角丸の選択表示に対応します。
 

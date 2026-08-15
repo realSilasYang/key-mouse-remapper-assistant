@@ -24,7 +24,12 @@
 
 # 介面概覽
 
-<p align="center"><img src="images/key-mouse-remapper-assistant-overview.png" alt="鍵鼠重映射小助手深色主介面" width="49%"> <img src="images/key-mouse-remapper-assistant-overview-light.png" alt="鍵鼠重映射小助手淺色主介面" width="49%"></p>
+<p align="center">
+  <img src="images/key-mouse-remapper-assistant-overview.png" alt="鍵鼠重映射小助手深色主介面" width="100%">
+</p>
+<p align="center">
+  <img src="images/key-mouse-remapper-assistant-overview-light.png" alt="鍵鼠重映射小助手淺色主介面" width="100%">
+</p>
 
 上方指令列用來新增、批量暫停／恢復及刪除規則；中間清單顯示次序、名稱、來源按鍵、映射結果、生效範圍及即時狀態；下方可直接錄製來源與目標。清單支援多選、批量拖曳、暫時排序、完整內容提示、彩色次序圓點及穩定的圓角選取背景。
 

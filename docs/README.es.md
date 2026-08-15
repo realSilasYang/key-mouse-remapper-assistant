@@ -17,7 +17,12 @@ Las reglas se guardan en la región comentada `@mapping`, que se puede leer y re
 
 # Vista general de la interfaz
 
-<p align="center"><img src="images/key-mouse-remapper-assistant-overview.png" alt="Ventana principal oscura" width="49%"> <img src="images/key-mouse-remapper-assistant-overview-light.png" alt="Ventana principal clara" width="49%"></p>
+<p align="center">
+  <img src="images/key-mouse-remapper-assistant-overview.png" alt="Ventana principal oscura" width="100%">
+</p>
+<p align="center">
+  <img src="images/key-mouse-remapper-assistant-overview-light.png" alt="Ventana principal clara" width="100%">
+</p>
 
 La barra superior añade, pausa／reanuda por lotes y elimina reglas. La lista muestra orden, nombre, entrada de origen, resultado, ámbito y estado. La zona inferior graba el origen y el destino. Hay selección múltiple, arrastre por lotes, orden visual temporal, ayudas para texto recortado, puntos de color y una selección redondeada estable.
 

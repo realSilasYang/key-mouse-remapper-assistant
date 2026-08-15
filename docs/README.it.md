@@ -17,7 +17,12 @@ Le regole sono salvate nell’area commentata `@mapping`, leggibile e copiabile.
 
 # Panoramica dell’interfaccia
 
-<p align="center"><img src="images/key-mouse-remapper-assistant-overview.png" alt="Finestra principale scura" width="49%"> <img src="images/key-mouse-remapper-assistant-overview-light.png" alt="Finestra principale chiara" width="49%"></p>
+<p align="center">
+  <img src="images/key-mouse-remapper-assistant-overview.png" alt="Finestra principale scura" width="100%">
+</p>
+<p align="center">
+  <img src="images/key-mouse-remapper-assistant-overview-light.png" alt="Finestra principale chiara" width="100%">
+</p>
 
 La barra superiore aggiunge, sospende／riprende in gruppo ed elimina le regole. L’elenco mostra ordine, nome, input origine, risultato, ambito e stato. L’area inferiore registra direttamente origine e destinazione. Sono disponibili selezione multipla, trascinamento in gruppo, ordinamento visivo temporaneo, suggerimenti per testo troncato, punti colorati e selezione arrotondata stabile.
 

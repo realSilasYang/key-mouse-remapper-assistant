@@ -17,7 +17,12 @@ Quy tắc nằm trong vùng chú thích `@mapping`, có thể đọc và sao lư
 
 # Tổng quan giao diện
 
-<p align="center"><img src="images/key-mouse-remapper-assistant-overview.png" alt="Cửa sổ chính ở chế độ tối" width="49%"> <img src="images/key-mouse-remapper-assistant-overview-light.png" alt="Cửa sổ chính ở chế độ sáng" width="49%"></p>
+<p align="center">
+  <img src="images/key-mouse-remapper-assistant-overview.png" alt="Cửa sổ chính ở chế độ tối" width="100%">
+</p>
+<p align="center">
+  <img src="images/key-mouse-remapper-assistant-overview-light.png" alt="Cửa sổ chính ở chế độ sáng" width="100%">
+</p>
 
 Thanh lệnh phía trên thêm, tạm dừng／tiếp tục hàng loạt và xóa quy tắc. Danh sách hiển thị thứ tự, tên, đầu vào nguồn, kết quả, phạm vi và trạng thái; vùng phía dưới ghi trực tiếp nguồn và đích. Danh sách hỗ trợ chọn nhiều, kéo theo nhóm, sắp xếp tạm thời, chú giải nội dung bị cắt, chấm thứ tự màu và nền chọn bo góc ổn định.
 

@@ -17,7 +17,12 @@
 
 # Обзор интерфейса
 
-<p align="center"><img src="images/key-mouse-remapper-assistant-overview.png" alt="Главное окно в тёмной теме" width="49%"> <img src="images/key-mouse-remapper-assistant-overview-light.png" alt="Главное окно в светлой теме" width="49%"></p>
+<p align="center">
+  <img src="images/key-mouse-remapper-assistant-overview.png" alt="Главное окно в тёмной теме" width="100%">
+</p>
+<p align="center">
+  <img src="images/key-mouse-remapper-assistant-overview-light.png" alt="Главное окно в светлой теме" width="100%">
+</p>
 
 Верхняя панель добавляет, массово приостанавливает／возобновляет и удаляет правила. Список показывает порядок, имя, исходный ввод, результат, область и состояние. Внизу можно непосредственно записать источник и цель. Поддерживаются множественный выбор, групповое перетаскивание, временная сортировка представления, подсказки для обрезанного текста, цветные точки и стабильное скруглённое выделение.
 

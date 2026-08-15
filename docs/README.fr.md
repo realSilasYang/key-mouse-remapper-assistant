@@ -17,7 +17,12 @@ Les règles sont enregistrées dans la zone commentée `@mapping`, lisible et sa
 
 # Aperçu de l’interface
 
-<p align="center"><img src="images/key-mouse-remapper-assistant-overview.png" alt="Fenêtre principale sombre" width="49%"> <img src="images/key-mouse-remapper-assistant-overview-light.png" alt="Fenêtre principale claire" width="49%"></p>
+<p align="center">
+  <img src="images/key-mouse-remapper-assistant-overview.png" alt="Fenêtre principale sombre" width="100%">
+</p>
+<p align="center">
+  <img src="images/key-mouse-remapper-assistant-overview-light.png" alt="Fenêtre principale claire" width="100%">
+</p>
 
 La barre supérieure ajoute, suspend／reprend par lot et supprime les règles. La liste affiche l’ordre, le nom, l’entrée source, le résultat, la portée et l’état. La zone inférieure enregistre directement la source et la cible. La sélection multiple, le glisser groupé, le tri visuel temporaire, les infobulles de texte tronqué, les pastilles colorées et la sélection arrondie sont pris en charge.
 

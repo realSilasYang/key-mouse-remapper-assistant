@@ -17,7 +17,12 @@ As regras ficam na região comentada `@mapping`, que pode ser lida e copiada. Ne
 
 # Visão geral da interface
 
-<p align="center"><img src="images/key-mouse-remapper-assistant-overview.png" alt="Janela principal escura" width="49%"> <img src="images/key-mouse-remapper-assistant-overview-light.png" alt="Janela principal clara" width="49%"></p>
+<p align="center">
+  <img src="images/key-mouse-remapper-assistant-overview.png" alt="Janela principal escura" width="100%">
+</p>
+<p align="center">
+  <img src="images/key-mouse-remapper-assistant-overview-light.png" alt="Janela principal clara" width="100%">
+</p>
 
 A barra superior adiciona, pausa／retoma em lote e exclui regras. A lista exibe ordem, nome, entrada de origem, resultado, escopo e estado. A área inferior grava origem e destino diretamente. Há seleção múltipla, arraste em lote, ordenação visual temporária, dicas para texto cortado, pontos coloridos e seleção arredondada estável.
 
