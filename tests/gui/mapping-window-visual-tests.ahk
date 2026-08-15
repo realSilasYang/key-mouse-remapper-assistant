@@ -1520,6 +1520,18 @@ ValidateMainWindowResponsiveLayout(window) {
                 "Int"),
         "The responsive-layout probe did not start with a visible window.")
     window.Gui.GetClientPos(, , &baseWidth, &baseHeight)
+    maximumSize := window.GetWorkAreaMaximumClientSize()
+    normalizedWidth := Min(baseWidth, maximumSize.Width)
+    normalizedHeight := Min(baseHeight, maximumSize.Height)
+    if normalizedWidth != baseWidth || normalizedHeight != baseHeight {
+        MappingWindowVisualAssert(ResizeMappingWindowClient(window.Gui.Hwnd,
+                normalizedWidth, normalizedHeight),
+            "Could not normalize the responsive-layout probe to the work area.")
+        window.Gui.GetClientPos(, , &baseWidth, &baseHeight)
+        MappingWindowVisualAssert(baseWidth == normalizedWidth
+                && baseHeight == normalizedHeight,
+            "The responsive-layout probe did not honor the work-area limit.")
+    }
     window.List.GetPos(&baseListX, &baseListY, &baseListWidth,
         &baseListHeight)
     window.SourceButton.GetPos(&baseSourceX, &baseSourceY,
@@ -1684,7 +1696,6 @@ ValidateMainWindowResponsiveLayout(window) {
         "A main-window region violated its explicit minimum height.")
     MappingWindowVisualCheckpoint(window, "tall")
 
-    maximumSize := window.GetWorkAreaMaximumClientSize()
     maximumWideDelta := Min(480, maximumSize.Width - baseWidth)
     MappingWindowVisualAssert(maximumWideDelta >= 30,
         "The desktop work area is too narrow for responsive-width verification.")
