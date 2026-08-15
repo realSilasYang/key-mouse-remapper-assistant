@@ -1531,6 +1531,9 @@ ValidateMainWindowResponsiveLayout(window) {
         MappingWindowVisualAssert(baseWidth == normalizedWidth
                 && baseHeight == normalizedHeight,
             "The responsive-layout probe did not honor the work-area limit.")
+        layoutResult := window.ApplyLayout(baseWidth, baseHeight, true, true)
+        MappingWindowVisualAssert(IsObject(layoutResult),
+            "The normalized responsive-layout baseline was not committed.")
     }
     window.List.GetPos(&baseListX, &baseListY, &baseListWidth,
         &baseListHeight)
