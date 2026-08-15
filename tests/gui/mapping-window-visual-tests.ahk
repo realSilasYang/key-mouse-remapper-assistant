@@ -1016,19 +1016,37 @@ MappingWindowPixelNearColor(pixel, target, tolerance := 24) {
 
 AssertUniformMappingListTextInsets(window, row) {
     name := source := target := ""
-    Loop 4 {
+    originalName := window.List.GetText(row, MappingWindow.NameColumn)
+    originalSource := window.List.GetText(row, MappingWindow.SourceColumn)
+    originalTarget := window.List.GetText(row, MappingWindow.TargetColumn)
+    try {
+        ; Identical text keeps glyph side bearings and antialiasing from being
+        ; mistaken for different column insets when the system font changes.
+        probeText := "Inset probe"
+        window.List.Modify(row, "Col" MappingWindow.NameColumn, probeText)
+        window.List.Modify(row, "Col" MappingWindow.SourceColumn, probeText)
+        window.List.Modify(row, "Col" MappingWindow.TargetColumn, probeText)
+        Loop 4 {
+            window.List.Redraw()
+            DllCall("user32\UpdateWindow", "Ptr", window.List.Hwnd, "Int")
+            DllCall("gdi32\GdiFlush", "Int")
+            name := GetMappingListVisibleContentBounds(window, row,
+                MappingWindow.NameColumn)
+            source := GetMappingListVisibleContentBounds(window, row,
+                MappingWindow.SourceColumn)
+            target := GetMappingListVisibleContentBounds(window, row,
+                MappingWindow.TargetColumn)
+            if IsObject(name) && IsObject(source) && IsObject(target)
+                break
+            Sleep(20)
+        }
+    } finally {
+        window.List.Modify(row, "Col" MappingWindow.NameColumn, originalName)
+        window.List.Modify(row, "Col" MappingWindow.SourceColumn,
+            originalSource)
+        window.List.Modify(row, "Col" MappingWindow.TargetColumn,
+            originalTarget)
         window.List.Redraw()
-        DllCall("user32\UpdateWindow", "Ptr", window.List.Hwnd, "Int")
-        DllCall("gdi32\GdiFlush", "Int")
-        name := GetMappingListVisibleContentBounds(window, row,
-            MappingWindow.NameColumn)
-        source := GetMappingListVisibleContentBounds(window, row,
-            MappingWindow.SourceColumn)
-        target := GetMappingListVisibleContentBounds(window, row,
-            MappingWindow.TargetColumn)
-        if IsObject(name) && IsObject(source) && IsObject(target)
-            break
-        Sleep(20)
     }
     MappingWindowVisualAssert(IsObject(name) && IsObject(source)
             && IsObject(target)

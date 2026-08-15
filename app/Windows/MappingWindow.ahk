@@ -3288,16 +3288,6 @@ class MappingWindow {
             cellRect.Right - inset), textRect, 8)
         NumPut("Int", cellRect.Bottom, textRect, 12)
         text := listView.GetText(row, column)
-        savedDc := DllCall("gdi32\SaveDC", "Ptr", hdc, "Int")
-        if savedDc {
-            ; The reordered primary column keeps ListView's native icon-slot
-            ; clip. Replace it with the real cell bounds so every left-aligned
-            ; column uses the same text inset.
-            DllCall("gdi32\SelectClipRgn", "Ptr", hdc, "Ptr", 0, "Int")
-            DllCall("gdi32\IntersectClipRect", "Ptr", hdc,
-                "Int", cellRect.Left, "Int", cellRect.Top,
-                "Int", cellRect.Right, "Int", cellRect.Bottom, "Int")
-        }
         font := SendMessage(Win32.WM_GETFONT, 0, 0, , listView.Hwnd)
         previousFont := font ? DllCall("gdi32\SelectObject", "Ptr", hdc,
             "Ptr", font, "Ptr") : 0
@@ -3318,9 +3308,6 @@ class MappingWindow {
             if previousFont
                 DllCall("gdi32\SelectObject", "Ptr", hdc, "Ptr",
                     previousFont, "Ptr")
-            if savedDc
-                DllCall("gdi32\RestoreDC", "Ptr", hdc, "Int", savedDc,
-                    "Int")
         }
         return Win32.CDRF_SKIPDEFAULT
     }
