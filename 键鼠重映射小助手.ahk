@@ -7,7 +7,7 @@
 
 ;@Ahk2Exe-SetName 键鼠重映射小助手
 ;@Ahk2Exe-SetDescription 键鼠重映射小助手可视化管理器
-;@Ahk2Exe-SetVersion 1.0.1.0
+;@Ahk2Exe-SetVersion 1.0.1
 ;@Ahk2Exe-SetCopyright Copyright (c) 2026 键鼠重映射小助手 contributors
 ;@Ahk2Exe-SetMainIcon assets\app\key-mouse-remapper-assistant.ico
 
