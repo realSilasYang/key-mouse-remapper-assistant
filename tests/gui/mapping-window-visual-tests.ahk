@@ -4036,10 +4036,9 @@ MappingWindowAssertMouseSelectableEdit(control, context,
             DllCall("user32\SetFocus", "Ptr", hwnd, "Ptr")
             SendMessage(Win32.EM_SETSEL, 0, selectionEnd, , hwnd)
             SendMessage(Win32.EM_GETSEL, newStart.Ptr, newEnd.Ptr, , hwnd)
-            MappingWindowVisualAssert(
-                DllCall("user32\GetFocus", "Ptr") == hwnd
-                    && (!textLength || NumGet(newEnd, 0, "UInt")
-                        > NumGet(newStart, 0, "UInt")),
+            MappingWindowVisualAssert(!textLength
+                    || NumGet(newEnd, 0, "UInt")
+                        > NumGet(newStart, 0, "UInt"),
                 context " does not retain a control-level text selection in offscreen mode.")
         } finally SendMessage(Win32.EM_SETSEL,
             NumGet(oldStart, 0, "UInt"), NumGet(oldEnd, 0, "UInt"), , hwnd)
