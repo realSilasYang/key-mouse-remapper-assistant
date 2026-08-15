@@ -1,0 +1,89 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: verify
+    runs-on: windows-2022
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout repository and LFS assets
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          lfs: true
+
+      - name: Restore locked toolchain cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            .tools/cache
+            .tools/autoHotkey-*
+            .tools/ahk2Exe-*
+          key: ${{ runner.os }}-tools-${{ hashFiles('tools/toolchain.lock.json') }}
+
+      - name: Resolve locked AutoHotkey toolchain
+        id: toolchain
+        shell: pwsh
+        run: |
+          $tools = .\tools\bootstrap-toolchain.ps1
+          "ahk=$($tools.AutoHotkeyPath)" >> $env:GITHUB_OUTPUT
+          "compiler=$($tools.CompilerPath)" >> $env:GITHUB_OUTPUT
+          "ahk_source=$($tools.AutoHotkeySourcePath)" >> $env:GITHUB_OUTPUT
+
+      - name: Verify source and GUI behavior
+        shell: pwsh
+        run: >-
+          .\tests\verify.ps1
+          -AutoHotkeyPath '${{ steps.toolchain.outputs.ahk }}'
+          -IncludeGui
+
+      - name: Build portable and source packages
+        shell: pwsh
+        run: >-
+          .\tools\build-release.ps1
+          -AutoHotkeyPath '${{ steps.toolchain.outputs.ahk }}'
+          -CompilerPath '${{ steps.toolchain.outputs.compiler }}'
+          -AutoHotkeySourcePath '${{ steps.toolchain.outputs.ahk_source }}'
+
+      - name: Validate packaged application startup
+        shell: pwsh
+        run: |
+          $version = (Get-Content -LiteralPath .\VERSION -Raw -Encoding UTF8).Trim()
+          $packageRoot = Join-Path $PWD `
+            "dist\key-mouse-remapper-assistant-$version-windows-x64"
+          $executable = Join-Path $packageRoot '键鼠重映射小助手.exe'
+          if (-not (Test-Path -LiteralPath $executable -PathType Leaf)) {
+            throw "Packaged executable is missing: $executable"
+          }
+          $process = Start-Process -FilePath $executable `
+            -ArgumentList '--startup-validation' `
+            -WorkingDirectory $packageRoot -WindowStyle Hidden -PassThru
+          if (-not $process.WaitForExit(60000)) {
+            try { $process.Kill() } catch {}
+            throw 'Packaged startup validation timed out.'
+          }
+          if ($process.ExitCode -ne 0) {
+            throw "Packaged startup validation failed with exit code $($process.ExitCode)."
+          }
+
+      - name: Upload verified release packages
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: key-mouse-remapper-assistant-packages
+          path: dist/*.zip
+          if-no-files-found: error
+          retention-days: 14
