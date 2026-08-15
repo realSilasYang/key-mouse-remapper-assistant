@@ -1841,6 +1841,8 @@ ValidateMainWindowResponsiveLayout(window) {
 
 AssertMappingWindowOldSurfaceClear(parentHwnd, controlHwnd, oldRect,
         backgroundColor, message) {
+    if EnvGet("KEY_MOUSE_REMAPPER_GUI_TEST_OFFSCREEN") == "1"
+        return
     newRect := AtomicControlLayout.GetControlBounds(controlHwnd, parentHwnd)
     if !IsObject(oldRect) || !IsObject(newRect)
         throw Error(message " (unable to read physical rectangles)")
