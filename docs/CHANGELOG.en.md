@@ -11,8 +11,15 @@ categories based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### 📦 Release Assets
 
-- **`key-mouse-remapper-assistant-1.0.1-source.zip` (complete source package):** Includes runnable AHK source, application modules, assets, all thirteen README languages, bilingual changelogs, tests, and build tools; intended for review, development, or source execution and requires AutoHotkey v2 x64.
-- **`key-mouse-remapper-assistant-1.0.1-windows-x64.zip` (complete portable package, recommended):** Includes the compiled EXE, editable mapping source, all thirteen README languages, bilingual changelogs, licenses, application modules, UI assets, fixed AutoHotkey v2.0.26 x64 runtime, and matching source archive; requires no AutoHotkey installation and is intended for long-term use after full extraction.
+- **`fonts.zip` (optional font package):** Provides Noto fallback UI fonts for installation into Windows; it is not required to run the application.
+- **`key-mouse-remapper-assistant-1.0.1-source.zip` (complete source package):** Includes runnable AHK source, application modules, assets other than fonts, all thirteen README languages, bilingual changelogs, tests, and build tools; intended for review, development, or source execution and requires AutoHotkey v2 x64.
+- **`key-mouse-remapper-assistant-1.0.1-windows-x64.zip` (complete portable package, recommended):** Includes the compiled EXE, editable mapping source, all thirteen README languages, bilingual changelogs, licenses, application modules, UI assets other than fonts, fixed AutoHotkey v2.0.26 x64 runtime, and matching source archive; requires no AutoHotkey installation and is intended for long-term use after full extraction.
+
+---
+
+### ⚠️ Important Notes
+
+- **Font loading changed:** Program packages no longer include or privately load fonts. To retain the Noto fallback appearance, download the optional font package and install the fonts into Windows.
 
 ---
 
@@ -20,6 +27,7 @@ categories based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **Release verification pipeline:** Restored Windows GitHub Actions CI, reused verified locked toolchain and font assets, and fully validates the GUI, portable package, and source package on `main` changes so official assets continue through the same release gate.
 - **Interface preview documentation:** All thirteen README languages now show the dark and light main windows on separate rows so both themes can be viewed clearly before download.
+- **Separate font package:** Runtime font selection now uses only Windows-installed families; source and portable packages exclude fonts, while CI and release builds restore and deliver them through the separate `fonts.zip`.
 
 ---
 

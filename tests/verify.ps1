@@ -32,6 +32,7 @@ Write-Host 'SKIP brittle source-based UI contracts (covered by GUI behavior test
 & (Join-Path $PSScriptRoot 'static\application-update-tests.ps1')
 & (Join-Path $PSScriptRoot 'static\localization-catalog-tests.ps1')
 & (Join-Path $PSScriptRoot 'static\release-build-tests.ps1')
+& (Join-Path $PSScriptRoot 'static\font-asset-restore-tests.ps1')
 Assert-PowerShellScriptParses (Join-Path $projectRoot `
     'runtime\application-update.ps1')
 Get-Content -LiteralPath (Join-Path $projectRoot `

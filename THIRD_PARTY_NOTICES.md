@@ -25,4 +25,5 @@ AutoHotkey 与本项目彼此独立；上游作者不为本项目提供担保或
 ## Noto Sans 与 Noto Sans CJK
 
 界面内容字体 `NotoSans-Variable.ttf` 与 `NotoSansCJK.ttc` 按 SIL Open Font
-License 1.1 分发；许可证、上游来源、转换方式与固定文件摘要位于 `assets/fonts/`。
+License 1.1 分发；字体仅进入独立的 `fonts.zip`，不进入源码包或便携包。许可证、
+上游来源、转换方式与固定文件摘要位于字体包的 `assets/fonts/`。

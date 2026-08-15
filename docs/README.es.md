@@ -63,6 +63,8 @@ Si el asistente mejora tu trabajo diario, puedes apoyar su desarrollo con estos 
 
 Descarga el ZIP portátil completo o el ZIP de código fuente completo desde [Releases](https://github.com/realSilasYang/key-mouse-remapper-assistant/releases) y extráelo íntegramente en una carpeta con permisos de escritura. La edición portátil ejecuta `键鼠重映射小助手.exe` e incluye un entorno AutoHotkey v2 x64 fijo. La edición fuente requiere AutoHotkey v2 x64 para ejecutar `键鼠重映射小助手.ahk`.
 
+Ninguno de los dos ZIP del programa incluye fuentes. El `fonts.zip` opcional proporciona fuentes Noto alternativas; instala en Windows las que necesites antes de usarlas. El asistente solo enumera fuentes instaladas en Windows y nunca las carga de forma privada desde el ZIP ni desde la carpeta de la aplicación. Las fuentes no son necesarias para ejecutar el programa.
+
 El primer inicio solicita permisos de administrador de forma predeterminada. Cerrar la ventana solo la oculta en la bandeja; usa Salir en la bandeja para detener todas las asignaciones. La edición portátil no es una aplicación de un solo archivo: conserva la carpeta completa al moverla o respaldarla.
 
 ### Versiones y formas de ejecución
@@ -123,4 +125,4 @@ Dos pruebas que bloquean entrada física no forman parte de la ejecución desate
 
 ## 4. Publicación y contribución
 
-Ejecuta `.\tools\build-release.ps1` para generar los ZIP portátil y fuente completos. El empaquetado rechaza estado personal y parámetros de IA y produce archivos deterministas. Sigue la [plantilla del registro](changelog-template.md) y el [proceso de publicación](release-process.md). El proyecto usa la [licencia MIT](../LICENSE); consulta [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md).
+Ejecuta `.\tools\build-release.ps1` para generar el ZIP portátil completo, el ZIP fuente completo y el `fonts.zip` opcional. Los dos paquetes del programa no contienen fuentes; el paquete de fuentes se instala en Windows. El empaquetado rechaza estado personal y parámetros de IA y produce archivos deterministas. Sigue la [plantilla del registro](changelog-template.md) y el [proceso de publicación](release-process.md). El proyecto usa la [licencia MIT](../LICENSE); consulta [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md).

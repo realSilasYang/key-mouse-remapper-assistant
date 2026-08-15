@@ -10,9 +10,6 @@ class LocalizationService {
     static UiFont := ""
     static InstalledUiFonts := ""
     static FontEnumerationTarget := ""
-    static LoadedPrivateUiFonts := ""
-    static LoadedPrivateUiFontPaths := ""
-    static FailedPrivateUiFonts := ""
     static RenderedSourceSpecCache := ""
 
     static Configure(language := "auto", uiFont?) {
@@ -177,11 +174,6 @@ class LocalizationService {
         installedName := this.FindInstalledUiFontName(spec.Fallback)
         if installedName != ""
             return installedName
-        if this.EnsurePackagedUiFontAvailable(spec.Fallback) {
-            installedName := this.FindInstalledUiFontName(spec.Fallback)
-            if installedName != ""
-                return installedName
-        }
         installedName := this.FindInstalledUiFontName(spec.System)
         if installedName != ""
             return installedName
@@ -264,13 +256,6 @@ class LocalizationService {
             normalized := installedName
             return true
         }
-        if this.EnsurePackagedUiFontAvailable(fontText) {
-            installedName := this.FindInstalledUiFontName(fontText)
-            if installedName != "" {
-                normalized := installedName
-                return true
-            }
-        }
         return false
     }
 
@@ -283,165 +268,6 @@ class LocalizationService {
                 return installedFont
         }
         return ""
-    }
-
-    static EnsurePackagedUiFontAvailable(fontName, assetName := "") {
-        if this.FindInstalledUiFontName(fontName) != ""
-            return true
-        if assetName == ""
-            assetName := this.GetPackagedUiFontAssetName(fontName)
-        if assetName == ""
-            return false
-        if Type(assetName) == "Array" {
-            if assetName.Length == 0
-                return false
-            for packagedAssetName in assetName {
-                if !this.LoadPrivateUiFontAsset(packagedAssetName)
-                    return false
-            }
-        } else if !this.LoadPrivateUiFontAsset(assetName) {
-            return false
-        }
-        return this.FindInstalledUiFontName(fontName) != ""
-    }
-
-    static GetPackagedUiFontAssetName(fontName) {
-        switch StrLower(Trim(String(fontName))) {
-            case "noto sans": return "NotoSans-Variable.ttf"
-            case "noto sans cjk sc", "noto sans cjk hk",
-                "noto sans cjk tc", "noto sans cjk jp",
-                "noto sans cjk kr":
-                return "NotoSansCJK.ttc"
-            default: return ""
-        }
-    }
-
-    static LoadPrivateUiFontAsset(assetName, assetDirectory := "") {
-        assetName := Trim(String(assetName))
-        if !RegExMatch(assetName, "^[A-Za-z0-9._-]+$")
-            return false
-        if assetDirectory == ""
-            assetDirectory := this.GetUiFontAssetDirectory()
-        fontPath := RTrim(String(assetDirectory), "\/") "\" assetName
-        return this.LoadPrivateUiFontPath(fontPath)
-    }
-
-    static GetUiFontAssetDirectory(startDirectory := "") {
-        ; 正式入口的脚本目录就是项目或安装根目录；独立核心和 GUI 测试则位于
-        ; tests 的下一层。逐级寻找固定资源目录，使同一生产代码无需测试专用路径。
-        searchDirectory := startDirectory == "" ? A_ScriptDir
-            : RTrim(String(startDirectory), "\/")
-        Loop 4 {
-            candidate := searchDirectory "\assets\fonts"
-            if DirExist(candidate)
-                return candidate
-            SplitPath(searchDirectory, , &parentDirectory)
-            if parentDirectory == "" || parentDirectory == searchDirectory
-                break
-            searchDirectory := parentDirectory
-        }
-        return A_ScriptDir "\assets\fonts"
-    }
-
-    static ClearFailedPrivateUiFontCache() {
-        ; 失败缓存用于避免缺失外置资源在界面交互中被反复探测。用户运行期间补回
-        ; assets\fonts 后，设置页字体下拉框刷新会调用这里，让补齐的文件能被重试。
-        this.EnsurePrivateUiFontStores()
-        this.FailedPrivateUiFonts := Map()
-        this.FailedPrivateUiFonts.CaseSense := "Off"
-    }
-
-    static LoadPrivateUiFontPath(fontPath) {
-        fontPath := this.NormalizeUiFontResourcePath(fontPath)
-        this.EnsurePrivateUiFontStores()
-        if this.LoadedPrivateUiFonts.Has(fontPath)
-            return true
-        if this.FailedPrivateUiFonts.Has(fontPath)
-            return false
-
-        previousCritical := A_IsCritical
-        Critical("On")
-        try {
-            if this.LoadedPrivateUiFonts.Has(fontPath)
-                return true
-            if this.FailedPrivateUiFonts.Has(fontPath)
-                return false
-            if !FileExist(fontPath) {
-                this.FailedPrivateUiFonts[fontPath] := true
-                return false
-            }
-            loadedFaces := DllCall("gdi32\AddFontResourceExW",
-                "WStr", fontPath, "UInt", 0x10, "Ptr", 0, "Int")
-            if loadedFaces <= 0 {
-                this.FailedPrivateUiFonts[fontPath] := true
-                return false
-            }
-            this.LoadedPrivateUiFonts[fontPath] := true
-            this.LoadedPrivateUiFontPaths.Push(fontPath)
-            ; 私有字体只对本进程可见。清空枚举缓存后，后续 GUI 创建与字体菜单
-            ; 会立即看到新家族，不需要安装字体、广播系统消息或重启程序。
-            this.InstalledUiFonts := ""
-            return true
-        } finally Critical(previousCritical ? previousCritical : "Off")
-    }
-
-    static NormalizeUiFontResourcePath(fontPath) {
-        fontPath := String(fontPath)
-        fullPathBuffer := Buffer(32768 * 2, 0)
-        pathLength := DllCall("kernel32\GetFullPathNameW", "WStr",
-            fontPath, "UInt", 32768, "Ptr", fullPathBuffer, "Ptr", 0,
-            "UInt")
-        if pathLength && pathLength < 32768
-            return StrGet(fullPathBuffer, pathLength, "UTF-16")
-        return fontPath
-    }
-
-    static EnsurePrivateUiFontStores() {
-        if !IsObject(this.LoadedPrivateUiFonts) {
-            this.LoadedPrivateUiFonts := Map()
-            this.LoadedPrivateUiFonts.CaseSense := "Off"
-        }
-        if !IsObject(this.LoadedPrivateUiFontPaths)
-            this.LoadedPrivateUiFontPaths := []
-        if !IsObject(this.FailedPrivateUiFonts) {
-            this.FailedPrivateUiFonts := Map()
-            this.FailedPrivateUiFonts.CaseSense := "Off"
-        }
-    }
-
-    static ShutdownUiFonts(*) {
-        if !IsObject(this.LoadedPrivateUiFontPaths)
-            return true
-        previousCritical := A_IsCritical
-        Critical("On")
-        try {
-            failures := []
-            Loop this.LoadedPrivateUiFontPaths.Length {
-                pathIndex := this.LoadedPrivateUiFontPaths.Length
-                    - A_Index + 1
-                fontPath := this.LoadedPrivateUiFontPaths[pathIndex]
-                try {
-                    if DllCall("gdi32\RemoveFontResourceExW",
-                            "WStr", fontPath, "UInt", 0x10,
-                            "Ptr", 0, "Int")
-                        this.LoadedPrivateUiFontPaths.RemoveAt(pathIndex)
-                    else
-                        failures.Push(fontPath "：Win32 " A_LastError)
-                } catch as fontCleanupError
-                    failures.Push(fontPath "：" fontCleanupError.Message)
-            }
-            if failures.Length {
-                message := ""
-                for failure in failures
-                    message .= (message == "" ? "" : "；") failure
-                throw Error("无法卸载私有界面字体：" message)
-            }
-            this.LoadedPrivateUiFonts := ""
-            this.LoadedPrivateUiFontPaths := ""
-            this.FailedPrivateUiFonts := ""
-            this.InstalledUiFonts := ""
-            return true
-        } finally Critical(previousCritical ? previousCritical : "Off")
     }
 
     static GetInstalledUiFontNames() {
@@ -494,10 +320,8 @@ class LocalizationService {
     }
 
     static RefreshInstalledUiFontNames() {
-        ; 字体可能在设置窗口保持打开期间被安装或卸载。这里显式丢弃枚举缓存，
-        ; 并允许之前缺失的随包字体重试，然后重新查询 GDI 当前对本进程可见的
-        ; 系统字体与随包私有字体。
-        this.ClearFailedPrivateUiFontCache()
+        ; 字体可能在设置窗口保持打开期间被安装或卸载。显式丢弃枚举缓存，
+        ; 重新查询 GDI 当前可见的 Windows 已安装字体。
         this.InstalledUiFonts := ""
         return this.GetInstalledUiFontNames()
     }

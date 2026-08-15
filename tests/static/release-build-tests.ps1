@@ -6,6 +6,11 @@ $projectRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $buildScriptPath = Join-Path $projectRoot 'tools\build-release.ps1'
 $runtimePath = Join-Path $projectRoot 'src\Core\DirectHotkeyRuntime.ahk'
 $scriptRuntimePath = Join-Path $projectRoot 'src\Core\ScriptRuleRuntime.ahk'
+$localizationPath = Join-Path $projectRoot `
+    'src\Localization\LocalizationService.ahk'
+$appPath = Join-Path $projectRoot 'app\KeyMouseRemapperAssistantApp.ahk'
+$fontRestorePath = Join-Path $projectRoot 'tools\restore-font-assets.ps1'
+$workflowPath = Join-Path $projectRoot '.github\workflows\ci.yml'
 $entryCandidates = @(Get-ChildItem -LiteralPath $projectRoot -Filter '*.ahk' `
     -File | Where-Object { $_.Name -notlike '.*' } | Where-Object {
         $candidateSource = Get-Content -LiteralPath $_.FullName -Raw `
@@ -23,6 +28,10 @@ $launcherPath = Join-Path $projectRoot 'src\Platform\PackagedLauncher.ahk'
 $buildScript = Get-Content -LiteralPath $buildScriptPath -Raw -Encoding UTF8
 $runtime = Get-Content -LiteralPath $runtimePath -Raw -Encoding UTF8
 $scriptRuntime = Get-Content -LiteralPath $scriptRuntimePath -Raw -Encoding UTF8
+$localization = Get-Content -LiteralPath $localizationPath -Raw -Encoding UTF8
+$app = Get-Content -LiteralPath $appPath -Raw -Encoding UTF8
+$fontRestore = Get-Content -LiteralPath $fontRestorePath -Raw -Encoding UTF8
+$workflow = Get-Content -LiteralPath $workflowPath -Raw -Encoding UTF8
 $entry = Get-Content -LiteralPath $entryPath -Raw -Encoding UTF8
 $launcher = Get-Content -LiteralPath $launcherPath -Raw -Encoding UTF8
 $builtInRuleCount = [regex]::Matches($entry,
@@ -95,6 +104,24 @@ if ($scriptRuntime -notmatch
         'QuoteRuntimeCommandArgument\(this\.InterpreterPath\)') {
     throw 'Script-rule workers no longer use the application interpreter.'
 }
+if ($localization -match
+        'AddFontResourceExW|RemoveFontResourceExW|FR_PRIVATE|GetUiFontAssetDirectory|EnsurePackagedUiFontAvailable' -or
+        $app -match 'LocalizationService\.ShutdownUiFonts') {
+    throw 'Runtime fonts must come only from Windows-installed families.'
+}
+if ($buildScript -notmatch '\$fontPackageName\s*=\s*''fonts''' -or
+        $buildScript -notmatch 'Assert-FontPackageContent' -or
+        $buildScript -notmatch '\$packagedFontDirectory' -or
+        $buildScript -notmatch '\$sourceFontDirectory' -or
+        $buildScript -notmatch 'New-DeterministicArchive\s+\$fontPackageDirectory\s+\$fontZipPath') {
+    throw 'The release build no longer creates a separate fonts.zip.'
+}
+if ($fontRestore -notmatch "'fonts\.zip'" -or
+        $fontRestore -match 'key-mouse-remapper-assistant-\*-source\.zip' -or
+        $workflow -notmatch '\.tools/font-assets' -or
+        $workflow -notmatch 'Restore release-verified font assets') {
+    throw 'CI no longer restores font assets from fonts.zip.'
+}
 
 $localizedReadmes = @(
     'README.md',
@@ -134,6 +161,7 @@ foreach ($relativePath in $localizedReadmes) {
             $readme -notmatch
                 'key-mouse-remapper-assistant-overview-light\.png' -or
             $readme -notmatch $stackedPreviewPattern -or
+            $readme -notmatch 'fonts\.zip' -or
             $readme -notmatch '(?m)^# Star History$') {
         throw "Localized README structure is incomplete: $relativePath"
     }
@@ -146,6 +174,10 @@ $releaseNotes = Get-Content -LiteralPath $releaseNotesPath -Raw `
     -Encoding UTF8
 if ($releaseNotes -match '(?i)sha-?256|sha256sums') {
     throw 'Release Notes must not publish SHA-256 values or checksum assets.'
+}
+if ($releaseNotes -notmatch '\*\*`fonts\.zip`' -or
+        $releaseNotes -notmatch '不(?:再)?包含字体') {
+    throw 'Release Notes do not describe the optional font package boundary.'
 }
 if ($buildScript -notmatch "'CHANGELOG\.md'" -or
         $buildScript -notmatch "'docs'" -or

@@ -70,6 +70,8 @@
 
 從 [Releases](https://github.com/realSilasYang/key-mouse-remapper-assistant/releases) 下載完整可攜 ZIP 或完整原始碼 ZIP，並完整解壓縮到可寫入的資料夾。可攜版執行 `鍵鼠重映射小助手.exe`，已包含固定 AutoHotkey v2 x64 執行環境；原始碼版需自行安裝 AutoHotkey v2 x64 後執行 `鍵鼠重映射小助手.ahk`。
 
+兩個程式 ZIP 均不包含字型。可選的 `fonts.zip` 提供 Noto 後備字型；依需要將字型安裝到 Windows 後，小助手會依原有優先順序選用。程式只列舉 Windows 已安裝字型，不會從 ZIP 或程式目錄私下載入。字型不是執行所必需。
+
 首次啟動預設要求系統管理員權限。關閉主視窗只會隱藏到系統匣；要停止所有映射，請在系統匣選單選擇「結束程式」。可攜版不是單一檔案，移動或備份時要保留整個資料夾。
 
 ## 2. 新增和管理映射
@@ -127,7 +129,7 @@
 
 ## 4. 發布與貢獻
 
-建置會產生完整可攜 ZIP 與完整原始碼 ZIP，拒絕本機使用者狀態和 AI 參數，並以確定性方式建立 ZIP。版本規範請見[更新日誌範本](changelog-template.md)及[發布流程](release-process.md)。
+建置會產生完整可攜 ZIP、完整原始碼 ZIP 與可選的 `fonts.zip`。兩個程式包均不包含字型；字型包供安裝到 Windows。建置會拒絕本機使用者狀態和 AI 參數，並以確定性方式建立 ZIP。版本規範請見[更新日誌範本](changelog-template.md)及[發布流程](release-process.md)。
 
 ### 授權條款
 

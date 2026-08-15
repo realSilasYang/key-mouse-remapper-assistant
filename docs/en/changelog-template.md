@@ -9,8 +9,9 @@ For a release, copy the block below beneath Unreleased in `docs/CHANGELOG.en.md`
 
 ### 📦 Release Assets
 
-- **`key-mouse-remapper-assistant-X.Y.Z-source.zip` (complete source package):** Includes runnable AHK source, application modules, assets, all thirteen README languages, bilingual changelogs, tests, and build tools; intended for review, development, or source execution and requires AutoHotkey v2 x64.
-- **`key-mouse-remapper-assistant-X.Y.Z-windows-x64.zip` (complete portable package, recommended):** Includes the compiled EXE, editable mapping source, all thirteen README languages, bilingual changelogs, licenses, application modules, UI assets, a fixed AutoHotkey v2 x64 runtime, and matching source archive; requires no AutoHotkey installation and is intended for long-term use after full extraction.
+- **`fonts.zip` (optional font package):** Provides Noto fallback UI fonts for installation into Windows; it is not required to run the application.
+- **`key-mouse-remapper-assistant-X.Y.Z-source.zip` (complete source package):** Includes runnable AHK source, application modules, assets other than fonts, all thirteen README languages, bilingual changelogs, tests, and build tools; intended for review, development, or source execution and requires AutoHotkey v2 x64.
+- **`key-mouse-remapper-assistant-X.Y.Z-windows-x64.zip` (complete portable package, recommended):** Includes the compiled EXE, editable mapping source, all thirteen README languages, bilingual changelogs, licenses, application modules, UI assets other than fonts, a fixed AutoHotkey v2 x64 runtime, and matching source archive; requires no AutoHotkey installation and is intended for long-term use after full extraction.
 
 ---
 
@@ -40,7 +41,7 @@ For a release, copy the block below beneath Unreleased in `docs/CHANGELOG.en.md`
 ## 📐 Writing Rules
 
 - Use `📋 Changelog` for the document title and `🎉 Version [X.Y.Z] - YYYY-MM-DD` for release headings. The version must match `VERSION`, the compiled file version, and the Git tag.
-- Every formal version retains `📦 Release Assets` and lists both exact file names, edition roles, included content, AutoHotkey requirements, and intended use in GitHub's fixed order: source ZIP, then portable ZIP.
+- Every formal version retains `📦 Release Assets` and lists all three exact file names, roles, included content, AutoHotkey requirements, and intended use in GitHub's fixed order: optional font ZIP, source ZIP, then portable ZIP.
 - `⚠️ Important Notes` is optional. Add it only for incompatible data or configuration, data-loss risk, breaking minimum-environment or privilege changes, risky changed defaults, or mandatory migration, backup, or replacement work.
 - Do not classify compatibility, direct-upgrade availability, download recommendations, edition selection, feature summaries, ordinary advice, or validation scope as Important Notes. Remove the heading when no qualifying item exists.
 - Standard categories are `✨ Added`, `🚀 Improvements`, and `🐛 Fixed`; remove empty categories. Use `🔒 Security` only after coordinated disclosure.

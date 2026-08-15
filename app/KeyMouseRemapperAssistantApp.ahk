@@ -6,7 +6,6 @@ class KeyMouseRemapperAssistantApp {
         this.Runtime := ""
         this.Window := ""
         this.SvgRenderer := ""
-        this.LocalizationConfigured := false
         try {
         this.DataDirectory := A_AppData "\KeyMouseRemapperAssistant"
         this.RuntimeStatePath := this.DataDirectory "\runtime.ini"
@@ -21,7 +20,6 @@ class KeyMouseRemapperAssistantApp {
         this.AIService := AIService()
         LocalizationService.Configure(this.Settings.UiLanguage,
             this.Settings.UiFont)
-        this.LocalizationConfigured := true
         UiThemeService.Configure(this.Settings.Theme)
         MappingWindow.Colors := UiThemeService.GetPalette()
         this.SystemIntegration := SystemIntegrationService(
@@ -143,11 +141,6 @@ class KeyMouseRemapperAssistantApp {
         if IsObject(this.SvgRenderer)
             this.RunConstructionCleanup(failures, "SVG 渲染器",
                 () => this.SvgRenderer.Shutdown())
-        if this.LocalizationConfigured {
-            if this.RunConstructionCleanup(failures, "本地化字体",
-                    () => LocalizationService.ShutdownUiFonts())
-                this.LocalizationConfigured := false
-        }
         return failures
     }
 
@@ -1685,6 +1678,5 @@ class KeyMouseRemapperAssistantApp {
         }
         try this.Window.Dispose()
         try this.SvgRenderer.Shutdown()
-        try LocalizationService.ShutdownUiFonts()
     }
 }

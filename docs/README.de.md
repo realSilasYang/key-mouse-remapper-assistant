@@ -63,6 +63,8 @@ Wenn der Assistent die tägliche Arbeit verbessert, kann die Entwicklung über d
 
 Das vollständige portable ZIP oder Quellcode-ZIP von [Releases](https://github.com/realSilasYang/key-mouse-remapper-assistant/releases) herunterladen und vollständig in einen beschreibbaren Ordner entpacken. Die portable Ausgabe startet `键鼠重映射小助手.exe` und enthält eine feste AutoHotkey-v2-x64-Laufzeit. Die Quellcodeausgabe benötigt AutoHotkey v2 x64 für `键鼠重映射小助手.ahk`.
 
+Beide Programm-ZIPs enthalten keine Schriften. Das optionale `fonts.zip` stellt Noto-Ersatzschriften bereit; benötigte Schriften müssen zuerst in Windows installiert werden. Der Assistent listet ausschließlich unter Windows installierte Schriften auf und lädt keine Schriften privat aus dem ZIP oder Programmordner. Schriften sind für den Betrieb nicht erforderlich.
+
 Der erste Start fordert standardmäßig Administratorrechte an. Schließen blendet das Fenster nur in den Infobereich aus; „Beenden“ im Infobereich stoppt alle Zuordnungen. Die portable Ausgabe ist keine Ein-Datei-App: Beim Verschieben und Sichern den gesamten Ordner behalten.
 
 ### Versionen und Laufzeitformen
@@ -123,4 +125,4 @@ Zwei Tests mit echter Eingabesperre gehören nicht zum unbeaufsichtigten Standar
 
 ## 4. Veröffentlichung und Mitarbeit
 
-`.\tools\build-release.ps1` erzeugt vollständige portable und Quellcode-ZIPs. Das Paketieren lehnt persönlichen Zustand und lokale KI-Parameter ab und erzeugt deterministische Archive. [Changelog-Vorlage](changelog-template.md) und [Veröffentlichungsprozess](release-process.md) beachten. Das Projekt verwendet die [MIT License](../LICENSE); siehe [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md).
+`.\tools\build-release.ps1` erzeugt das vollständige portable ZIP, das vollständige Quellcode-ZIP und das optionale `fonts.zip`. Beide Programmpakete enthalten keine Schriften; das Schriftpaket dient der Installation in Windows. Das Paketieren lehnt persönlichen Zustand und lokale KI-Parameter ab und erzeugt deterministische Archive. [Changelog-Vorlage](changelog-template.md) und [Veröffentlichungsprozess](release-process.md) beachten. Das Projekt verwendet die [MIT License](../LICENSE); siehe [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md).

@@ -62,6 +62,8 @@
 
 [Releases](https://github.com/realSilasYang/key-mouse-remapper-assistant/releases)에서 전체 포터블 ZIP 또는 전체 소스 ZIP을 받아 쓰기 가능한 폴더에 모두 압축 해제합니다. 포터블판은 고정 AutoHotkey v2 x64 런타임이 포함된 `键鼠重映射小助手.exe`를 실행합니다. 소스판은 AutoHotkey v2 x64를 설치한 뒤 `键鼠重映射小助手.ahk`를 실행합니다.
 
+두 프로그램 ZIP에는 글꼴이 포함되지 않습니다. 선택 사항인 `fonts.zip`은 Noto 대체 글꼴을 제공하므로 필요한 글꼴을 Windows에 먼저 설치하십시오. 도우미는 Windows에 설치된 글꼴만 열거하며 ZIP이나 프로그램 폴더에서 글꼴을 비공개로 불러오지 않습니다. 글꼴은 실행에 필수가 아닙니다.
+
 첫 실행은 기본적으로 관리자 권한을 요청합니다. 기본 창을 닫으면 트레이로 숨겨질 뿐이며 모든 매핑을 멈추려면 트레이에서 종료해야 합니다. 포터블판은 단일 파일 앱이 아니므로 이동하거나 백업할 때 전체 폴더를 유지하십시오.
 
 ## 2. 항목 추가와 관리
@@ -119,7 +121,7 @@
 
 ## 4. 릴리스와 기여
 
-빌드는 전체 포터블 ZIP과 전체 소스 ZIP을 만들며 개인 상태와 로컬 AI 매개변수를 거부하고 결정론적 ZIP을 기록합니다. [변경 기록 템플릿](changelog-template.md)과 [릴리스 절차](release-process.md)를 따르십시오.
+빌드는 전체 포터블 ZIP, 전체 소스 ZIP, 선택 사항인 `fonts.zip`을 만듭니다. 두 프로그램 패키지에는 글꼴이 없고 글꼴 ZIP은 Windows 설치용입니다. 개인 상태와 로컬 AI 매개변수를 거부하고 결정론적 ZIP을 기록합니다. [변경 기록 템플릿](changelog-template.md)과 [릴리스 절차](release-process.md)를 따르십시오.
 
 ### 라이선스
 

@@ -63,6 +63,8 @@ Se l’assistente migliora il lavoro quotidiano, puoi sostenere lo sviluppo tram
 
 Scarica lo ZIP portatile completo o lo ZIP sorgente completo da [Releases](https://github.com/realSilasYang/key-mouse-remapper-assistant/releases) ed estrailo interamente in una cartella scrivibile. L’edizione portatile esegue `键鼠重映射小助手.exe` e include un ambiente AutoHotkey v2 x64 fisso. L’edizione sorgente richiede AutoHotkey v2 x64 per eseguire `键鼠重映射小助手.ahk`.
 
+Nessuno dei due ZIP del programma contiene font. Il file facoltativo `fonts.zip` fornisce font Noto di riserva; installa in Windows quelli necessari prima dell’uso. L’assistente elenca soltanto i font installati in Windows e non carica mai font privatamente dallo ZIP o dalla cartella dell’applicazione. I font non sono necessari per eseguire il programma.
+
 Il primo avvio richiede per impostazione predefinita i privilegi di amministratore. Chiudere la finestra la nasconde soltanto nell’area di notifica; usa Esci dal menu per fermare tutte le mappature. L’edizione portatile non è un’app a file singolo: conserva l’intera cartella quando la sposti o la salvi.
 
 ### Versioni e modalità di esecuzione
@@ -123,4 +125,4 @@ Due test che bloccano realmente l’input fisico sono esclusi dall’esecuzione 
 
 ## 4. Pubblicazione e contributi
 
-Esegui `.\tools\build-release.ps1` per creare gli ZIP portatile e sorgente completi. Il packaging rifiuta stato personale e parametri IA locali e produce archivi deterministici. Segui il [modello del changelog](changelog-template.md) e il [processo di rilascio](release-process.md). Il progetto usa la [MIT License](../LICENSE); consulta [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md).
+Esegui `.\tools\build-release.ps1` per creare lo ZIP portatile completo, lo ZIP sorgente completo e il file facoltativo `fonts.zip`. I due pacchetti del programma non contengono font; il pacchetto dei font serve per l’installazione in Windows. Il packaging rifiuta stato personale e parametri IA locali e produce archivi deterministici. Segui il [modello del changelog](changelog-template.md) e il [processo di rilascio](release-process.md). Il progetto usa la [MIT License](../LICENSE); consulta [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md).

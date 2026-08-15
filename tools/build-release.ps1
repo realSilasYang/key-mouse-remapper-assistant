@@ -127,6 +127,9 @@ function Assert-ReleaseContent {
             throw "$Label contains forbidden user state: $($file.Name)"
         }
     }
+    if (Test-Path -LiteralPath (Join-Path $Directory 'assets\fonts')) {
+        throw "$Label must not contain the optional font package."
+    }
 
     $localAiParameters = @(Get-LocalAiParameterValues)
     if ($localAiParameters.Count -eq 0) { return }
@@ -145,6 +148,37 @@ function Assert-ReleaseContent {
                     [StringComparison]::Ordinal) -ge 0) {
                 throw "$Label contains the local AI $($parameter.Name)."
             }
+        }
+    }
+}
+
+function Assert-FontPackageContent {
+    param([Parameter(Mandatory = $true)][string]$Directory)
+
+    $sourceRoot = Join-Path $projectRoot 'assets\fonts'
+    $packageRoot = Join-Path $Directory 'assets\fonts'
+    if (-not (Test-Path -LiteralPath $packageRoot -PathType Container)) {
+        throw 'Optional font package does not contain assets\fonts.'
+    }
+    $sourceFiles = @(Get-ChildItem -LiteralPath $sourceRoot -Recurse -File |
+        Sort-Object FullName)
+    $packageFiles = @(Get-ChildItem -LiteralPath $packageRoot -Recurse -File |
+        Sort-Object FullName)
+    if ($sourceFiles.Count -ne $packageFiles.Count) {
+        throw 'Optional font package file count differs from its source.'
+    }
+    for ($index = 0; $index -lt $sourceFiles.Count; $index++) {
+        $sourceRelative = $sourceFiles[$index].FullName.Substring(
+            $sourceRoot.Length + 1)
+        $packageRelative = $packageFiles[$index].FullName.Substring(
+            $packageRoot.Length + 1)
+        $sourceHash = (Get-FileHash -Algorithm SHA256 `
+            -LiteralPath $sourceFiles[$index].FullName).Hash
+        $packageHash = (Get-FileHash -Algorithm SHA256 `
+            -LiteralPath $packageFiles[$index].FullName).Hash
+        if ($sourceRelative -cne $packageRelative -or
+                $sourceHash -cne $packageHash) {
+            throw "Optional font package changed $sourceRelative."
         }
     }
 }
@@ -338,6 +372,11 @@ $sourcePackageDirectory = Assert-OutputPath `
     (Join-Path $OutputRoot $sourcePackageName)
 $sourceZipPath = Assert-OutputPath `
     (Join-Path $OutputRoot "$sourcePackageName.zip")
+$fontPackageName = 'fonts'
+$fontPackageDirectory = Assert-OutputPath `
+    (Join-Path $OutputRoot $fontPackageName)
+$fontZipPath = Assert-OutputPath `
+    (Join-Path $OutputRoot "$fontPackageName.zip")
 $obsoleteChecksumsPath = Assert-OutputPath `
     (Join-Path $OutputRoot 'SHA256SUMS.txt')
 $versionedArtifactPattern =
@@ -400,12 +439,17 @@ foreach ($output in @(
             Name = 'source-package' },
         [pscustomobject]@{ Path = $sourceZipPath;
             Name = 'source-archive.zip' },
+        [pscustomobject]@{ Path = $fontPackageDirectory;
+            Name = 'font-package' },
+        [pscustomobject]@{ Path = $fontZipPath;
+            Name = 'font-archive.zip' },
         [pscustomobject]@{ Path = $obsoleteChecksumsPath;
             Name = 'obsolete-checksums.txt' })) {
     $outputsToBackup.Add($output)
 }
 $currentArtifactNames = @($packageName, "$packageName.zip",
-    $sourcePackageName, "$sourcePackageName.zip")
+    $sourcePackageName, "$sourcePackageName.zip",
+    $fontPackageName, "$fontPackageName.zip")
 $obsoleteVersionTargets = @(Get-ChildItem -LiteralPath $OutputRoot -Force |
     Where-Object {
         $_.Name -match $versionedArtifactPattern -and
@@ -608,6 +652,10 @@ foreach ($directory in @('app', 'assets', 'docs', 'src', 'third_party')) {
     Copy-Item -LiteralPath $sourceDirectory `
         -Destination $packageDirectory -Recurse
 }
+$packagedFontDirectory = Join-Path $packageDirectory 'assets\fonts'
+if (Test-Path -LiteralPath $packagedFontDirectory) {
+    Remove-Item -LiteralPath $packagedFontDirectory -Recurse -Force
+}
 foreach ($file in @('CHANGELOG.md', 'README.md', 'LICENSE', 'VERSION',
         'THIRD_PARTY_NOTICES.md')) {
     Copy-Item -LiteralPath (Join-Path $projectRoot $file) `
@@ -753,6 +801,10 @@ foreach ($directory in @('app', 'assets', 'docs', 'src',
     Copy-Item -LiteralPath $sourceDirectory `
         -Destination $sourcePackageDirectory -Recurse
 }
+$sourceFontDirectory = Join-Path $sourcePackageDirectory 'assets\fonts'
+if (Test-Path -LiteralPath $sourceFontDirectory) {
+    Remove-Item -LiteralPath $sourceFontDirectory -Recurse -Force
+}
 $sourceUpdateManifestJson = (@(
     '{'
     '  "schemaVersion": 1,'
@@ -787,8 +839,16 @@ $sourceUpdateManifestJson = (@(
     (Join-Path $sourcePackageDirectory 'update-manifest.json'),
     $sourceUpdateManifestJson, [System.Text.UTF8Encoding]::new($false))
 
+# 字体是独立的可选下载。保持 assets/fonts 布局，使 metadata.json、许可证和
+# 字体文件可以直接交叉核对；用户安装到 Windows 后，应用才会枚举到这些字体。
+New-Item -ItemType Directory -Force -Path `
+    (Join-Path $fontPackageDirectory 'assets') | Out-Null
+Copy-Item -LiteralPath (Join-Path $projectRoot 'assets\fonts') `
+    -Destination (Join-Path $fontPackageDirectory 'assets') -Recurse
+
 Assert-ReleaseContent $packageDirectory 'Portable release package'
 Assert-ReleaseContent $sourcePackageDirectory 'Source release package'
+Assert-FontPackageContent $fontPackageDirectory
 
 if (-not ('KeyMouseRemapperAssistant.Build.DeterministicZipCrc32V2' `
         -as [type])) {
@@ -982,11 +1042,16 @@ Assert-NoReparsePointTree $packageDirectory `
     'Release package directory' | Out-Null
 Assert-NoReparsePointTree $sourcePackageDirectory `
     'Release source package directory' | Out-Null
+Assert-NoReparsePointTree $fontPackageDirectory `
+    'Optional font package directory' | Out-Null
 New-DeterministicArchive $packageDirectory $zipPath
 New-DeterministicArchive $sourcePackageDirectory $sourceZipPath
+New-DeterministicArchive $fontPackageDirectory $fontZipPath
 $zipHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $zipPath).Hash
 $sourceZipHash = (Get-FileHash -Algorithm SHA256 `
     -LiteralPath $sourceZipPath).Hash
+$fontZipHash = (Get-FileHash -Algorithm SHA256 `
+    -LiteralPath $fontZipPath).Hash
 $exePath = Join-Path $packageDirectory '键鼠重映射小助手.exe'
 $exeHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $exePath).Hash
 $releaseCompleted = $true
@@ -996,7 +1061,8 @@ $releaseCompleted = $true
 } finally {
     if ($releaseTransactionStarted -and -not $releaseCompleted) {
         foreach ($target in @($packageDirectory, $zipPath,
-                $sourcePackageDirectory, $sourceZipPath)) {
+                $sourcePackageDirectory, $sourceZipPath,
+                $fontPackageDirectory, $fontZipPath)) {
             try {
                 $safeTarget = Assert-OutputPath $target
                 if (Test-Path -LiteralPath $safeTarget) {
@@ -1058,6 +1124,7 @@ if ($rollbackErrors.Count -gt 0) {
 
 Write-Host "Release package: $zipPath"
 Write-Host "Source package: $sourceZipPath"
+Write-Host "Optional font package: $fontZipPath"
 Write-Host "Executable: $exePath"
 [pscustomobject]@{
     Version = $version
@@ -1065,8 +1132,11 @@ Write-Host "Executable: $exePath"
     ZipPath = $zipPath
     SourcePackageDirectory = $sourcePackageDirectory
     SourceZipPath = $sourceZipPath
+    FontPackageDirectory = $fontPackageDirectory
+    FontZipPath = $fontZipPath
     ExecutablePath = $exePath
     ZipSha256 = $zipHash
     SourceZipSha256 = $sourceZipHash
+    FontZipSha256 = $fontZipHash
     ExecutableSha256 = $exeHash
 }

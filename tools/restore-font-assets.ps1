@@ -1,6 +1,6 @@
-# Restore the LFS-tracked fonts from the latest verified source release when
-# GitHub LFS is unavailable. Only metadata-declared files with matching hashes
-# are allowed to replace the checkout's pointer files.
+# Restore the LFS-tracked fonts from the latest verified fonts.zip when GitHub
+# LFS is unavailable. Only metadata-declared files with matching hashes may
+# replace the checkout's pointer files.
 
 [CmdletBinding()]
 param(
@@ -93,7 +93,7 @@ New-Item -ItemType Directory -Force -Path $cachePath | Out-Null
 $resolvedArchivePath = if ($ArchivePath) {
     [IO.Path]::GetFullPath($ArchivePath)
 } else {
-    Join-Path $cachePath 'release-source.zip'
+    Join-Path $cachePath 'fonts.zip'
 }
 
 function Get-ArchiveEntryHash {
@@ -141,7 +141,7 @@ function Test-FontArchive {
 
 function Download-FontArchive {
     if ($ArchivePath) {
-        throw "Provided source archive does not match metadata: $resolvedArchivePath"
+        throw "Provided fonts.zip does not match metadata: $resolvedArchivePath"
     }
     $gh = Get-Command gh -ErrorAction SilentlyContinue
     if (-not $gh) {
@@ -154,13 +154,13 @@ function Download-FontArchive {
         $arguments = @('release', 'download')
         if ($ReleaseTag) { $arguments += $ReleaseTag }
         $arguments += @('--repo', $Repository, '--pattern',
-            'key-mouse-remapper-assistant-*-source.zip', '--dir',
+            'fonts.zip', '--dir',
             $downloadDirectory)
         & $gh.Source @arguments
         $downloads = @(Get-ChildItem -LiteralPath $downloadDirectory `
             -Filter '*.zip' -File)
         if ($LASTEXITCODE -ne 0 -or $downloads.Count -ne 1) {
-            throw "Unable to download one source ZIP from $Repository."
+            throw "Unable to download fonts.zip from $Repository."
         }
         if (Test-Path -LiteralPath $resolvedArchivePath) {
             Remove-Item -LiteralPath $resolvedArchivePath -Force
@@ -177,7 +177,7 @@ function Download-FontArchive {
 if (-not (Test-FontArchive $resolvedArchivePath)) {
     Download-FontArchive
     if (-not (Test-FontArchive $resolvedArchivePath)) {
-        throw 'Downloaded source archive does not contain the expected fonts.'
+        throw 'Downloaded fonts.zip does not contain the expected fonts.'
     }
 }
 

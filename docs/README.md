@@ -10,6 +10,8 @@
 - [v1.0.1 发行说明](release-notes/v1.0.1.md)
 - [v1.0.0 发行说明](release-notes/v1.0.0.md)
 
+正式版本提供完整便携 ZIP、完整源码 ZIP 和可选的 `fonts.zip`。两个程序包均不包含字体；如需 Noto 回退字体，请从字体包安装到 Windows。
+
 ## 开发与发布文档
 
 - [发布流程](release-process.md)

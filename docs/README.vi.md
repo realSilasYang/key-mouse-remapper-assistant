@@ -62,6 +62,8 @@ Nếu trợ lý hữu ích cho công việc hằng ngày, bạn có thể hỗ t
 
 Tải ZIP di động đầy đủ hoặc ZIP mã nguồn đầy đủ từ [Releases](https://github.com/realSilasYang/key-mouse-remapper-assistant/releases), rồi giải nén toàn bộ vào thư mục có quyền ghi. Bản di động chạy `键鼠重映射小助手.exe` và đã kèm môi trường AutoHotkey v2 x64 cố định. Bản mã nguồn cần cài AutoHotkey v2 x64 rồi chạy `键鼠重映射小助手.ahk`.
 
+Hai ZIP chương trình đều không chứa phông chữ. `fonts.zip` tùy chọn cung cấp các phông Noto dự phòng; hãy cài phông cần dùng vào Windows trước. Trợ lý chỉ liệt kê phông đã cài trong Windows và không tải riêng phông từ ZIP hay thư mục ứng dụng. Phông chữ không bắt buộc để chạy chương trình.
+
 Lần chạy đầu mặc định yêu cầu quyền quản trị. Đóng cửa sổ chính chỉ ẩn xuống khay; dùng mục Thoát ở khay để dừng mọi ánh xạ. Bản di động không phải ứng dụng một tệp, vì vậy hãy giữ cả thư mục khi di chuyển hoặc sao lưu.
 
 ## 2. Thêm và quản lý ánh xạ
@@ -119,7 +121,7 @@ Khối quy tắc chạy bằng `Hotkey()` trong tiến trình chính; tập lệ
 
 ## 4. Phát hành và đóng góp
 
-Quá trình dựng tạo ZIP di động đầy đủ và ZIP mã nguồn đầy đủ, từ chối trạng thái cá nhân cùng tham số AI cục bộ và ghi ZIP xác định. Xem [mẫu nhật ký thay đổi](changelog-template.md) và [quy trình phát hành](release-process.md).
+Quá trình dựng tạo ZIP di động đầy đủ, ZIP mã nguồn đầy đủ và `fonts.zip` tùy chọn. Hai gói chương trình không chứa phông; gói phông dùng để cài vào Windows. Quá trình dựng từ chối trạng thái cá nhân cùng tham số AI cục bộ và ghi ZIP xác định. Xem [mẫu nhật ký thay đổi](changelog-template.md) và [quy trình phát hành](release-process.md).
 
 ### Giấy phép
 

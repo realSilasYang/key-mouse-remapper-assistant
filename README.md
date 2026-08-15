@@ -87,13 +87,15 @@
 
 ## 1. 安装与首次运行
 
-1. 从 [Releases](https://github.com/realSilasYang/key-mouse-remapper-assistant/releases) 下载完整便携 ZIP 或完整源码 ZIP。
+1. 从 [Releases](https://github.com/realSilasYang/key-mouse-remapper-assistant/releases) 下载完整便携 ZIP 或完整源码 ZIP。可选字体包是单独资源，不是第三个程序版本。
 2. 两个版本必须完整解压到可写目录后使用，不要只从压缩包中运行单个文件：
 
 | 下载 | 适用场景 | 运行方式 |
 | --- | --- | --- |
 | 完整便携 ZIP（推荐） | 日常使用、手动部署和备份 | 运行 `键鼠重映射小助手.exe`；内含固定的 AutoHotkey v2 x64 运行时，无需另行安装 |
 | 完整源码 ZIP | 审阅、开发或从源码运行 | 安装 AutoHotkey v2 x64 后运行 `键鼠重映射小助手.ahk`；不含编译 EXE 和便携运行时 |
+
+两个程序 ZIP 均不包含字体。可选的 `fonts.zip` 提供 Noto 回退字体；按需把其中字体安装到 Windows 后，小助手会按原有优先级自动选择。程序只枚举 Windows 已安装字体，不会从 ZIP 或自身目录私有加载。字体不是程序运行必需。
 
 3. 首次启动默认请求管理员权限。若选择不提权，映射通常无法影响以管理员身份运行的前台程序。
 4. 主窗口关闭按钮只会隐藏界面，启用的映射仍继续运行；需要彻底停止时使用托盘菜单中的“退出程序”。
@@ -246,7 +248,7 @@ Consumer Control HID -> 浏览器／媒体／启动键 -> KeyCaptureSession
 .\tools\build-release.ps1
 ```
 
-构建固定生成完整便携 ZIP 和完整源码 ZIP。两者都包含当前 18 条内置规则、README、更新日志和许可证；源码版额外包含测试，便携版额外包含编译 EXE、固定 AutoHotkey v2 x64 运行时及对应源码归档。发布脚本拒绝用户状态文件和本机 AI 参数，并为同一输入生成确定性 ZIP。
+构建固定生成完整便携 ZIP、完整源码 ZIP 和可选 `fonts.zip`。两个程序包都不含字体，并包含当前 18 条内置规则、README、更新日志和许可证；源码版额外包含测试，便携版额外包含编译 EXE、固定 AutoHotkey v2 x64 运行时及对应源码归档。字体包保持 `assets/fonts` 布局，供用户安装到 Windows。发布脚本拒绝用户状态文件和本机 AI 参数，并为同一输入生成确定性 ZIP。
 
 版本条目遵循[更新日志模板](docs/changelog-template.md)，正式说明保存在 `docs/release-notes/v<版本>.md`。完整步骤见[发布流程](docs/release-process.md)。第三方组件、固定版本和许可证见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
 

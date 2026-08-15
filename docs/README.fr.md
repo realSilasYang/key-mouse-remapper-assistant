@@ -63,6 +63,8 @@ Si l’assistant améliore votre travail quotidien, vous pouvez soutenir son dé
 
 Téléchargez le ZIP portable complet ou le ZIP source complet depuis [Releases](https://github.com/realSilasYang/key-mouse-remapper-assistant/releases), puis extrayez-le entièrement dans un dossier accessible en écriture. L’édition portable exécute `键鼠重映射小助手.exe` et inclut un environnement AutoHotkey v2 x64 figé. L’édition source nécessite AutoHotkey v2 x64 pour exécuter `键鼠重映射小助手.ahk`.
 
+Les deux ZIP du programme sont dépourvus de polices. Le fichier facultatif `fonts.zip` fournit des polices Noto de secours ; installez dans Windows celles dont vous avez besoin. L’assistant répertorie uniquement les polices installées dans Windows et ne charge jamais de police privée depuis le ZIP ou le dossier de l’application. Les polices ne sont pas nécessaires au fonctionnement.
+
 Le premier lancement demande par défaut les droits administrateur. Fermer la fenêtre la masque seulement dans la zone de notification ; utilisez Quitter dans ce menu pour arrêter tous les remappages. L’édition portable n’est pas une application monofichier : conservez tout le dossier lors d’un déplacement ou d’une sauvegarde.
 
 ### Versions et modes d’exécution
@@ -123,4 +125,4 @@ Deux tests bloquant réellement l’entrée physique sont exclus de l’exécuti
 
 ## 4. Publication et contribution
 
-Exécutez `.\tools\build-release.ps1` pour créer les ZIP portable et source complets. L’empaquetage refuse les états personnels et paramètres IA et produit des archives déterministes. Suivez le [modèle de changelog](changelog-template.md) et le [processus de publication](release-process.md). Le projet utilise la [licence MIT](../LICENSE) ; voir [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md).
+Exécutez `.\tools\build-release.ps1` pour créer le ZIP portable complet, le ZIP source complet et le fichier facultatif `fonts.zip`. Les deux paquets du programme excluent les polices ; le paquet de polices sert à leur installation dans Windows. L’empaquetage refuse les états personnels et paramètres IA et produit des archives déterministes. Suivez le [modèle de changelog](changelog-template.md) et le [processus de publication](release-process.md). Le projet utilise la [licence MIT](../LICENSE) ; voir [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md).

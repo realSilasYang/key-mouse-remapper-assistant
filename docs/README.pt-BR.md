@@ -63,6 +63,8 @@ Se o assistente melhora seu trabalho diário, você pode apoiar o desenvolviment
 
 Baixe o ZIP portátil completo ou o ZIP de código-fonte completo em [Releases](https://github.com/realSilasYang/key-mouse-remapper-assistant/releases) e extraia tudo para uma pasta gravável. A edição portátil executa `键鼠重映射小助手.exe` e inclui um ambiente AutoHotkey v2 x64 fixo. A edição de código-fonte requer AutoHotkey v2 x64 para executar `键鼠重映射小助手.ahk`.
 
+Nenhum dos dois ZIPs do programa contém fontes. O `fonts.zip` opcional fornece fontes Noto alternativas; instale no Windows as fontes desejadas antes de usá-las. O assistente enumera apenas fontes instaladas no Windows e nunca carrega fontes de forma privada do ZIP ou da pasta do aplicativo. As fontes não são necessárias para executar o programa.
+
 A primeira execução solicita privilégios de administrador por padrão. Fechar a janela apenas a oculta na bandeja; use Sair na bandeja para parar todos os mapeamentos. A edição portátil não é um aplicativo de arquivo único: preserve toda a pasta ao mover ou fazer backup.
 
 ### Versões e formas de execução
@@ -123,4 +125,4 @@ Dois testes que bloqueiam entrada física não fazem parte da execução autôno
 
 ## 4. Publicação e contribuição
 
-Execute `.\tools\build-release.ps1` para criar os ZIPs portátil e fonte completos. O empacotamento rejeita estado pessoal e parâmetros de IA e produz arquivos determinísticos. Siga o [modelo de changelog](changelog-template.md) e o [processo de publicação](release-process.md). O projeto usa a [licença MIT](../LICENSE); consulte [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md).
+Execute `.\tools\build-release.ps1` para criar o ZIP portátil completo, o ZIP de código-fonte completo e o `fonts.zip` opcional. Os dois pacotes do programa não contêm fontes; o pacote de fontes deve ser instalado no Windows. O empacotamento rejeita estado pessoal e parâmetros de IA e produz arquivos determinísticos. Siga o [modelo de changelog](changelog-template.md) e o [processo de publicação](release-process.md). O projeto usa a [licença MIT](../LICENSE); consulte [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md).

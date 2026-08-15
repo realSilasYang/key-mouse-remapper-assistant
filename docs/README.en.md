@@ -92,6 +92,8 @@ If the assistant improves your daily workflow, you can support its development w
 | Complete portable ZIP (recommended) | Everyday use, manual deployment, and backup | Run `键鼠重映射小助手.exe`; the fixed AutoHotkey v2 x64 runtime is included |
 | Complete source ZIP | Review, development, or source execution | Install AutoHotkey v2 x64 and run `键鼠重映射小助手.ahk`; no compiled EXE or portable runtime is included |
 
+Neither program ZIP contains fonts. The optional `fonts.zip` provides Noto fallback families; install the desired fonts into Windows before use. The assistant enumerates only Windows-installed fonts and never loads fonts privately from the ZIP or its application directory. Fonts are not required to run it.
+
 The first launch requests administrator access by default. Closing the main window only hides it to the tray; use “Exit” from the tray to stop all mappings. All 18 built-in rules are editable, pausable, and removable.
 
 The portable edition is not a single-file application. Keep its EXE, editable AHK entry, modules, assets, and runtime together when moving or backing it up.
@@ -193,7 +195,7 @@ Two integration tests that physically suppress desktop input are intentionally o
 .\tools\build-release.ps1
 ```
 
-The build produces a complete portable ZIP and a complete source ZIP. Both carry the 18 current rules, README set, changelogs, and licenses. The source package also carries tests; the portable package carries the compiled EXE, fixed AutoHotkey v2 x64 runtime, and matching source archive. Packaging rejects personal state and local AI parameters and writes deterministic ZIPs.
+The build produces a complete portable ZIP, a complete source ZIP, and the optional `fonts.zip`. Both program packages exclude fonts and carry the 18 current rules, README set, changelogs, and licenses. The source package also carries tests; the portable package carries the compiled EXE, fixed AutoHotkey v2 x64 runtime, and matching source archive. The font package preserves the `assets/fonts` layout for installation into Windows. Packaging rejects personal state and local AI parameters and writes deterministic ZIPs.
 
 Use the [changelog template](changelog-template.md) and [release process](release-process.md) for formal versions. Third-party versions and licenses are listed in [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md).
 
