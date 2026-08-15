@@ -4006,11 +4006,14 @@ AssertListCellTooltipUsesContentWidth(window) {
                     && cellTooltip.PendingText == clippedProbe,
                 "A visibly clipped mapping name was not queued for its full-content hover tip.")
             cellTooltip.ShowPending()
+            requireNativeVisibility := EnvGet(
+                "KEY_MOUSE_REMAPPER_GUI_TEST_OFFSCREEN") != "1"
             MappingWindowVisualAssert(cellTooltip.VisibleCell != ""
                     && cellTooltip.PendingText == clippedProbe
                     && IsObject(cellTooltip.Gui)
-                    && DllCall("user32\IsWindowVisible", "Ptr",
-                        cellTooltip.Gui.Hwnd, "Int"),
+                    && (!requireNativeVisibility
+                        || DllCall("user32\IsWindowVisible", "Ptr",
+                            cellTooltip.Gui.Hwnd, "Int")),
                 "A visibly clipped mapping name did not show its full-content hover tip.")
         } finally {
             OnMessage(0x02A3, cellTooltip.MouseLeaveCallback)
