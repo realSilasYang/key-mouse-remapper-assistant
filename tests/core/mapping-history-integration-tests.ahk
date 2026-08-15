@@ -409,6 +409,32 @@ RunMappingHistoryIntegrationTests() {
         finally lifecycleApp.UnregisterCallbacks()
         MappingHistoryIntegrationAssert(!lifecycleApp.CallbacksRegistered,
             "Application callbacks were not unregistered as one group.")
+        trayRecoveryApp := TrayRecoveryTestApp([false, false, true])
+        MappingHistoryIntegrationAssert(
+            !trayRecoveryApp.RequestTrayIconRecovery(3)
+                && trayRecoveryApp.ApplyCount == 1
+                && trayRecoveryApp.ScheduleCount == 1
+                && trayRecoveryApp.TrayRecoveryAttemptsRemaining == 2
+                && !trayRecoveryApp.RecoverTrayIcon()
+                && trayRecoveryApp.ApplyCount == 2
+                && trayRecoveryApp.ScheduleCount == 2
+                && trayRecoveryApp.TrayRecoveryAttemptsRemaining == 1
+                && trayRecoveryApp.RecoverTrayIcon()
+                && trayRecoveryApp.ApplyCount == 3
+                && trayRecoveryApp.ScheduleCount == 2
+                && trayRecoveryApp.TrayRecoveryAttemptsRemaining == 0,
+            "Tray registration did not retry until the notification icon existed.")
+        trayRecoveryApp.RegistrationResults := [true]
+        trayRecoveryApp.OnTaskbarCreated()
+        MappingHistoryIntegrationAssert(trayRecoveryApp.ApplyCount == 4
+                && trayRecoveryApp.TrayRecoveryAttemptsRemaining == 0,
+            "Taskbar recreation did not register the tray icon again.")
+        trayRecoveryApp.ShuttingDown := true
+        applyCountBeforeShutdownRetry := trayRecoveryApp.ApplyCount
+        MappingHistoryIntegrationAssert(
+            !trayRecoveryApp.RequestTrayIconRecovery(3)
+                && trayRecoveryApp.ApplyCount == applyCountBeforeShutdownRetry,
+            "Tray registration continued after application shutdown began.")
         reloadMarkerApp := ReloadMarkerTestApp()
         MappingHistoryIntegrationAssert(reloadMarkerApp
                 .ConsumeShowAfterReloadMarker()
@@ -657,10 +683,45 @@ class AppLifecycleTestApp extends KeyMouseRemapperAssistantApp {
         this.SessionChangeCallback := ObjBindMethod(this, "IgnoreMessage")
         this.ShowApplicationMessage := 0
         this.ShowApplicationCallback := ObjBindMethod(this, "IgnoreMessage")
+        this.TaskbarCreatedMessage := 0
+        this.TaskbarCreatedCallback := ObjBindMethod(this, "IgnoreMessage")
         this.ExitCallback := ObjBindMethod(this, "IgnoreMessage")
     }
 
     IgnoreMessage(*) => 0
+}
+
+class TrayRecoveryTestApp extends KeyMouseRemapperAssistantApp {
+    __New(registrationResults) {
+        this.ShuttingDown := false
+        this.TrayRecoveryAttemptsRemaining := 0
+        this.RegistrationResults := registrationResults.Clone()
+        this.ApplyCount := 0
+        this.ScheduleCount := 0
+        this.StopCount := 0
+        this.LastDelayMs := 0
+    }
+
+    ApplyTrayIconRegistration() {
+        this.ApplyCount++
+        return true
+    }
+
+    IsTrayIconRegistered() {
+        return this.RegistrationResults.Length
+            ? !!this.RegistrationResults.RemoveAt(1) : false
+    }
+
+    ScheduleTrayIconRecovery(delayMs) {
+        this.ScheduleCount++
+        this.LastDelayMs := delayMs
+        return true
+    }
+
+    StopTrayIconRecoveryTimer() {
+        this.StopCount++
+        return true
+    }
 }
 
 class AppLifecycleWindow {
