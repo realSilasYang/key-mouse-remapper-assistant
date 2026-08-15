@@ -19,7 +19,7 @@ categories based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### 🚀 Improvements
 
 - **Release verification pipeline:** Restored Windows GitHub Actions CI, reused verified locked toolchain and font assets, and fully validates the GUI, portable package, and source package on `main` changes so official assets continue through the same release gate.
-- **Interface preview documentation:** All thirteen README languages now show the dark and light main windows side by side so both themes can be compared before download.
+- **Interface preview documentation:** All thirteen README languages now show the dark and light main windows on separate rows so both themes can be viewed clearly before download.
 
 ---
 
