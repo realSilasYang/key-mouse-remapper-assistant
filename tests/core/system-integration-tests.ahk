@@ -150,21 +150,23 @@ try {
                 == SystemIntegrationService.ApplicationUserModelId,
             "The Start menu shortcut did not preserve target isolation, "
                 . "icon, arguments, or its product AppUserModelID.")
-        Run(chainPaths.Desktop, chainRoot)
-        deadline := A_TickCount + 10000
-        expectedProbeOutput := chainRoot "|2|--chain|two words"
-        actualProbeOutput := ""
-        while A_TickCount < deadline {
-            try actualProbeOutput := FileRead(probeOutput, "UTF-8")
-            catch
-                actualProbeOutput := ""
-            if actualProbeOutput == expectedProbeOutput
-                break
-            Sleep(50)
+        if IntegrationHasAhkFileAssociation() {
+            Run(chainPaths.Desktop, chainRoot)
+            deadline := A_TickCount + 10000
+            expectedProbeOutput := chainRoot "|2|--chain|two words"
+            actualProbeOutput := ""
+            while A_TickCount < deadline {
+                try actualProbeOutput := FileRead(probeOutput, "UTF-8")
+                catch
+                    actualProbeOutput := ""
+                if actualProbeOutput == expectedProbeOutput
+                    break
+                Sleep(50)
+            }
+            IntegrationAssertTrue(actualProbeOutput == expectedProbeOutput,
+                "The source shortcut did not preserve its directory or "
+                    . "arguments through the system file association.")
         }
-        IntegrationAssertTrue(actualProbeOutput == expectedProbeOutput,
-            "The source shortcut did not preserve its directory or arguments "
-                . "through the system file association.")
     } finally {
         if DirExist(realShortcutRoot)
             DirDelete(realShortcutRoot, true)
@@ -293,6 +295,17 @@ IntegrationGetShortPath(path) {
     length := DllCall("kernel32\GetShortPathNameW", "WStr", path,
         "Ptr", pathBuffer, "UInt", required + 1, "UInt")
     return length ? StrGet(pathBuffer, length, "UTF-16") : path
+}
+
+IntegrationHasAhkFileAssociation() {
+    try {
+        className := Trim(RegRead("HKCR\.ahk"))
+        if className == ""
+            return false
+        return Trim(RegRead("HKCR\" className "\shell\open\command")) != ""
+    } catch {
+        return false
+    }
 }
 
 class FailingShortcutIntegrationService extends SystemIntegrationService {
