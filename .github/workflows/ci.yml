@@ -21,10 +21,10 @@ jobs:
     timeout-minutes: 25
 
     steps:
-      - name: Checkout repository and LFS assets
+      - name: Checkout repository without LFS transfer
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          lfs: true
+          lfs: false
 
       - name: Restore locked toolchain cache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -33,7 +33,16 @@ jobs:
             .tools/cache
             .tools/autoHotkey-*
             .tools/ahk2Exe-*
-          key: ${{ runner.os }}-tools-${{ hashFiles('tools/toolchain.lock.json') }}
+            .tools/font-assets
+          key: ${{ runner.os }}-tools-${{ hashFiles('tools/toolchain.lock.json', 'assets/fonts/metadata.json') }}
+
+      - name: Restore release-verified font assets
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          .\tools\restore-font-assets.ps1
+          -Repository '${{ github.repository }}'
 
       - name: Resolve locked AutoHotkey toolchain
         id: toolchain
