@@ -11,7 +11,7 @@
   <p><a href="#tổng-quan-giao-diện">Giao diện</a> · <a href="#hướng-dẫn-người-dùng">Hướng dẫn</a> · <a href="#4-khối-quy-tắc-và-tập-lệnh-được-quản-lý">Dạng quy tắc</a> · <a href="https://github.com/realSilasYang/key-mouse-remapper-assistant/releases">Bản phát hành</a> · <a href="./CHANGELOG.en.md">Nhật ký thay đổi</a> · <a href="https://github.com/realSilasYang/key-mouse-remapper-assistant/issues/new">Phản hồi</a> · <a href="#hướng-dẫn-nhà-phát-triển">Phát triển</a></p>
 </div>
 
-Trợ lý ánh xạ lại bàn phím và chuột là công cụ AutoHotkey v2 dành cho Windows 10／11 x64. Ứng dụng tập hợp ghi đầu vào, quản lý quy tắc, chỉnh sửa mã, tạo và tối ưu bằng AI, kiểm tra cục bộ và trạng thái chạy trong một giao diện. Phiên bản 1.0.2 có 18 quy tắc dựng sẵn có thể sửa: 13 khối quy tắc và 5 tập lệnh được quản lý.
+Trợ lý ánh xạ lại bàn phím và chuột là công cụ AutoHotkey v2 dành cho Windows 10／11 x64. Ứng dụng tập hợp ghi đầu vào, quản lý quy tắc, chỉnh sửa mã, tạo và tối ưu bằng AI, kiểm tra cục bộ và trạng thái chạy trong một giao diện. Mỗi bản phát hành chứa các quy tắc dựng sẵn có thể sửa có trong commit phát hành; số khối quy tắc và tập lệnh được quản lý có thể thay đổi.
 
 Quy tắc nằm trong vùng chú thích `@mapping`, có thể đọc và sao lưu. Ứng dụng không cài trình điều khiển hay dịch vụ Windows; ánh xạ chỉ hoạt động khi trợ lý đang chạy. Gói chính thức không chứa địa chỉ AI, khóa API, mô hình, lời nhắc tùy chỉnh hoặc thiết lập cá nhân của máy dựng.
 
@@ -95,7 +95,7 @@ Có thể đặt ngôn ngữ, phông chữ, chủ đề, lối tắt, tác vụ 
 
 ## 6. Sự kiện, chẩn đoán và quyền riêng tư
 
-Quy tắc nằm trong `键鼠重映射小助手.ahk` ở thư mục chạy; thiết lập AI, hiển thị và khởi động nằm tại `%APPDATA%\KeyMouseRemapperAssistant`. Hãy sao lưu cả hai. Gói chính thức chứa đúng 18 quy tắc hiện tại nhưng loại `settings.ini`, `runtime.ini`, `rule-appearance.json`, `window-layout.ini` và mọi tham số AI cục bộ. Dự án không có đo từ xa hoặc tự tải lên.
+Quy tắc nằm trong `键鼠重映射小助手.ahk` ở thư mục chạy; thiết lập AI, hiển thị và khởi động nằm tại `%APPDATA%\KeyMouseRemapperAssistant`. Hãy sao lưu cả hai. Gói chính thức chứa các quy tắc có trong commit phát hành nhưng loại `settings.ini`, `runtime.ini`, `rule-appearance.json`, `window-layout.ini` và mọi tham số AI cục bộ. Dự án không có đo từ xa hoặc tự tải lên.
 
 # Star History
 

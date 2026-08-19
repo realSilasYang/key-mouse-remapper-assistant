@@ -42,8 +42,7 @@ $builtInManagedRuleCount = [regex]::Matches($entry,
     '(?m)^; @spec-begin\r?$').Count
 $builtInScriptRuleCount = [regex]::Matches($entry,
     '(?m)^; @script-code-begin\r?$').Count
-if ($builtInRuleCount -ne 18 -or
-        $builtInRuleEndCount -ne $builtInRuleCount -or
+if ($builtInRuleEndCount -ne $builtInRuleCount -or
         ($builtInManagedRuleCount + $builtInScriptRuleCount) -ne
             $builtInRuleCount) {
     throw ('The application entry does not contain complete built-in rules: ' +

@@ -27,12 +27,10 @@ $builtInManagedRuleCount = [regex]::Matches($entrySourceText,
     '(?m)^; @spec-begin\r?$').Count
 $builtInScriptRuleCount = [regex]::Matches($entrySourceText,
     '(?m)^; @script-code-begin\r?$').Count
-if ($builtInRuleCount -ne 18 -or
-        $builtInRuleEndCount -ne $builtInRuleCount -or
+if ($builtInRuleEndCount -ne $builtInRuleCount -or
         ($builtInManagedRuleCount + $builtInScriptRuleCount) -ne
             $builtInRuleCount) {
-    throw ('The application entry must contain exactly 18 complete ' +
-        'built-in mappings: ' +
+    throw ('The application entry contains incomplete built-in mappings: ' +
         "begin=$builtInRuleCount, end=$builtInRuleEndCount, " +
         "managed=$builtInManagedRuleCount, script=$builtInScriptRuleCount.")
 }

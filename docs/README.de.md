@@ -11,7 +11,7 @@
   <p><a href="#oberflächenübersicht">Oberfläche</a> · <a href="#benutzerhandbuch">Handbuch</a> · <a href="#4-regelblöcke-verwaltete-skripte-und-ki">Regelformen</a> · <a href="https://github.com/realSilasYang/key-mouse-remapper-assistant/releases">Versionen</a> · <a href="./CHANGELOG.en.md">Änderungen</a> · <a href="https://github.com/realSilasYang/key-mouse-remapper-assistant/issues/new">Rückmeldung</a> · <a href="#entwicklerhandbuch">Entwicklung</a></p>
 </div>
 
-Der Tastatur- und Maus-Neuzuordnungsassistent ist ein AutoHotkey-v2-Werkzeug für Windows 10 und 11 x64. Eingabeaufnahme, Regelverwaltung, Codebearbeitung, KI-Erzeugung und -Optimierung, lokale Prüfung und Laufzeitstatus befinden sich in einer Oberfläche. Version 1.0.2 liefert 18 bearbeitbare Regeln: 13 Regelblöcke und 5 verwaltete Skripte.
+Der Tastatur- und Maus-Neuzuordnungsassistent ist ein AutoHotkey-v2-Werkzeug für Windows 10 und 11 x64. Eingabeaufnahme, Regelverwaltung, Codebearbeitung, KI-Erzeugung und -Optimierung, lokale Prüfung und Laufzeitstatus befinden sich in einer Oberfläche. Version 1.0.2 enthält die im jeweiligen Release-Commit vorhandenen bearbeitbaren Regeln; die Anzahl der Regelblöcke und verwalteten Skripte kann variieren.
 
 Regeln liegen im les- und sicherbaren `@mapping`-Kommentarbereich. Es werden weder Treiber noch Windows-Dienste installiert; Zuordnungen wirken nur, solange der Assistent läuft. Offizielle Pakete enthalten niemals KI-Adresse, API-Schlüssel, Modell, eigene Prompts oder andere persönliche Einstellungen des Build-Rechners.
 
@@ -98,7 +98,7 @@ Einstellungen steuern Sprache, Schrift, Thema, Verknüpfungen, Startaufgabe, Adm
 
 Die Ereignisansicht filtert Eingaben, Treffer, abgelehnte Bedingungen, Aktionen, Speicher- und Systemereignisse und exportiert JSONL. Vor dem Teilen App-, Fenster- und Tasteninformationen prüfen.
 
-Regeln liegen in `键鼠重映射小助手.ahk`; KI-, Anzeige- und Starteinstellungen in `%APPDATA%\KeyMouseRemapperAssistant`. Beides sichern. Offizielle Pakete enthalten die 18 aktuellen Regeln, aber nicht `settings.ini`, `runtime.ini`, `rule-appearance.json`, `window-layout.ini` oder lokale KI-Parameter. Es gibt keine Telemetrie oder automatischen Upload; KI-Daten gehen nur nach ausdrücklicher Aktion an den konfigurierten Anbieter.
+Regeln liegen in `键鼠重映射小助手.ahk`; KI-, Anzeige- und Starteinstellungen in `%APPDATA%\KeyMouseRemapperAssistant`. Beides sichern. Offizielle Pakete enthalten die im Release-Commit vorhandenen Regeln, aber nicht `settings.ini`, `runtime.ini`, `rule-appearance.json`, `window-layout.ini` oder lokale KI-Parameter. Es gibt keine Telemetrie oder automatischen Upload; KI-Daten gehen nur nach ausdrücklicher Aktion an den konfigurierten Anbieter.
 
 # Star History
 

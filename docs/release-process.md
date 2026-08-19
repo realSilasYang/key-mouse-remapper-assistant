@@ -19,8 +19,8 @@
    ```
 
    两项会真实拦截桌面输入的集成测试不属于无人值守发布门禁，只有在明确可控制本机输入时才单独运行。
-7. 运行 `.\tools\build-release.ps1`。构建必须恰好生成三个公开附件：可选 `fonts.zip`、完整源码 ZIP 和完整便携 ZIP。两个程序包都不含字体，并包含当前 18 条规则、13 语 README、双语更新日志和许可证；源码版额外包含测试，便携版额外包含编译 EXE、固定运行时及对应源码归档。字体包保持 `assets/fonts` 布局。
-8. 解压检查三个 ZIP：两个程序包的 `builtInRuleCount` 必须为 18，`bundlesUserSettings` 必须为 `false`，且不得包含 `assets/fonts`、`settings.ini`、`runtime.ini`、`rule-appearance.json` 或 `window-layout.ini`；字体包必须只包含清单声明的字体、说明与许可证。再确认发行文本不含本机 AI 地址、密钥、模型或自定义提示词，并用便携 EXE 运行 `--startup-validation`。
+7. 运行 `.\tools\build-release.ps1`。构建必须恰好生成三个公开附件：可选 `fonts.zip`、完整源码 ZIP 和完整便携 ZIP。两个程序包都不含字体，并包含发布提交中实际存在的内置规则、13 语 README、双语更新日志和许可证；源码版额外包含测试，便携版额外包含编译 EXE、固定运行时及对应源码归档。字体包保持 `assets/fonts` 布局。
+8. 解压检查三个 ZIP：两个程序包的 `builtInRuleCount` 必须等于发布提交入口实际解析出的规则数量，`bundlesUserSettings` 必须为 `false`，且不得包含 `assets/fonts`、`settings.ini`、`runtime.ini`、`rule-appearance.json` 或 `window-layout.ini`；字体包必须只包含清单声明的字体、说明与许可证。再确认发行文本不含本机 AI 地址、密钥、模型或自定义提示词，并用便携 EXE 运行 `--startup-validation`。
 9. 提交全部源码、测试和文档并推送 `main`。全部检查通过后才创建 `v<版本>` 标签；标签必须指向 `main` 历史中的发布提交。除非发布者明确要求修订仍处于维护中的同一版本，否则不要移动已公开标签，而应发布新的补丁版本。
 10. GitHub Release 标题使用“键鼠重映射小助手 X.Y.Z”，正文原样采用 `docs/release-notes/v<版本>.md`，只上传模板规定的三个 ZIP。上传后重新下载附件，核对 GitHub 资产摘要、文件名、包内清单、启动验证和标签提交。
 

@@ -11,7 +11,7 @@
   <p><a href="#aperçu-de-linterface">Interface</a> · <a href="#guide-dutilisation">Guide</a> · <a href="#4-blocs-de-règles-scripts-gérés-et-ia">Types de règle</a> · <a href="https://github.com/realSilasYang/key-mouse-remapper-assistant/releases">Versions</a> · <a href="./CHANGELOG.en.md">Historique</a> · <a href="https://github.com/realSilasYang/key-mouse-remapper-assistant/issues/new">Retours</a> · <a href="#guide-de-développement">Développement</a></p>
 </div>
 
-L’Assistant de remappage clavier et souris est un outil AutoHotkey v2 pour Windows 10 et 11 x64. Il réunit l’enregistrement des entrées, la gestion des règles, l’édition de code, la génération et l’optimisation par IA, la validation locale et l’état d’exécution. La version 1.0.2 contient 18 règles modifiables : 13 blocs de règles et 5 scripts gérés.
+L’Assistant de remappage clavier et souris est un outil AutoHotkey v2 pour Windows 10 et 11 x64. Il réunit l’enregistrement des entrées, la gestion des règles, l’édition de code, la génération et l’optimisation par IA, la validation locale et l’état d’exécution. Chaque version contient les règles modifiables présentes dans son commit de publication ; le nombre de blocs et de scripts gérés peut varier.
 
 Les règles sont enregistrées dans la zone commentée `@mapping`, lisible et sauvegardable. Aucun pilote ni service Windows n’est installé ; les remappages ne fonctionnent que pendant l’exécution de l’assistant. Les paquets officiels n’intègrent jamais l’adresse IA, la clé API, le modèle, les invites personnalisées ou les réglages personnels de la machine de compilation.
 
@@ -98,7 +98,7 @@ Les réglages contrôlent langue, police, thème, raccourcis, tâche de démarra
 
 Le visualiseur filtre les entrées, correspondances, conditions refusées, actions, événements de dépôt et système, puis exporte en JSONL. Vérifiez les informations d’application, de fenêtre et de touches avant partage.
 
-Les règles se trouvent dans `键鼠重映射小助手.ahk` ; les réglages IA, d’affichage et de démarrage sont dans `%APPDATA%\KeyMouseRemapperAssistant`. Sauvegardez les deux. Les paquets officiels contiennent les 18 règles actuelles mais excluent `settings.ini`, `runtime.ini`, `rule-appearance.json`, `window-layout.ini` et tous les paramètres IA locaux. Il n’existe ni télémétrie ni envoi automatique ; les données IA ne partent vers le fournisseur configuré que sur action explicite.
+Les règles se trouvent dans `键鼠重映射小助手.ahk` ; les réglages IA, d’affichage et de démarrage sont dans `%APPDATA%\KeyMouseRemapperAssistant`. Sauvegardez les deux. Les paquets officiels contiennent les règles présentes dans le commit de publication mais excluent `settings.ini`, `runtime.ini`, `rule-appearance.json`, `window-layout.ini` et tous les paramètres IA locaux. Il n’existe ni télémétrie ni envoi automatique ; les données IA ne partent vers le fournisseur configuré que sur action explicite.
 
 # Star History
 

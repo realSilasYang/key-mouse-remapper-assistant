@@ -11,7 +11,7 @@
   <p><a href="#vista-general-de-la-interfaz">Interfaz</a> · <a href="#guía-de-usuario">Guía</a> · <a href="#4-bloques-de-reglas-scripts-administrados-e-ia">Tipos de regla</a> · <a href="https://github.com/realSilasYang/key-mouse-remapper-assistant/releases">Versiones</a> · <a href="./CHANGELOG.en.md">Cambios</a> · <a href="https://github.com/realSilasYang/key-mouse-remapper-assistant/issues/new">Comentarios</a> · <a href="#guía-para-desarrolladores">Desarrollo</a></p>
 </div>
 
-El Asistente de reasignación de teclado y ratón es una aplicación AutoHotkey v2 para Windows 10 y 11 x64. Reúne captura de entradas, administración de reglas, edición de código, generación y optimización con IA, validación local y estado de ejecución. La versión 1.0.2 incluye 18 reglas editables: 13 bloques de reglas y 5 scripts administrados.
+El Asistente de reasignación de teclado y ratón es una aplicación AutoHotkey v2 para Windows 10 y 11 x64. Reúne captura de entradas, administración de reglas, edición de código, generación y optimización con IA, validación local y estado de ejecución. Cada versión incluye las reglas editables presentes en su commit de publicación; la cantidad de bloques y scripts administrados puede variar.
 
 Las reglas se guardan en la región comentada `@mapping`, que se puede leer y respaldar. La aplicación no instala controladores ni servicios de Windows; las asignaciones solo funcionan mientras el asistente está abierto. Los paquetes oficiales nunca incluyen la dirección de IA, la clave de API, el modelo, las indicaciones personalizadas ni otros ajustes del equipo de compilación.
 
@@ -98,7 +98,7 @@ Los ajustes controlan idioma, fuente, tema, accesos directos, tarea de inicio, m
 
 El visor filtra entrada, coincidencias, condiciones rechazadas, acciones, repositorio y eventos del sistema, y exporta JSONL. Revisa datos de aplicaciones, ventanas y teclas antes de compartirlos.
 
-Las reglas están en `键鼠重映射小助手.ahk`; los ajustes de IA, interfaz e inicio están en `%APPDATA%\KeyMouseRemapperAssistant`. Respalda ambos. Los paquetes oficiales contienen las 18 reglas actuales, pero excluyen `settings.ini`, `runtime.ini`, `rule-appearance.json`, `window-layout.ini` y todos los parámetros de IA locales. El proyecto no tiene telemetría ni carga automática; los datos de IA solo van al proveedor configurado cuando el usuario inicia una solicitud.
+Las reglas están en `键鼠重映射小助手.ahk`; los ajustes de IA, interfaz e inicio están en `%APPDATA%\KeyMouseRemapperAssistant`. Respalda ambos. Los paquetes oficiales contienen las reglas presentes en el commit de publicación, pero excluyen `settings.ini`, `runtime.ini`, `rule-appearance.json`, `window-layout.ini` y todos los parámetros de IA locales. El proyecto no tiene telemetría ni carga automática; los datos de IA solo van al proveedor configurado cuando el usuario inicia una solicitud.
 
 # Star History
 

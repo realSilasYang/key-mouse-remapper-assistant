@@ -28,7 +28,7 @@
 
 Key Mouse Remapper Assistant is an AutoHotkey v2 desktop tool for Windows 10 and 11 x64. It brings input capture, rule management, code editing, AI generation and optimization, local validation, and runtime status into one interface. It handles simple key substitutions while still allowing full AHK v2 automation through managed scripts.
 
-Version 1.0.2 ships with 18 editable built-in rules: 13 rule blocks and 5 managed scripts. Rules live in the comment-only `@mapping` region, where both portable and source users can inspect, back up, and modify them. The application installs no driver or Windows service; enabled mappings work only while the assistant is running.
+Each release ships with the editable built-in rules present in its release commit; the number of rule blocks and managed scripts may vary. Rules live in the comment-only `@mapping` region, where both portable and source users can inspect, back up, and modify them. The application installs no driver or Windows service; enabled mappings work only while the assistant is running.
 
 The interface supports 13 languages, light and dark themes, elevated startup, scheduled startup, application updates, event inspection, and rule-package import and export. Official packages never include the build computer's AI address, API key, model, custom prompts, or other personal settings.
 
@@ -94,7 +94,7 @@ If the assistant improves your daily workflow, you can support its development w
 
 Neither program ZIP contains fonts. The optional `fonts.zip` provides Noto fallback families; install the desired fonts into Windows before use. The assistant enumerates only Windows-installed fonts and never loads fonts privately from the ZIP or its application directory. Fonts are not required to run it.
 
-The first launch requests administrator access by default. Closing the main window only hides it to the tray; use “Exit” from the tray to stop all mappings. All 18 built-in rules are editable, pausable, and removable.
+The first launch requests administrator access by default. Closing the main window only hides it to the tray; use “Exit” from the tray to stop all mappings. All built-in rules are editable, pausable, and removable.
 
 The portable edition is not a single-file application. Keep its EXE, editable AHK entry, modules, assets, and runtime together when moving or backing it up.
 
@@ -147,7 +147,7 @@ Rule code lives in `键鼠重映射小助手.ahk` in the actual run directory. A
 
 Official portable and source packages:
 
-- contain exactly the current 18 built-in rules;
+- contain exactly the built-in rules parsed from the release entry file;
 - exclude `settings.ini`, `runtime.ini`, `rule-appearance.json`, and `window-layout.ini`;
 - exclude the build computer's AI address, key, model, and custom prompts;
 - fail the build if forbidden state or a local AI parameter appears in packaged text.
@@ -195,7 +195,7 @@ Two integration tests that physically suppress desktop input are intentionally o
 .\tools\build-release.ps1
 ```
 
-The build produces a complete portable ZIP, a complete source ZIP, and the optional `fonts.zip`. Both program packages exclude fonts and carry the 18 current rules, README set, changelogs, and licenses. The source package also carries tests; the portable package carries the compiled EXE, fixed AutoHotkey v2 x64 runtime, and matching source archive. The font package preserves the `assets/fonts` layout for installation into Windows. Packaging rejects personal state and local AI parameters and writes deterministic ZIPs.
+The build produces a complete portable ZIP, a complete source ZIP, and the optional `fonts.zip`. Both program packages exclude fonts and carry the built-in rules from the release commit, README set, changelogs, and licenses. The source package also carries tests; the portable package carries the compiled EXE, fixed AutoHotkey v2 x64 runtime, and matching source archive. The font package preserves the `assets/fonts` layout for installation into Windows. Packaging rejects personal state and local AI parameters and writes deterministic ZIPs.
 
 Use the [changelog template](changelog-template.md) and [release process](release-process.md) for formal versions. Third-party versions and licenses are listed in [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md).
 

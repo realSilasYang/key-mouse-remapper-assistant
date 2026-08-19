@@ -39,7 +39,7 @@ categories based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Capture and shortcuts:** `Ctrl+N` now creates a rule even when no main-list item is selected. Selecting Clear during capture ends the capture and clears the value instead of recording the left mouse button.
 - **Long status rendering:** Long status messages after adding or editing a rule now wrap inside their own bottom region without clipping, overlap, or button artifacts during resize, theme refresh, or dynamic layout updates.
 - **Scaling and drawing stability:** Fixed repeated control scaling, font measurement, rounded-button geometry, list-column widths, dialog regions, and minimum-window sizing at custom scales, and completed cleanup of scaled GDI font resources.
-- **Built-in rule integrity:** Restored the 18 built-in rules as 13 rule blocks and 5 managed scripts, and reinstated exact rule-count enforcement in release builds.
+- **Built-in rule integrity:** Release packages now include the built-in rules actually present in the release commit, while the build verifies complete rule markers and matching package counts.
 
 ## 🎉 Version [1.0.1] - 2026-08-15
 
@@ -106,7 +106,7 @@ categories based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **List interaction:** Sequence, status, and scope columns center their content; left-aligned columns use consistent padding. Overflow tooltips use actual text width, and wheel scrolling interpolates smoothly according to input speed.
 - **Code persistence:** Mapping writes now share cross-process locking, snapshot comparison, atomic replacement, and transactional history; deletion, ordering, pause, editing, and imports no longer own conflicting refresh paths.
 - **AI progress:** Request timeouts are substantially longer, while status text identifies connection, response wait, parsing, normalization, and validation stages with current elapsed time.
-- **Release privacy boundary:** Portable and source editions carry exactly the 18 current rules but reject `settings.ini`, `runtime.ini`, `rule-appearance.json`, `window-layout.ini`, and the build computer's AI address, key, model, and custom prompts.
+- **Release privacy boundary:** Portable and source editions carry all built-in rules from the release commit but reject `settings.ini`, `runtime.ini`, `rule-appearance.json`, `window-layout.ini`, and the build computer's AI address, key, model, and custom prompts.
 
 ---
 
