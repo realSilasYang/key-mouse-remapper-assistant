@@ -55,7 +55,7 @@ class RulePackageImportWindow {
                 this.FormatPermissions(this.Preview["permissions"])))
 
         this.List := this.Gui.Add("ListView",
-            "x16 y122 w728 h286 Report Checked +ReadOnly -Multi -Hdr"
+            "x16 y124 w728 h284 Report Checked +ReadOnly -Multi -Hdr"
             " +LV0x10000 -Border -E0x200 Background" colors.Surface
             " c" colors.Text, [Tr("名称"), Tr("模式"), Tr("权限")])
         this.List.SetFont("s10 c" colors.Text, fontName)
@@ -78,7 +78,8 @@ class RulePackageImportWindow {
                 item["id"], item["mode"],
                 this.FormatPermissions(item["permissions"]))
         for index, width in this.ColumnWidths
-            this.List.ModifyCol(index, width (index == 2 ? " Center" : ""))
+            this.List.ModifyCol(index, UiScaleService.Scale(width)
+                (index == 2 ? " Center" : ""))
 
         this.SelectAllButton := this.AddButton(16, 430, 112,
             Tr("全选"), colors.Toolbar, ObjBindMethod(this, "SelectAll"),
@@ -230,7 +231,7 @@ class RulePackageImportWindow {
             this.SummaryText.SetFont("s10 c" colors.Muted, fontName)
             this.Header.SetLabels([Tr("名称"), Tr("模式"), Tr("权限")])
             this.Header.ApplyAppearance(colors.Toolbar, colors.Muted,
-                systemFont, 9)
+                systemFont, 10)
             this.List.Opt("Background" colors.Surface " c" colors.Text)
             this.List.SetFont("s10 c" colors.Text, fontName)
             buttonSpecs := [

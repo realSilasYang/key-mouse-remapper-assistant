@@ -31,6 +31,8 @@ class AppSettingsService {
                     "UiFont", "auto"),
                 Theme: this.ReadSnapshotValue(values, "Appearance",
                     "Theme", "auto"),
+                UiScalePercent: this.ReadSnapshotValue(values, "Appearance",
+                    "UiScalePercent", "100"),
                 ShowAtStartup: this.ReadSnapshotValue(values, "Startup",
                     "ShowAtStartup", "0"),
                 RunAsAdministrator: this.ReadSnapshotValue(values,
@@ -79,6 +81,8 @@ class AppSettingsService {
                 this.GetProperty(settings, "UiFont", "auto")),
             Theme: UiThemeService.NormalizeTheme(
                 this.GetProperty(settings, "Theme", "auto")),
+            UiScalePercent: UiScaleService.NormalizePercent(
+                this.GetProperty(settings, "UiScalePercent", 100)),
             ShowAtStartup: this.NormalizeBoolean(
                 this.GetProperty(settings, "ShowAtStartup", false), false),
             RunAsAdministrator: this.NormalizeBoolean(
@@ -106,15 +110,13 @@ class AppSettingsService {
                 this.GetProperty(settings, "AITimeoutS",
                 AIService.DefaultTimeoutS), 1,
                     AIService.MaximumTimeoutS, AIService.DefaultTimeoutS),
-            AIPrompt: this.NormalizePrompt(this.GetProperty(settings,
-                "AIPrompt", AIService.DefaultGeneratePrompt),
-                AIService.DefaultGeneratePrompt),
-            AIOptimizePrompt: this.NormalizePrompt(this.GetProperty(settings,
-                "AIOptimizePrompt", AIService.DefaultOptimizePrompt),
-                AIService.DefaultOptimizePrompt),
-            AISystemPrompt: this.NormalizePrompt(this.GetProperty(settings,
-                "AISystemPrompt", AIService.DefaultSystemPrompt),
-                AIService.DefaultSystemPrompt)
+            AIPrompt: AIService.NormalizeGeneratePrompt(this.GetProperty(
+                settings, "AIPrompt", AIService.DefaultGeneratePrompt)),
+            AIOptimizePrompt: AIService.NormalizeOptimizePrompt(
+                this.GetProperty(settings, "AIOptimizePrompt",
+                    AIService.DefaultOptimizePrompt)),
+            AISystemPrompt: AIService.NormalizeSystemPrompt(this.GetProperty(
+                settings, "AISystemPrompt", AIService.DefaultSystemPrompt))
         }
     }
 
@@ -145,15 +147,6 @@ class AppSettingsService {
             return fallback
         return normalized >= minimum && normalized <= maximum
             ? normalized : fallback
-    }
-
-    NormalizePrompt(value, fallback) {
-        try text := Trim(String(value))
-        catch
-            return fallback
-        if text == ""
-            return fallback
-        return text
     }
 
     EncodeMultilineValue(value) {
@@ -235,7 +228,8 @@ class AppSettingsService {
         return "[Appearance]`r`n"
             . "UiLanguage=" settings.UiLanguage "`r`n"
             . "UiFont=" settings.UiFont "`r`n"
-            . "Theme=" settings.Theme "`r`n`r`n"
+            . "Theme=" settings.Theme "`r`n"
+            . "UiScalePercent=" settings.UiScalePercent "`r`n`r`n"
             . "[Startup]`r`n"
             . "ShowAtStartup=" (settings.ShowAtStartup ? 1 : 0) "`r`n"
             . "RunAsAdministrator="

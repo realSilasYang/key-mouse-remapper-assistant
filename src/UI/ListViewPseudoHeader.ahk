@@ -1,7 +1,7 @@
 ; 隐藏原生表头后的可点击伪表头。排序只改变当前 ListView 投影，不修改源码顺序。
 
 class ListViewPseudoHeader {
-    static DefaultHeight := 28
+    static DefaultHeight := 30
     static InputGuardSubclassId := 0x4C565048
     static InputGuardCallback := 0
     static InputGuardAttachmentCount := 0
@@ -82,7 +82,7 @@ class ListViewPseudoHeader {
             UiThemeService.Color("MutedText"))
         this.FontName := this.GetOption(options, "FontName",
             LocalizationService.GetLanguageSystemUiFontName())
-        this.FontSize := this.GetOption(options, "FontSize", 9)
+        this.FontSize := this.GetOption(options, "FontSize", 10)
         this.Height := Max(1, Integer(this.GetOption(options, "Height",
             ListViewPseudoHeader.DefaultHeight)))
 

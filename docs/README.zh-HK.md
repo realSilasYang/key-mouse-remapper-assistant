@@ -18,7 +18,7 @@
   <p><a href="#介面概覽">介面概覽</a> · <a href="#使用指南">使用指南</a> · <a href="#4-規則區塊與受託管指令碼">規則形式</a> · <a href="https://github.com/realSilasYang/key-mouse-remapper-assistant/releases">版本發佈</a> · <a href="../CHANGELOG.md">更新日誌</a> · <a href="https://github.com/realSilasYang/key-mouse-remapper-assistant/issues/new">問題回報</a> · <a href="#開發者指南">開發者指南</a></p>
 </div>
 
-鍵鼠重映射小助手是供 Windows 10／11 x64 使用的 AutoHotkey v2 桌面工具，把按鍵錄製、規則管理、程式碼編輯、AI 產生與最佳化、本機驗證及執行狀態集中在同一介面。版本 1.0.1 內置 18 條可編輯規則，包括 13 條規則區塊及 5 條受託管指令碼。
+鍵鼠重映射小助手是供 Windows 10／11 x64 使用的 AutoHotkey v2 桌面工具，把按鍵錄製、規則管理、程式碼編輯、AI 產生與最佳化、本機驗證及執行狀態集中在同一介面。版本 1.0.2 內置 18 條可編輯規則，包括 13 條規則區塊及 5 條受託管指令碼。
 
 規則儲存在可讀、可備份的 `@mapping` 註解區域。程式不安裝驅動程式或 Windows 服務，映射只會在小助手運行時生效。正式發佈包不會包含製作電腦的 AI 位址、API 金鑰、模型、自訂提示詞或其他個人設定。
 

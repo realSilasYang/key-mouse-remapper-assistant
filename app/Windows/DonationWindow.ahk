@@ -8,6 +8,7 @@ class DonationWindow {
         this.App := ownerWindow.App
         this.Gui := ""
         this.OwnerLease := ""
+        this.WheelPropagationGuard := ""
         this.IconHandles := []
         this.MessageText := ""
         this.QrLabels := []
@@ -40,6 +41,8 @@ class DonationWindow {
             this.Gui.Hwnd)
         if !this.OwnerLease
             throw Error("无法建立打赏窗口层级。")
+        this.WheelPropagationGuard :=
+            WindowWheelPropagationGuard.ForOwnedWindow(this.Gui)
         this.Gui.BackColor := colors.Window
         this.Gui.MarginX := 0
         this.Gui.MarginY := 0
@@ -175,6 +178,10 @@ class DonationWindow {
                 cleanup.Failures.Push("释放父窗口关系：" ownerError.Message)
             }
         }
+        if IsObject(this.WheelPropagationGuard)
+                && cleanup.Run("释放滚轮传播边界",
+                    () => this.WheelPropagationGuard.Dispose())
+            this.WheelPropagationGuard := ""
         if IsObject(this.Gui)
                 && cleanup.Run("销毁窗口", () => this.Gui.Destroy())
             this.Gui := ""

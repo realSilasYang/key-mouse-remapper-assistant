@@ -125,14 +125,16 @@ class MappingContextPopupWindow {
         if !this.MappingIds.Length
             this.MappingIds := [this.MappingId]
         this.RefreshSwatchSelection()
-        this.Gui.Show("Hide NoActivate w" this.WindowWidth
-            " h" this.WindowHeight)
+        UiScaleService.PrepareGui(this.Gui)
+        this.Gui.Show(UiScaleService.ScaleShowOptions(
+            "Hide NoActivate w" this.WindowWidth " h" this.WindowHeight))
         this.ApplyRoundedRegion()
         point := Buffer(8, 0)
         if !DllCall("user32\GetCursorPos", "Ptr", point, "Int")
             return false
         x := NumGet(point, 0, "Int")
-        y := NumGet(point, 4, "Int") + 4
+        y := NumGet(point, 4, "Int") + Round(4
+            * UiScaleService.GetEffectiveDpi(this.Gui.Hwnd) / 96)
         windowRect := Buffer(16, 0)
         DllCall("user32\GetWindowRect", "Ptr", this.Gui.Hwnd,
             "Ptr", windowRect)
@@ -278,8 +280,8 @@ class MappingContextPopupWindow {
                     "Ptr", hdc)
             }
         }
-        dpi := DllCall("user32\GetDpiForWindow", "Ptr", this.Gui.Hwnd,
-            "UInt")
+        dpi := UiScaleService.GetDesignMeasurementDpi(
+            this.MeasureControl.Hwnd)
         if !dpi
             dpi := 96
         measuredWidth := MappingContextPopupWindow.Padding * 2
@@ -343,6 +345,8 @@ class MappingContextPopupWindow {
                 this.Interactions.SetTextNoErase(swatch.Control, "")
             }
         }
+        if UiScaleService.IsPrepared(this.Gui)
+            UiScaleService.RefreshGuiFonts(this.Gui)
         return true
     }
 
@@ -394,10 +398,7 @@ class MappingContextPopupWindow {
             - NumGet(windowRect, 0, "Int")
         height := NumGet(windowRect, 12, "Int")
             - NumGet(windowRect, 4, "Int")
-        windowDpi := DllCall("user32\GetDpiForWindow", "Ptr", this.Gui.Hwnd,
-            "UInt")
-        if !windowDpi
-            windowDpi := 96
+        windowDpi := UiScaleService.GetEffectiveDpi(this.Gui.Hwnd)
         radius := Max(4, Round(MappingContextPopupWindow.WindowRadiusDip
             * windowDpi / 96))
         region := DllCall("gdi32\CreateRoundRectRgn",
@@ -456,6 +457,7 @@ class MappingContextPopupWindow {
             this.Interactions.SetButtonTooltip(swatch.Control,
                 swatch.Key == "" ? Tr("清除圆点颜色")
                     : this.GetPresetTooltip(swatch.Key))
+        UiScaleService.PrepareGui(this.Gui)
         this.RefreshSwatchSelection()
         swatchRowWidth := (RuleColorPalette.Presets().Length + 1)
             * MappingContextPopupWindow.SwatchSize
@@ -468,18 +470,23 @@ class MappingContextPopupWindow {
             contentWidth := this.WindowWidth
                 - MappingContextPopupWindow.Padding * 2
             for index, button in this.MenuButtons
-                button.Move(MappingContextPopupWindow.Padding,
+                UiScaleService.MoveControl(button,
+                    MappingContextPopupWindow.Padding,
                     MappingContextPopupWindow.Padding + (index - 1)
                         * (MappingContextPopupWindow.ItemHeight
                             + MappingContextPopupWindow.ItemGap),
                     contentWidth, MappingContextPopupWindow.ItemHeight)
-            this.ColorLabel.Move(MappingContextPopupWindow.Padding, ,
+            UiScaleService.MoveControl(this.ColorLabel,
+                MappingContextPopupWindow.Padding, ,
                 contentWidth)
-            if this.IsVisible()
+            if this.IsVisible() {
+                effectiveDpi := UiScaleService.GetEffectiveDpi(this.Gui.Hwnd)
                 DllCall("user32\SetWindowPos", "Ptr", this.Gui.Hwnd,
                     "Ptr", 0, "Int", 0, "Int", 0,
-                    "Int", this.WindowWidth, "Int", this.WindowHeight,
+                    "Int", Round(this.WindowWidth * effectiveDpi / 96),
+                    "Int", Round(this.WindowHeight * effectiveDpi / 96),
                     "UInt", 0x0016, "Int")
+            }
         }
         if this.IsVisible()
             this.ApplyRoundedRegion()

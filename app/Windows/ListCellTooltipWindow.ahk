@@ -81,10 +81,7 @@ class ListCellTooltipWindow {
         NumPut("Int", column - 1, rect, 4)
         if !SendMessage(0x1038, row - 1, rect.Ptr, , this.List.Hwnd)
             return false
-        dpi := DllCall("user32\GetDpiForWindow", "Ptr", this.List.Hwnd,
-            "UInt")
-        if !dpi
-            dpi := 96
+        dpi := UiScaleService.GetEffectiveDpi(this.List.Hwnd)
         horizontalInset := Max(1, Round(8 * dpi / 96))
         availableWidth := NumGet(rect, 8, "Int")
             - NumGet(rect, 0, "Int") - horizontalInset
@@ -183,6 +180,7 @@ class ListCellTooltipWindow {
                 LocalizationService.GetUiFontName())
             this.TextControl := this.Gui.Add("Text", "w1 h1 +Wrap Background"
                 style.Background " c" style.Text, this.PendingText)
+            UiScaleService.PrepareGui(this.Gui, false)
             if VerCompare(A_OSVersion, "10.0.22000") >= 0
                 try DllCall("dwmapi\DwmSetWindowAttribute", "Ptr", this.Gui.Hwnd,
                     "Int", 33, "Int*", 2, "Int", 4)
@@ -192,18 +190,17 @@ class ListCellTooltipWindow {
         this.VisibleCell := this.PendingCell
         point := Buffer(8, 0)
         DllCall("user32\GetCursorPos", "Ptr", point)
-        x := NumGet(point, 0, "Int") + 12
-        y := NumGet(point, 4, "Int") + 20
+        pointerDpi := UiScaleService.GetEffectiveDpi(this.List.Hwnd)
+        x := NumGet(point, 0, "Int") + Round(12 * pointerDpi / 96)
+        y := NumGet(point, 4, "Int") + Round(20 * pointerDpi / 96)
         workArea := this.GetWorkArea(x, y)
-        tooltipDpi := DllCall("user32\GetDpiForWindow", "Ptr",
-            this.List.Hwnd, "UInt")
-        if !tooltipDpi
-            tooltipDpi := 96
+        tooltipDpi := UiScaleService.GetEffectiveDpi(this.List.Hwnd)
         maximumTextWidth := Max(80,
             Floor((workArea.Right - workArea.Left - 32) * 96 / tooltipDpi))
         textSize := this.MeasureTooltipText(this.PendingText,
             Min(420, maximumTextWidth), tooltipDpi)
-        this.TextControl.Move(, , textSize.Width, textSize.Height)
+        UiScaleService.MoveControl(this.TextControl, , , textSize.Width,
+            textSize.Height)
         this.Gui.Show("Hide AutoSize")
         this.Gui.GetPos(, , &tooltipWidth, &tooltipHeight)
         maximumWidth := Max(1, workArea.Right - workArea.Left - 8)

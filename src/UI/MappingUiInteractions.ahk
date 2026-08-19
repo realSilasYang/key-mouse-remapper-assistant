@@ -16,6 +16,7 @@ class MappingUiInteractions {
         this.ArrowCursor := 0
         this.PointerFeedbackFrozen := false
         this.Disposed := false
+        this.WheelPropagationGuard := ""
         this.Painter := RoundedButtonPainter(parentColor)
         this.SvgRenderer := IsObject(svgRenderer) ? svgRenderer : ""
         this.Tooltip := ""
@@ -25,6 +26,8 @@ class MappingUiInteractions {
         this.ClickCallback := ""
         this.PointerDownCallback := ""
         try {
+            this.WheelPropagationGuard :=
+                WindowWheelPropagationGuard.ForOwnedWindow(this.Gui)
             this.SubclassMethod := ObjBindMethod(this, "SubclassProc")
             this.SubclassCallback := CallbackCreate(this.SubclassMethod, "", 6)
             this.DrawCallback := ObjBindMethod(this, "OnDrawItem")
@@ -218,6 +221,19 @@ class MappingUiInteractions {
         state.HiddenWheelScrollLines := Max(1, Integer(linesPerNotch))
         state.WheelDelta := 0
         state.AfterWheelScroll := IsObject(afterScroll) ? afterScroll : ""
+        return true
+    }
+
+    SuppressTextInputWheelScroll(inputControl) {
+        try hwnd := inputControl.Hwnd
+        catch
+            return false
+        if !hwnd || !this.Controls.Has(hwnd)
+            return false
+        state := this.Controls[hwnd]
+        if state.Kind != "text"
+            return false
+        state.SuppressWheelScroll := true
         return true
     }
 
@@ -425,6 +441,9 @@ class MappingUiInteractions {
                             state.TargetHwnd)
                         return 0
                     }
+                    if state.HasOwnProp("SuppressWheelScroll")
+                            && state.SuppressWheelScroll
+                        return 0
                     if state.HasOwnProp("HiddenWheelScrollLines") {
                         wheelDelta := (wParam >> 16) & 0xFFFF
                         if wheelDelta & 0x8000
@@ -1137,9 +1156,7 @@ class MappingUiInteractions {
         if (state.Kind != "button" && state.Kind != "icon")
                 || !FileExist(svgPath)
             return 0
-        windowDpi := DllCall("user32\GetDpiForWindow", "Ptr", hwnd, "UInt")
-        if !windowDpi
-            windowDpi := 96
+        windowDpi := UiScaleService.GetEffectiveDpi(hwnd)
         targetPixels := Max(1, Round(sizeDip * windowDpi / 96))
         snapshot := this.SvgRenderer.RenderFile(svgPath, windowDpi,
             Max(64, Min(512, targetPixels * 4)))
@@ -1516,6 +1533,10 @@ class MappingUiInteractions {
                     && cleanup.Run("释放工具提示",
                         () => this.Tooltip.Dispose())
                 this.Tooltip := ""
+            if IsObject(this.WheelPropagationGuard)
+                    && cleanup.Run("释放滚轮传播边界",
+                        () => this.WheelPropagationGuard.Dispose())
+                this.WheelPropagationGuard := ""
             for controlHwnd, state in this.Controls {
                 if state.Kind == "button"
                     cleanup.Run("清理按钮辅助功能", ObjBindMethod(

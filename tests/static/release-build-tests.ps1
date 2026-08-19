@@ -100,6 +100,10 @@ if ($buildScript -notmatch 'builtInRuleCount' -or
         $buildScript -notmatch 'window-layout\.ini') {
     throw 'The release build no longer enforces its built-in-rule and privacy contract.'
 }
+if ($buildScript -notmatch
+        "SystemPromptEscaped\s*=\s*'DefaultSystemPrompt'") {
+    throw 'The release build mistakes the built-in system prompt for local AI data.'
+}
 if ($scriptRuntime -notmatch
         'QuoteRuntimeCommandArgument\(this\.InterpreterPath\)') {
     throw 'Script-rule workers no longer use the application interpreter.'

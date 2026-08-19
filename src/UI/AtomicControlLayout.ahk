@@ -99,7 +99,9 @@ class AtomicControlLayout {
                 "Int")
             return false
         dpi := this.GetDpi(parentHwnd)
-        return {ParentHwnd: parentHwnd, Dpi: dpi, Scale: dpi / 96}
+        effectiveDpi := UiScaleService.GetEffectiveDpi(parentHwnd)
+        return {ParentHwnd: parentHwnd, Dpi: effectiveDpi,
+            WindowDpi: dpi, Scale: effectiveDpi / 96}
     }
 
     static Apply(parentGui, entries, options := "") {
@@ -253,7 +255,7 @@ class AtomicControlLayout {
     static ApplyHidden(parentHwnd, physicalEntries, changedEntries,
             result) {
         try {
-            this.MoveLogicalDirect(changedEntries)
+            this.MovePhysicalDirect(changedEntries)
             verification := this.ReadAndValidateTargets(physicalEntries,
                 changedEntries, parentHwnd)
             if !verification.Ok
@@ -304,7 +306,8 @@ class AtomicControlLayout {
     }
 
     static GetDpiScale(parentHwnd) {
-        return this.GetDpi(parentHwnd) / 96
+        return Round(this.GetDpi(parentHwnd)
+            * UiScaleService.GetFactor()) / 96
     }
 
     static GetDpi(parentHwnd) {

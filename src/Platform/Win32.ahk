@@ -40,6 +40,7 @@ class Win32 {
     static WM_EXITSIZEMOVE := 0x0232
     static WM_MOUSELEAVE := 0x02A3
     static WM_MOUSEWHEEL := 0x020A
+    static WM_MOUSEHWHEEL := 0x020E
     static IDC_ARROW := 32512
     static IDC_IBEAM := 32513
     static HTCLIENT := 1
@@ -51,7 +52,11 @@ class Win32 {
     static STATE_SYSTEM_OFFSCREEN := 0x00010000
     static EM_GETSEL := 0x00B0
     static EM_SETSEL := 0x00B1
+    static EM_GETRECT := 0x00B2
     static EM_SETRECT := 0x00B3
+    static EM_LINESCROLL := 0x00B6
+    static EM_GETLINECOUNT := 0x00BA
+    static EM_GETFIRSTVISIBLELINE := 0x00CE
     static EM_SETMARGINS := 0x00D3
     static EM_CHARFROMPOS := 0x00D7
     static NM_CUSTOMDRAW := -12

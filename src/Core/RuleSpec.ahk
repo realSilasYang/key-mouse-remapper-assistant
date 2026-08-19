@@ -553,6 +553,9 @@ class RuleSpec {
             if actionType == "key_down" || actionType == "key_up"
                 normalized["value"] := this.NormalizeOutputKeyName(
                     normalized["value"], actionType ".value")
+            else if actionType == "app_command"
+                normalized["value"] := this.NormalizeAppCommandName(
+                    normalized["value"])
         }
         if actionType == "sleep" {
             if !RegExMatch(normalized["value"], "^\d{1,4}$")
@@ -571,6 +574,33 @@ class RuleSpec {
         if repeatPolicy != "inherit"
             normalized["repeat"] := repeatPolicy
         return normalized
+    }
+
+    static NormalizeAppCommandName(value) {
+        identity := StrLower(RegExReplace(Trim(String(value)), "[\s_-]+"))
+        static names := Map(
+            "browserback", "Browser_Back",
+            "browserforward", "Browser_Forward",
+            "browserrefresh", "Browser_Refresh",
+            "browserstop", "Browser_Stop",
+            "browsersearch", "Browser_Search",
+            "browserfavorites", "Browser_Favorites",
+            "browserhome", "Browser_Home",
+            "volumemute", "Volume_Mute",
+            "volumedown", "Volume_Down",
+            "volumeup", "Volume_Up",
+            "medianext", "Media_Next",
+            "mediaprev", "Media_Prev",
+            "mediastop", "Media_Stop",
+            "mediaplaypause", "Media_Play_Pause",
+            "launchmail", "Launch_Mail",
+            "launchmedia", "Launch_Media",
+            "launchapp1", "Launch_App1",
+            "launchapp2", "Launch_App2")
+        if !names.Has(identity)
+            throw Error("app_command.value 不是受支持的应用命令：“"
+                String(value) "”。")
+        return names[identity]
     }
 
     static NormalizeOutputKeyName(value, label) {

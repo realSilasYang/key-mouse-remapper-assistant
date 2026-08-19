@@ -77,7 +77,7 @@ class SettingsWindow {
             this.TabControls.Push([])
             this.TabBuilt.Push(false)
         }
-        this.Gui.SetFont("norm " (isCompact ? "s9" : "s8") " c"
+        this.Gui.SetFont("norm s10 c"
             UiThemeService.Color("TabText"), fontName)
         tabLabels := [Tr("显示"), Tr("启动"), Tr("AI 设置"),
             Tr("规则与事件")]
@@ -130,8 +130,10 @@ class SettingsWindow {
             layout.ContentX, 62, Tr("桌面与开始菜单快捷方式"))
         this.StartupTaskLabel := this.AddSelectableMenuText(pageIndex,
             layout.ContentX, 98, Tr("开机自动启动（计划任务）"))
-        this.ShortcutLabel.GetPos(, , &shortcutLabelWidth)
-        this.StartupTaskLabel.GetPos(, , &taskLabelWidth)
+        UiScaleService.GetControlDesignPos(this.ShortcutLabel, , ,
+            &shortcutLabelWidth)
+        UiScaleService.GetControlDesignPos(this.StartupTaskLabel, , ,
+            &taskLabelWidth)
         integrationLabelWidth := Max(shortcutLabelWidth, taskLabelWidth)
         integrationGap := 18
         integrationButtonWidth := 72
@@ -141,8 +143,9 @@ class SettingsWindow {
             Floor((layout.WindowWidth - integrationGroupWidth) / 2))
         integrationActionX := integrationGroupX + integrationLabelWidth
             + integrationGap
-        this.ShortcutLabel.Move(integrationGroupX)
-        this.StartupTaskLabel.Move(integrationGroupX)
+        UiScaleService.MoveControl(this.ShortcutLabel, integrationGroupX)
+        UiScaleService.MoveControl(this.StartupTaskLabel,
+            integrationGroupX)
         this.ShortcutButton := this.AddTabControl(pageIndex,
             this.AddActionButton(integrationActionX, 58, Tr("创建"),
                 colors.Toolbar, colors.ToolbarText,
@@ -153,13 +156,14 @@ class SettingsWindow {
         this.ShortcutFeedback := this.AddSelectableMenuText(pageIndex,
             integrationActionX, 62, Tr("创建成功！"), 1, 20, "Center")
         this.ShortcutFeedback.SetFont("norm s10", layout.FontName)
-        this.ShortcutFeedback.GetPos(, , &shortcutFeedbackWidth)
+        UiScaleService.GetControlDesignPos(this.ShortcutFeedback, , ,
+            &shortcutFeedbackWidth)
         shortcutFeedbackX := integrationActionX
             + Floor((integrationButtonWidth - shortcutFeedbackWidth) / 2)
         shortcutFeedbackX := Max(integrationActionX - integrationGap + 4,
             Min(shortcutFeedbackX,
                 layout.ContentRight - shortcutFeedbackWidth))
-        this.ShortcutFeedback.Move(shortcutFeedbackX, ,
+        UiScaleService.MoveControl(this.ShortcutFeedback, shortcutFeedbackX, ,
             shortcutFeedbackWidth)
         this.ShortcutFeedback.Visible := false
         this.Interactions.SetButtonLucideIcon(this.ShortcutButton,
@@ -278,6 +282,23 @@ class SettingsWindow {
         this.ThemeDropDown := this.AddTabControl(pageIndex,
             this.AddDropDown(0, 228, menuControlWidth,
                 themeLabels, selectedTheme))
+
+        this.ScaleIcon := this.AddMenuIcon(pageIndex, 272,
+            "sliders-horizontal.svg", colors.DisplayIcon)
+        this.ScaleLabel := this.AddMenuLabel(pageIndex, 272,
+            Tr("界面缩放："))
+        this.ScaleValues := UiScaleService.SupportedPercents.Clone()
+        scaleLabels := []
+        selectedScale := 1
+        for index, value in this.ScaleValues {
+            scaleLabels.Push(value "%")
+            if value == (this.Original.HasOwnProp("UiScalePercent")
+                    ? this.Original.UiScalePercent : 100)
+                selectedScale := index
+        }
+        this.ScaleDropDown := this.AddTabControl(pageIndex,
+            this.AddDropDown(0, 296, menuControlWidth,
+                scaleLabels, selectedScale))
         this.AlignAppearanceTabControls()
         this.ApplySparseMenuTopSpacing(pageIndex)
         this.TabBuilt[pageIndex] := true
@@ -375,7 +396,8 @@ class SettingsWindow {
             this.MeasureRequiredIconButtonWidth(
                 this.AITestConnectionButton, [Tr("测试连接")],
                 testButtonWidth))
-        this.AITestConnectionButton.Move(, , testButtonWidth)
+        UiScaleService.MoveControl(this.AITestConnectionButton, , ,
+            testButtonWidth)
         this.AddTabControl(3, this.AITestConnectionButton)
         this.AIConnectionStatus := this.AddTabControl(3,
             this.Gui.Add("Edit", "x0 y266 w1 h30 ReadOnly Multi Wrap"
@@ -405,7 +427,8 @@ class SettingsWindow {
         top := 0
         bottom := 0
         for controlIndex, control in controls {
-            control.GetPos(, &controlY, , &controlHeight)
+            UiScaleService.GetControlDesignPos(control, , &controlY, ,
+                &controlHeight)
             if controlIndex == 1 || controlY < top
                 top := controlY
             bottom := Max(bottom, controlY + controlHeight)
@@ -413,19 +436,23 @@ class SettingsWindow {
         if bottom - top >= Floor(this.WindowHeight / 2)
             return false
         for control in controls {
-            control.GetPos(, &controlY)
-            control.Move(, controlY + SettingsWindow.SparseMenuTopOffset)
+            UiScaleService.GetControlDesignPos(control, , &controlY)
+            UiScaleService.MoveControl(control, ,
+                controlY + SettingsWindow.SparseMenuTopOffset)
         }
         return true
     }
 
     MoveSettingsInput(input, x, width := 0) {
-        input.Background.GetPos(, &inputY, &currentWidth, &inputHeight)
+        UiScaleService.GetControlDesignPos(input.Background, , &inputY,
+            &currentWidth, &inputHeight)
         if width <= 0
             width := currentWidth
-        input.Edit.GetPos(, , , &editHeight)
-        input.Background.Move(x, inputY, width, inputHeight)
-        input.Edit.Move(x, inputY + Floor((inputHeight - editHeight) / 2),
+        UiScaleService.GetControlDesignPos(input.Edit, , , , &editHeight)
+        UiScaleService.MoveControl(input.Background, x, inputY, width,
+            inputHeight)
+        UiScaleService.MoveControl(input.Edit, x,
+            inputY + Floor((inputHeight - editHeight) / 2),
             width, editHeight)
         return true
     }
@@ -436,7 +463,8 @@ class SettingsWindow {
         catch
             clientWidth := 0
         if clientWidth > 0
-            width := clientWidth
+            width := UiScaleService.IsPrepared(this.Gui)
+                ? UiScaleService.ToDesign(clientWidth) : clientWidth
         return width
     }
 
@@ -444,11 +472,16 @@ class SettingsWindow {
         if !this.HasOwnProp("LanguageLabel")
             return false
         iconSlotWidth := 28
-        labels := [this.LanguageLabel, this.FontLabel, this.ThemeLabel]
-        this.LanguageDropDown.GetPos(, , &languageWidth)
-        this.FontDropDown.GetPos(, , &fontWidth)
-        this.ThemeDropDown.GetPos(, , &themeWidth)
-        itemWidths := [languageWidth, fontWidth, themeWidth]
+        labels := [this.LanguageLabel, this.FontLabel, this.ThemeLabel,
+            this.ScaleLabel]
+        UiScaleService.GetControlDesignPos(this.LanguageDropDown, , ,
+            &languageWidth)
+        UiScaleService.GetControlDesignPos(this.FontDropDown, , , &fontWidth)
+        UiScaleService.GetControlDesignPos(this.ThemeDropDown, , ,
+            &themeWidth)
+        UiScaleService.GetControlDesignPos(this.ScaleDropDown, , ,
+            &scaleWidth)
+        itemWidths := [languageWidth, fontWidth, themeWidth, scaleWidth]
         for label in labels
             itemWidths.Push(this.MeasureControlTextWidth(label, label.Text)
                 + iconSlotWidth + 2)
@@ -456,28 +489,34 @@ class SettingsWindow {
         for spec in [
                 {Icon: this.LanguageIcon, Label: this.LanguageLabel},
                 {Icon: this.FontIcon, Label: this.FontLabel},
-                {Icon: this.ThemeIcon, Label: this.ThemeLabel}] {
-            spec.Icon.Move(layout.X)
-            spec.Label.Move(layout.X + iconSlotWidth, ,
+                {Icon: this.ThemeIcon, Label: this.ThemeLabel},
+                {Icon: this.ScaleIcon, Label: this.ScaleLabel}] {
+            UiScaleService.MoveControl(spec.Icon, layout.X)
+            UiScaleService.MoveControl(spec.Label,
+                layout.X + iconSlotWidth, ,
                 this.GetSelectableTextWidth(spec.Label))
         }
-        this.LanguageDropDown.Move(layout.X)
-        this.FontDropDown.Move(layout.X)
-        this.ThemeDropDown.Move(layout.X)
+        UiScaleService.MoveControl(this.LanguageDropDown, layout.X)
+        UiScaleService.MoveControl(this.FontDropDown, layout.X)
+        UiScaleService.MoveControl(this.ThemeDropDown, layout.X)
+        UiScaleService.MoveControl(this.ScaleDropDown, layout.X)
         return true
     }
 
     AlignEventTabControls() {
         if !this.HasOwnProp("EventCapacityLabel")
             return false
-        this.EventCapacityInput.Background.GetPos(, , &inputWidth)
-        this.EscapeCancelCheck.GetPos(, , &escapeWidth)
-        this.EventAutoScrollCheck.GetPos(, , &autoScrollWidth)
+        UiScaleService.GetControlDesignPos(this.EventCapacityInput.Background,
+            , , &inputWidth)
+        UiScaleService.GetControlDesignPos(this.EscapeCancelCheck, , ,
+            &escapeWidth)
+        UiScaleService.GetControlDesignPos(this.EventAutoScrollCheck, , ,
+            &autoScrollWidth)
         layout := this.AlignMenuColumn([this.EventCapacityLabel],
             [inputWidth, escapeWidth, autoScrollWidth])
         this.MoveSettingsInput(this.EventCapacityInput, layout.X, inputWidth)
-        this.EscapeCancelCheck.Move(layout.X)
-        this.EventAutoScrollCheck.Move(layout.X)
+        UiScaleService.MoveControl(this.EscapeCancelCheck, layout.X)
+        UiScaleService.MoveControl(this.EventAutoScrollCheck, layout.X)
         return true
     }
 
@@ -487,8 +526,10 @@ class SettingsWindow {
         clientWidth := this.GetActualClientWidth()
         labels := [this.AIAddressLabel, this.AIKeyLabel, this.AIModelLabel,
             this.AITimeoutLabel]
-        this.AIAddressInput.Background.GetPos(, , &wideInputWidth)
-        this.AITestConnectionButton.GetPos(, , &testButtonWidth)
+        UiScaleService.GetControlDesignPos(this.AIAddressInput.Background,
+            , , &wideInputWidth)
+        UiScaleService.GetControlDesignPos(this.AITestConnectionButton,
+            , , &testButtonWidth)
         timeoutRowWidth := 96 + 12 + testButtonWidth
         layout := this.AlignMenuColumn(labels,
             [wideInputWidth, timeoutRowWidth], clientWidth)
@@ -498,21 +539,24 @@ class SettingsWindow {
         this.MoveSettingsInput(this.AIModelInput, layout.X, wideInputWidth)
         this.MoveSettingsInput(this.AITimeoutInput, layout.X, 96)
         testButtonX := layout.X + 108
-        this.AITestConnectionButton.Move(testButtonX)
+        UiScaleService.MoveControl(this.AITestConnectionButton, testButtonX)
         statusX := testButtonX + testButtonWidth
             + SettingsWindow.AIConnectionStatusGap
         statusWidth := Max(1,
             clientWidth - SettingsWindow.AIConnectionStatusRightMargin
                 - statusX)
-        this.AIConnectionStatus.Move(statusX, 266, statusWidth, 30)
+        UiScaleService.MoveControl(this.AIConnectionStatus, statusX, 266,
+            statusWidth, 30)
         this.LayoutAIConnectionStatus(this.AIConnectionStatus.Text)
         promptLabelWidth := this.GetSelectableTextWidth(
             this.AIPromptsLabel)
         promptRowWidth := promptLabelWidth + 12 + 80
         promptRowX := Max(this.Layout.ContentX,
             Floor((clientWidth - promptRowWidth) / 2))
-        this.AIPromptsLabel.Move(promptRowX, , promptLabelWidth)
-        this.AIPromptsButton.Move(promptRowX + promptLabelWidth + 12)
+        UiScaleService.MoveControl(this.AIPromptsLabel, promptRowX, ,
+            promptLabelWidth)
+        UiScaleService.MoveControl(this.AIPromptsButton,
+            promptRowX + promptLabelWidth + 12)
         return true
     }
 
@@ -536,14 +580,6 @@ class SettingsWindow {
         try settings := this.GetAIConnectionSettings()
         catch as validationError {
             this.SetAIConnectionStatus(validationError.Message, "Error")
-            return false
-        }
-        try {
-            this.App.SaveAIConnectionSettings(settings)
-            this.Original := this.App.Settings
-        } catch as saveError {
-            this.SetAIConnectionStatus(Tr("AI 参数未保存：{1}",
-                TrDiagnostic(saveError.Message)), "Error")
             return false
         }
         if !IsObject(this.App.AIService) {
@@ -618,6 +654,7 @@ class SettingsWindow {
         this.AIConnectionStatus.SetFont("c"
             this.ResolveAIConnectionStatusColor(colorName),
             LocalizationService.GetUiFontName())
+        UiScaleService.RefreshGuiFonts(this.Gui)
         this.AIConnectionStatus.Text := String(message)
         this.LayoutAIConnectionStatus(message)
         return true
@@ -627,7 +664,8 @@ class SettingsWindow {
         if !this.HasOwnProp("AIConnectionStatus")
                 || !this.AIConnectionStatus
             return false
-        this.AIConnectionStatus.GetPos(&statusX, , &statusWidth)
+        UiScaleService.GetControlDesignPos(this.AIConnectionStatus,
+            &statusX, , &statusWidth)
         statusWidth := Max(1, statusWidth)
         SetMultilineEditPadding(this.AIConnectionStatus.Hwnd, 1, 2, 1, 2)
         textHeight := message == "" ? 0
@@ -644,7 +682,7 @@ class SettingsWindow {
         maximumHeight := SettingsWindow.AIConnectionStatusBottom
             - SettingsWindow.AIConnectionStatusTop
         statusHeight := Min(maximumHeight, requiredHeight)
-        this.AIConnectionStatus.Move(statusX,
+        UiScaleService.MoveControl(this.AIConnectionStatus, statusX,
             SettingsWindow.AIConnectionStatusBottom - statusHeight,
             statusWidth, statusHeight)
         if statusHeight == 30 && message != "" {
@@ -678,6 +716,7 @@ class SettingsWindow {
         this.ValidationStatusColorName := colorName
         this.ValidationStatus.SetFont("c" UiThemeService.Color(colorName),
             LocalizationService.GetUiFontName())
+        UiScaleService.RefreshGuiFonts(this.Gui)
         this.ValidationStatus.Text := String(message)
         return true
     }
@@ -718,7 +757,7 @@ class SettingsWindow {
 
     CreateTabButton(index, x, width, text, iconName, iconColor := "none") {
         button := this.Gui.Add("Text", "x" x " y12 w" width
-            " h28 Center 0x200 Background" UiThemeService.Color("Tab")
+            " h30 Center 0x200 Background" UiThemeService.Color("Tab")
                 " c" UiThemeService.Color("TabText"), text)
         this.TabButtons.Push(button)
         this.TabButtonPages.Push(index)
@@ -767,6 +806,8 @@ class SettingsWindow {
 
     AddTabControl(index, control) {
         this.TabControls[index].Push(control)
+        if UiScaleService.IsPrepared(this.Gui)
+            UiScaleService.PrepareGui(this.Gui)
         if this.ActiveTab && index != this.ActiveTab
             try control.Visible := false
         return control
@@ -784,12 +825,14 @@ class SettingsWindow {
             " h" height " " alignment
             " ReadOnly -TabStop -Border -E0x200 -VScroll -HScroll"
             " Background" colors.Window " c" colors.Text, String(text))
+        if UiScaleService.IsPrepared(this.Gui)
+            UiScaleService.PrepareGui(this.Gui)
         ApplyDarkControl(control.Hwnd)
         if !this.Interactions.RegisterTextInput(control, "", "arrow")
             throw Error("无法注册可选择菜单文字。")
         if width <= 1
-            control.Move(, , this.MeasureControlTextWidth(control,
-                control.Text) + 2)
+            UiScaleService.MoveControl(control, , ,
+                this.MeasureControlTextWidth(control, control.Text) + 2)
         this.SelectableTextControls.Push(control)
         return index > 0 ? this.AddTabControl(index, control) : control
     }
@@ -825,7 +868,8 @@ class SettingsWindow {
         menuX := Max(this.Layout.ContentX,
             Floor((clientWidth - menuWidth) / 2))
         for label in labels
-            label.Move(menuX, , this.GetSelectableTextWidth(label), 20)
+            UiScaleService.MoveControl(label, menuX, ,
+                this.GetSelectableTextWidth(label), 20)
         return {X: menuX, Width: menuWidth}
     }
 
@@ -893,10 +937,7 @@ class SettingsWindow {
                     deviceContext, "Str", text, "Int", StrLen(text),
                     "Ptr", extent, "Int")
                 return StrLen(text) * 12
-            windowDpi := DllCall("user32\GetDpiForWindow", "Ptr",
-                control.Hwnd, "UInt")
-            if !windowDpi
-                windowDpi := 96
+            windowDpi := UiScaleService.GetDesignMeasurementDpi(control.Hwnd)
             return Ceil(NumGet(extent, 0, "Int") * 96 / windowDpi)
         } finally {
             if previousFont
@@ -919,6 +960,8 @@ class SettingsWindow {
             case 4: this.BuildRulesAndEventTab()
             default: return false
         }
+        if UiScaleService.IsPrepared(this.Gui)
+            UiScaleService.PrepareGui(this.Gui)
         return this.TabBuilt[index]
     }
 
@@ -1107,7 +1150,8 @@ class SettingsWindow {
             this.Interactions.SetParentColor(colors.Window)
 
             for controlHwnd, control in this.Gui {
-                try control.GetPos(, , &controlWidth, &controlHeight)
+                try UiScaleService.GetControlDesignPos(control, , ,
+                    &controlWidth, &controlHeight)
                 catch
                     continue
                 if controlWidth == 1 || controlHeight == 1
@@ -1116,7 +1160,8 @@ class SettingsWindow {
 
             textControls := ["ShortcutLabel", "StartupTaskLabel",
                 "ShortcutFeedback", "LanguageLabel", "FontLabel",
-                "ThemeLabel", "EventCapacityLabel", "EscapeCancelCheck",
+                "ThemeLabel", "ScaleLabel", "EventCapacityLabel",
+                "EscapeCancelCheck",
                 "EventAutoScrollCheck", "CheckUpdatesOnStartupCheck",
                 "RunAsAdministratorCheck", "ShowAtStartupCheck",
                 "AIAddressLabel", "AIKeyLabel",
@@ -1135,7 +1180,9 @@ class SettingsWindow {
                     {Name: "FontIcon", Icon: "type.svg",
                         Color: colors.FontIcon},
                     {Name: "ThemeIcon", Icon: "palette.svg",
-                        Color: colors.ThemeIcon}] {
+                        Color: colors.ThemeIcon},
+                    {Name: "ScaleIcon", Icon: "sliders-horizontal.svg",
+                        Color: colors.DisplayIcon}] {
                 if this.HasOwnProp(spec.Name) && this.%spec.Name% {
                     this.Interactions.SetIconSurfaceAppearance(
                         this.%spec.Name%, colors.Window, spec.Color)
@@ -1159,7 +1206,7 @@ class SettingsWindow {
                 this.LayoutAIConnectionStatus(this.AIConnectionStatus.Text)
 
             for dropDownName in ["LanguageDropDown", "FontDropDown",
-                    "ThemeDropDown"] {
+                    "ThemeDropDown", "ScaleDropDown"] {
                 if this.HasOwnProp(dropDownName) && this.%dropDownName%
                     this.%dropDownName%.Opt("Background" colors.Input
                         " c" colors.Text)
@@ -1182,7 +1229,7 @@ class SettingsWindow {
             for buttonIndex, button in this.TabButtons {
                 active := this.TabButtonPages[buttonIndex] == this.ActiveTab
                 this.ApplyTabButtonAppearance(buttonIndex, button, active)
-                button.SetFont("bold", systemFont)
+                button.SetFont("s10 bold", systemFont)
             }
             buttonSpecs := [
                 {Name: "ShortcutButton", Color: colors.Toolbar,
@@ -1226,6 +1273,7 @@ class SettingsWindow {
                 this.Interactions.SetButtonLucideIcon(
                     this.ExportRulePackageButton, "file-output.svg", 15, 6,
                     colors.RulesEventIcon)
+            UiScaleService.RefreshGuiFonts(this.Gui)
             this.AlignAppearanceTabControls()
             this.AlignAITabControls()
             this.AlignEventTabControls()
@@ -1237,7 +1285,7 @@ class SettingsWindow {
 
     ApplyComboBoxThemes() {
         for dropDownName in ["LanguageDropDown", "FontDropDown",
-                "ThemeDropDown"] {
+                "ThemeDropDown", "ScaleDropDown"] {
             if this.HasOwnProp(dropDownName) && this.%dropDownName%
                 ApplyDarkComboBoxTheme(this.%dropDownName%.Hwnd)
         }
@@ -1330,6 +1378,8 @@ class SettingsWindow {
         uiLanguage := this.Original.UiLanguage
         uiFont := this.Original.UiFont
         theme := this.Original.Theme
+        uiScalePercent := this.Original.HasOwnProp("UiScalePercent")
+            ? this.Original.UiScalePercent : 100
         showAtStartup := this.Original.ShowAtStartup
         runAsAdministrator := this.Original.RunAsAdministrator
         checkUpdatesOnStartup := this.Original.CheckUpdatesOnStartup
@@ -1337,6 +1387,7 @@ class SettingsWindow {
             uiLanguage := this.LanguageValues[this.LanguageDropDown.Value]
             uiFont := this.FontValues[this.FontDropDown.Value]
             theme := this.ThemeValues[this.ThemeDropDown.Value]
+            uiScalePercent := this.ScaleValues[this.ScaleDropDown.Value]
         }
         if this.TabBuilt[2] {
             showAtStartup := this.ShowAtStartupCheck.Value != 0
@@ -1363,6 +1414,7 @@ class SettingsWindow {
         }
         return {
             UiLanguage: uiLanguage, UiFont: uiFont, Theme: theme,
+            UiScalePercent: uiScalePercent,
             ShowAtStartup: showAtStartup,
             RunAsAdministrator: runAsAdministrator,
             CheckUpdatesOnStartup: checkUpdatesOnStartup,
@@ -1535,7 +1587,7 @@ class SettingsWindow {
                 this.FontDropDownCommandRegistered := false
         }
         for dropDownName in ["LanguageDropDown", "FontDropDown",
-                "ThemeDropDown"] {
+                "ThemeDropDown", "ScaleDropDown"] {
             if this.HasOwnProp(dropDownName) && this.%dropDownName% {
                 dropDown := this.%dropDownName%
                 cleanup.Run("注销下拉框主题",

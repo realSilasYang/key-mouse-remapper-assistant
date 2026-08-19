@@ -28,8 +28,10 @@
 #Include ..\..\src\Core\MappingCodeRepository.ahk
 #Include ..\..\src\Platform\Win32.ahk
 #Include ..\..\src\Platform\WindowHierarchy.ahk
+#Include ..\..\src\UI\UiScaleService.ahk
 #Include ..\..\src\UI\ThemeHelpers.ahk
 #Include ..\..\src\UI\AtomicControlLayout.ahk
+#Include ..\..\src\UI\WindowWheelPropagationGuard.ahk
 class SystemIntegrationService {
     static ApplicationUserModelId := "realSilasYang.KeyMouseRemapperAssistant"
 }
@@ -52,6 +54,8 @@ ExitApp(RunMappingWindowSmoothScrollTests() ? 0 : 1)
 
 RunMappingWindowSmoothScrollTests() {
     window := ""
+    overlayGui := ""
+    overlayGuard := ""
     try {
         LocalizationService.Configure("zh-CN", "")
         UiThemeService.Configure("dark")
@@ -119,6 +123,29 @@ RunMappingWindowSmoothScrollTests() {
             "The reversed smooth-scroll queue did not finish.")
 
         ResetSmoothScrollList(window)
+        overlayGui := Gui("+Owner" window.Gui.Hwnd,
+            "wheel propagation overlay")
+        overlayEdit := overlayGui.Add("Edit", "x0 y0 w240 h120 VScroll",
+            "overlay`nwheel`ncontent")
+        overlayGuard :=
+            WindowWheelPropagationGuard.ForOwnedWindow(overlayGui)
+        overlayGui.Show("x" screenX " y" screenY " w240 h120 NA")
+        window.WheelMessageCallCount := 0
+        PostMessage(Win32.WM_MOUSEWHEEL, wheelDownWParam,
+            packedScreenPoint, , overlayEdit.Hwnd)
+        Sleep(50)
+        SmoothScrollAssert(window.WheelMessageCallCount == 1
+                && GetSmoothScrollTopIndex(window) == 0
+                && window.PendingListScrollLines == 0,
+            Format("A foreground owned window leaked wheel input into the covered main list: calls={1}, top={2}, pending={3}.",
+                window.WheelMessageCallCount,
+                GetSmoothScrollTopIndex(window),
+                window.PendingListScrollLines))
+        overlayGuard.Dispose()
+        overlayGuard := ""
+        overlayGui.Destroy()
+        overlayGui := ""
+
         smallDeltaWParam := ((-40 & 0xFFFF) << 16)
         SendMessage(Win32.WM_MOUSEWHEEL, smallDeltaWParam, 0, ,
             window.List.Hwnd)
@@ -145,6 +172,10 @@ RunMappingWindowSmoothScrollTests() {
         FileAppend(testError.Message "`n" testError.Stack "`n", "**")
         return false
     } finally {
+        if IsObject(overlayGuard)
+            try overlayGuard.Dispose()
+        if IsObject(overlayGui)
+            try overlayGui.Destroy()
         if IsObject(window)
             try window.Dispose()
     }

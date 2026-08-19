@@ -587,10 +587,8 @@ class RoundedButtonPainter {
             DllCall("gdiplus\GdipSetCompositingQuality", "Ptr", graphics, "Int", 2)
             DllCall("gdiplus\GdipGraphicsClear", "Ptr", graphics,
                 "UInt", this.ColorToArgb(this.ParentColor))
-            surfaceDpi := DllCall("user32\GetDpiForWindow", "Ptr",
-                state.Control.Hwnd, "UInt")
-            if !surfaceDpi
-                surfaceDpi := 96
+            surfaceDpi := UiScaleService.GetEffectiveDpi(
+                state.Control.Hwnd)
             radiusDip := state.HasOwnProp("RadiusDip")
                 ? state.RadiusDip : RoundedButtonPainter.RadiusDip
             radius := Max(3, Round(radiusDip * surfaceDpi / 96))
@@ -625,10 +623,7 @@ class RoundedButtonPainter {
             DllCall("gdi32\SetBkMode", "Ptr", hdc, "Int", 1)
             DllCall("gdi32\SetTextColor", "Ptr", hdc,
                 "UInt", this.ColorToBgr(state.TextColor))
-            textDpi := DllCall("user32\GetDpiForWindow", "Ptr",
-                state.Control.Hwnd, "UInt")
-            if !textDpi
-                textDpi := 96
+            textDpi := UiScaleService.GetEffectiveDpi(state.Control.Hwnd)
             insetDip := state.HasOwnProp("TextInsetDip")
                 ? state.TextInsetDip : 6
             inset := Max(0, Round(insetDip * textDpi / 96))
@@ -802,10 +797,7 @@ class RoundedButtonPainter {
     DrawCenteredClearMark(hdc, width, height, state) {
         if !this.Ready || !hdc || width <= 0 || height <= 0
             return false
-        dpi := DllCall("user32\GetDpiForWindow", "Ptr",
-            state.Control.Hwnd, "UInt")
-        if !dpi
-            dpi := 96
+        dpi := UiScaleService.GetEffectiveDpi(state.Control.Hwnd)
         size := Min(width, height, Max(4.0,
             state.ClearMarkSizeDip * dpi / 96))
         stroke := Max(1.0, state.ClearMarkStrokeDip * dpi / 96)
@@ -894,10 +886,7 @@ class RoundedButtonPainter {
             measureDpi := IsObject(layoutRound)
                     && layoutRound.HasOwnProp("Dpi")
                 ? layoutRound.Dpi
-                : DllCall("user32\GetDpiForWindow", "Ptr",
-                    control.Hwnd, "UInt")
-            if !measureDpi
-                measureDpi := 96
+                : UiScaleService.GetDesignMeasurementDpi(control.Hwnd)
             inset := Round(horizontalInsetDip * measureDpi / 96)
             reservedWidth := Round(reservedWidthDip * measureDpi / 96)
             pixelWidth := Max(1, Round(width * measureDpi / 96)
@@ -935,10 +924,7 @@ class RoundedButtonPainter {
                     "Ptr", backgroundBrush, "Int")
                 return false
 
-            dpi := DllCall("user32\GetDpiForWindow", "Ptr",
-                state.Control.Hwnd, "UInt")
-            if !dpi
-                dpi := 96
+            dpi := UiScaleService.GetEffectiveDpi(state.Control.Hwnd)
             dashWidth := Max(1, Round(state.DashWidthDip * dpi / 96))
             dashGap := Max(1, Round(state.DashGapDip * dpi / 96))
             dashHeight := Max(1, Round(state.DashHeightDip * dpi / 96))

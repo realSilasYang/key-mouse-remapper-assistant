@@ -7,6 +7,40 @@ categories based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## 🚧 [Unreleased]
 
+## 🎉 Version [1.0.2] - 2026-08-19
+
+### 📦 Release Assets
+
+- **`fonts.zip` (optional font package):** Provides Noto fallback UI fonts for installation into Windows; it is not required to run the application.
+- **`key-mouse-remapper-assistant-1.0.2-source.zip` (complete source package):** Includes runnable AHK source, application modules, assets other than fonts, all thirteen README languages, bilingual changelogs, tests, and build tools; intended for review, development, or source execution and requires AutoHotkey v2 x64.
+- **`key-mouse-remapper-assistant-1.0.2-windows-x64.zip` (complete portable package, recommended):** Includes the compiled EXE, editable mapping source, all thirteen README languages, bilingual changelogs, licenses, application modules, UI assets other than fonts, fixed AutoHotkey v2.0.26 x64 runtime, and matching source archive; requires no AutoHotkey installation and is intended for long-term use after full extraction.
+
+---
+
+### ✨ Added
+
+- **Interface scaling:** Appearance settings now offer 100%, 110%, 125%, 150%, 175%, and 200% scaling for text and controls across the main window, editor, settings, and auxiliary windows; changing the value reloads the application.
+- **Undo for AI optimization:** After an AI optimization is applied in the editor, `Ctrl+Z` restores the pre-optimization content and `Ctrl+Shift+Z` reapplies it. Further manual edits return to the editor's own undo history.
+
+---
+
+### 🚀 Improvements
+
+- **Readability and layout:** Increased undersized interface fonts and adjusted headers, labels, buttons, status areas, and dialogs to match. The main capture area now uses a shorter name field, equal-width Save and Clear buttons, and a dedicated full-width status region.
+- **AI rule capability:** The model now receives fuller rule-block limits, AHK v2 runtime details, input timing guidance, managed lifecycle behavior, and local validation feedback. Generated scripts must include detailed comments that accurately describe the implementation, including during repair and review passes.
+- **Settings commit behavior:** Connection testing uses the temporary AI values currently shown in the window without persisting them. All settings are committed only when Save is selected, so canceling cannot leave partial changes behind.
+- **Interface previews:** Refreshed the dark and light main-window screenshots used by all thirteen README languages to match the current capture area, status bar, and list appearance.
+
+---
+
+### 🐛 Fixed
+
+- **Wheel isolation:** Mouse-wheel and horizontal-wheel messages handled by child windows no longer propagate to their owner, preventing the background main window from scrolling while an editor, Settings, or dialog is active.
+- **Capture and shortcuts:** `Ctrl+N` now creates a rule even when no main-list item is selected. Selecting Clear during capture ends the capture and clears the value instead of recording the left mouse button.
+- **Long status rendering:** Long status messages after adding or editing a rule now wrap inside their own bottom region without clipping, overlap, or button artifacts during resize, theme refresh, or dynamic layout updates.
+- **Scaling and drawing stability:** Fixed repeated control scaling, font measurement, rounded-button geometry, list-column widths, dialog regions, and minimum-window sizing at custom scales, and completed cleanup of scaled GDI font resources.
+- **Built-in rule integrity:** Restored the 18 built-in rules as 13 rule blocks and 5 managed scripts, and reinstated exact rule-count enforcement in release builds.
+
 ## 🎉 Version [1.0.1] - 2026-08-15
 
 ### 📦 Release Assets
@@ -129,7 +163,8 @@ categories based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Product and data location:** Standardized product identifiers and `%APPDATA%\KeyMouseRemapperAssistant`.
 - **Release compatibility:** Locked AutoHotkey and build tools and aligned UTF-8 behavior across Windows PowerShell 5.1 and PowerShell 7.
 
-[Unreleased]: https://github.com/realSilasYang/key-mouse-remapper-assistant/compare/v1.0.1...HEAD
+[Unreleased]: https://github.com/realSilasYang/key-mouse-remapper-assistant/compare/v1.0.2...HEAD
+[1.0.2]: https://github.com/realSilasYang/key-mouse-remapper-assistant/releases/tag/v1.0.2
 [1.0.1]: https://github.com/realSilasYang/key-mouse-remapper-assistant/releases/tag/v1.0.1
 [1.0.0]: https://github.com/realSilasYang/key-mouse-remapper-assistant/releases/tag/v1.0.0
 [0.1.1]: https://github.com/realSilasYang/key-mouse-remapper-assistant/releases/tag/v0.1.1

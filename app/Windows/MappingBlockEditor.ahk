@@ -19,8 +19,8 @@ class MappingBlockEditor {
     static ModeSelectorBottomGap := 14
     static TitleTop := 14
     static TitleMinimumHeight := 24
-    static TitleBottomGap := 16
-    static CodeEditorTop := 54
+    static TitleBottomGap := 18
+    static CodeEditorTop := 56
     static EditorLineSpacingTwips := 340
 
     __New(ownerWindow, mapping, isNew := false, confirmCallback := "",
@@ -36,7 +36,8 @@ class MappingBlockEditor {
         this.ConfirmCallback := IsObject(confirmCallback)
             ? confirmCallback : ShowDarkConfirmBox.Bind()
         this.PurposePromptCallback := IsObject(purposePromptCallback)
-            ? purposePromptCallback : ShowDarkTextInputBox.Bind()
+            ? purposePromptCallback
+            : ObjBindMethod(this, "ShowAiPurposePrompt")
         this.AiReviewCallback := IsObject(aiReviewCallback)
             ? aiReviewCallback : ShowDarkTextComparisonDialog.Bind()
         this.IsNew := isNew
@@ -111,15 +112,20 @@ class MappingBlockEditor {
         this.AiCandidateText := ""
         this.AiRepairAttempts := 0
         this.AiReviewAttempts := 0
+        this.AiOptimizationUndoText := ""
+        this.AiOptimizationUndoMode := ""
+        this.AiOptimizationRedoText := ""
+        this.AiOptimizationRedoMode := ""
+        this.AiOptimizationHistoryState := ""
         this.RichEditModule := DllCall("kernel32\LoadLibraryExW",
             "WStr", "Msftedit.dll", "Ptr", 0, "UInt", 0x00000800, "Ptr")
         if !this.RichEditModule
             throw Error("无法加载代码编辑控件。")
         try {
             windowTitle := isNew ? Tr("新增映射代码") : Tr("编辑映射代码")
-            minimumSize := " +MinSize"
-                . MappingBlockEditor.EditorMinimumWidth "x"
-                . MappingBlockEditor.EditorMinimumHeight
+            minimumSize := " " UiScaleService.ScaleMinSizeOptions(
+                MappingBlockEditor.EditorMinimumWidth,
+                MappingBlockEditor.EditorMinimumHeight)
             this.Gui := Gui("+Owner" ownerWindow.Gui.Hwnd
                 " +Resize +MinimizeBox" minimumSize " +OwnDialogs",
                 windowTitle)
@@ -294,9 +300,9 @@ class MappingBlockEditor {
     AddModeButton(x, text, mode, width) {
         colors := MappingWindow.Colors
         button := this.Gui.Add("Text", "x" x " y10 w"
-            width " h30 Center 0x200 "
+            width " h32 Center 0x200 "
             . "Background" colors.Toolbar " c" colors.ToolbarText, text)
-        button.SetFont("s9 bold",
+        button.SetFont("s10 bold",
             LocalizationService.GetLanguageSystemUiFontName())
         callback := ObjBindMethod(this, "SwitchEditorMode", mode)
         if !this.Interactions.RegisterButton(button, colors.Toolbar,
@@ -418,7 +424,7 @@ class MappingBlockEditor {
         this.SetCodeSelectionHighlightVisible(false)
         ShowPreparedWindow(this.Gui, "w" MappingBlockEditor.EditorWidth
             " h" MappingBlockEditor.EditorHeight,
-            ObjBindMethod(this, "PrepareFirstVisibleEditorSurface"))
+            ObjBindMethod(this, "PrepareFirstVisibleEditorSurface"), true)
         this.UpdateLineNumbers()
         this.CodeEdit.Opt("+TabStop")
         this.PrepareInitialCodeCaret()
@@ -514,8 +520,14 @@ class MappingBlockEditor {
         this.RefreshAISettingsLinkBounds()
         this.ApplyNativeThemes(false)
         this.ApplyLineNumberAppearance()
-        if this.IsNew
+        if this.IsNew {
+            for modeButton in [this.ManagedModeButton,
+                    this.ScriptModeButton]
+                modeButton.SetFont("s10 bold",
+                    LocalizationService.GetLanguageSystemUiFontName())
             this.RefreshModeSelectorAppearance()
+        }
+        UiScaleService.RefreshGuiFonts(this.Gui)
         this.ApplyEditorFonts(true)
         this.RelayoutCurrentSize()
         DllCall("user32\RedrawWindow", "Ptr", this.Gui.Hwnd,
@@ -659,6 +671,15 @@ class MappingBlockEditor {
         }
         this.AiPurposeRetryText := purpose
         return {Accepted: true, Value: purpose}
+    }
+
+    ShowAiPurposePrompt(message, title, confirmText, cancelText,
+            emptyMessage, ownerGui, initialValue := "") {
+        svgRenderer := this.App.HasOwnProp("SvgRenderer")
+                && IsObject(this.App.SvgRenderer)
+            ? this.App.SvgRenderer : ""
+        return ShowDarkTextInputBox(message, title, confirmText, cancelText,
+            emptyMessage, ownerGui, initialValue, svgRenderer)
     }
 
     GetAiPurposeQuestion(operation) {
@@ -854,6 +875,21 @@ class MappingBlockEditor {
             this.RefreshModeSelectorAppearance()
             return this.FinishAiPipelineFailure(
                 Tr("AI 结果无法应用到编辑器，请重试。"))
+        }
+        if operation == "optimize"
+                && this.Canonicalize(currentText)
+                    != this.Canonicalize(normalizedText) {
+            this.AiOptimizationUndoText := currentText
+            this.AiOptimizationUndoMode := previousMode
+            this.AiOptimizationRedoText := normalizedText
+            this.AiOptimizationRedoMode := this.EditorMode
+            this.AiOptimizationHistoryState := "applied"
+        } else if operation == "optimize" {
+            this.AiOptimizationUndoText := ""
+            this.AiOptimizationUndoMode := ""
+            this.AiOptimizationRedoText := ""
+            this.AiOptimizationRedoMode := ""
+            this.AiOptimizationHistoryState := ""
         }
         this.AiPurposeRetryText := ""
         this.FinishAiPipeline(false)
@@ -2324,6 +2360,7 @@ class MappingBlockEditor {
         this.Status.SetFont("c" (isError ? MappingWindow.Colors.Error
             : MappingWindow.Colors.Muted),
             LocalizationService.GetUiFontName())
+        UiScaleService.RefreshGuiFonts(this.Gui)
         this.Interactions.HideTextInputCaret(this.Status.Hwnd)
         this.RelayoutCurrentSize()
         return true
@@ -2349,6 +2386,7 @@ class MappingBlockEditor {
             options .= " underline"
         this.AISettingsLink.SetFont(options,
             LocalizationService.GetUiFontName())
+        UiScaleService.RefreshGuiFonts(this.Gui)
         return true
     }
 
@@ -2360,9 +2398,11 @@ class MappingBlockEditor {
                 this.AISettingsLink.Text) + 1
         try {
             this.Gui.GetClientPos(, , &clientWidth)
+            clientWidth := UiScaleService.ToDesign(clientWidth)
             availableWidth := Max(1, clientWidth - 336)
-            this.AISettingsLink.GetPos(&x, &y, , &height)
-            this.AISettingsLink.Move(x, y,
+            UiScaleService.GetControlDesignPos(this.AISettingsLink,
+                &x, &y, , &height)
+            UiScaleService.MoveControl(this.AISettingsLink, x, y,
                 Min(availableWidth, this.AISettingsLinkPreferredWidth),
                 height)
         }
@@ -2386,10 +2426,7 @@ class MappingBlockEditor {
                     "Str", text, "Int", StrLen(text), "Ptr", extent,
                     "Int")
                 return StrLen(text) * 12
-            dpi := DllCall("user32\GetDpiForWindow", "Ptr", control.Hwnd,
-                "UInt")
-            if !dpi
-                dpi := 96
+            dpi := UiScaleService.GetDesignMeasurementDpi(control.Hwnd)
             return Ceil(NumGet(extent, 0, "Int") * 96 / dpi)
         } finally {
             if previousFont
@@ -2451,6 +2488,16 @@ class MappingBlockEditor {
         ctrlDown := GetKeyState("Ctrl", "P")
         shiftDown := GetKeyState("Shift", "P")
         altDown := GetKeyState("Alt", "P")
+        if ctrlDown && !altDown && wParam == 0x5A {
+            if !shiftDown && this.TryUndoAiOptimization() {
+                this.SetStatus(Tr("已撤销上一步映射变更。"))
+                return 0
+            }
+            if shiftDown && this.TryRedoAiOptimization() {
+                this.SetStatus(Tr("已重做映射变更。"))
+                return 0
+            }
+        }
         if hwnd == this.CodeEdit.Hwnd {
             shortcutResult := this.HandleCodeEditorShortcut(wParam,
                 ctrlDown, shiftDown, altDown)
@@ -2466,16 +2513,75 @@ class MappingBlockEditor {
     HandleCodeEditorShortcut(wParam, ctrlDown, shiftDown, altDown) {
         if !ctrlDown || altDown
             return -1
+        if wParam == 0x5A && !shiftDown {
+            if this.TryUndoAiOptimization() {
+                this.SetStatus(Tr("已撤销上一步映射变更。"))
+                return 0
+            }
+            return -1
+        }
         if wParam == 0x59 && !shiftDown { ; Ctrl+Y: delete line
             this.DeleteSelectedLines()
             return 0
         }
         if wParam == 0x5A && shiftDown { ; Ctrl+Shift+Z: redo
+            if this.TryRedoAiOptimization() {
+                this.SetStatus(Tr("已重做映射变更。"))
+                return 0
+            }
             this.SendControlMessage(0x0454, 0, 0,
                 this.CodeEditHwnd) ; EM_REDO
             return 0
         }
         return -1
+    }
+
+    TryUndoAiOptimization() {
+        if this.Disposed || this.AiOptimizationHistoryState != "applied"
+                || this.AiOptimizationRedoText == ""
+            return false
+        try currentText := this.Canonicalize(this.GetCodeText())
+        catch
+            return false
+        if currentText != this.Canonicalize(this.AiOptimizationRedoText)
+            return false
+        if !this.ApplyAiOptimizationHistoryText(
+                this.AiOptimizationUndoText, this.AiOptimizationUndoMode)
+            return false
+        this.AiOptimizationHistoryState := "undone"
+        return true
+    }
+
+    TryRedoAiOptimization() {
+        if this.Disposed || this.AiOptimizationHistoryState != "undone"
+                || this.AiOptimizationRedoText == ""
+            return false
+        try currentText := this.Canonicalize(this.GetCodeText())
+        catch
+            return false
+        if currentText != this.Canonicalize(this.AiOptimizationUndoText)
+            return false
+        if !this.ApplyAiOptimizationHistoryText(
+                this.AiOptimizationRedoText, this.AiOptimizationRedoMode)
+            return false
+        this.AiOptimizationHistoryState := "applied"
+        return true
+    }
+
+    ApplyAiOptimizationHistoryText(text, mode) {
+        previousMode := this.EditorMode
+        mode := StrLower(Trim(String(mode)))
+        if mode != "" && mode != this.EditorMode {
+            this.EditorMode := mode
+            this.ApplyEditorTextLimit()
+            this.RefreshModeSelectorAppearance()
+        }
+        if this.ReplaceEditorTextAtomically(text)
+            return true
+        this.EditorMode := previousMode
+        this.ApplyEditorTextLimit()
+        this.RefreshModeSelectorAppearance()
+        return false
     }
 
     DeleteSelectedLines() {
@@ -2526,6 +2632,11 @@ class MappingBlockEditor {
         if notificationCode == 0x0300 {
             if this.Formatting || this.SuppressEditorChange
                 return
+            this.AiOptimizationUndoText := ""
+            this.AiOptimizationUndoMode := ""
+            this.AiOptimizationRedoText := ""
+            this.AiOptimizationRedoMode := ""
+            this.AiOptimizationHistoryState := ""
             this.EditorRevision++
             this.CachedTextRevision := -1
             this.LastFormattedRevision := -1
@@ -2897,7 +3008,8 @@ class MappingBlockEditor {
         ; CFM_BOLD。显式清除粗体并固定 400 字重，避免继承 GUI 标题字体。
         NumPut("UInt", 0xE8400001, characterFormat, 4)
         NumPut("UInt", 0, characterFormat, 8)
-        NumPut("Int", 13 * 20, characterFormat, 12)
+        NumPut("Int", Round(13 * 20 * UiScaleService.GetFactor()),
+            characterFormat, 12)
         NumPut("UInt", ColorRef(color), characterFormat, 20)
         NumPut("UChar", characterSet, characterFormat, 24)
         StrPut(faceName, characterFormat.Ptr + 26, 32, "UTF-16")
@@ -2940,7 +3052,8 @@ class MappingBlockEditor {
         paragraphFormat := Buffer(188, 0) ; PARAFORMAT2
         NumPut("UInt", paragraphFormat.Size, paragraphFormat, 0)
         NumPut("UInt", 0x00000100, paragraphFormat, 4) ; PFM_LINESPACING
-        NumPut("Int", MappingBlockEditor.EditorLineSpacingTwips,
+        NumPut("Int", Round(MappingBlockEditor.EditorLineSpacingTwips
+            * UiScaleService.GetFactor()),
             paragraphFormat, 164)
         NumPut("UChar", 4, paragraphFormat, 170) ; 精确 twips 行距
         return !!this.SendControlMessage(0x0447, 0,
@@ -2950,6 +3063,8 @@ class MappingBlockEditor {
     OnResize(guiObj, minMax, width, height) {
         if minMax == -1 || this.Disposed || width <= 0 || height <= 0
             return
+        width := UiScaleService.ToDesign(width)
+        height := UiScaleService.ToDesign(height)
         layoutRound := AtomicControlLayout.BeginRound(this.Gui)
         if !IsObject(layoutRound)
             return false
@@ -2964,10 +3079,10 @@ class MappingBlockEditor {
             titleWidth := Max(220, managedModeX - 22)
             entries.Push({Control: this.ManagedModeButton,
                 X: managedModeX, Y: 10,
-                Width: this.ModeButtonWidth, Height: 30})
+                Width: this.ModeButtonWidth, Height: 32})
             entries.Push({Control: this.ScriptModeButton,
                 X: scriptModeX, Y: 10,
-                Width: this.ModeButtonWidth, Height: 30})
+                Width: this.ModeButtonWidth, Height: 32})
         }
         titleHeight := this.GetTitleHeight(titleWidth, layoutRound)
         codeEditorTop := this.GetCodeEditorTop(titleWidth, layoutRound)
@@ -3218,6 +3333,7 @@ class MappingBlockEditor {
         this.FormatTimer := ""
         this.ScrollTimer := ""
         this.CommandCallback := ""
+        this.PurposePromptCallback := ""
         this.AISettingsLinkMouseCallback := ""
         this.KeyDownCallback := ""
         this.ImeCompositionCallback := ""

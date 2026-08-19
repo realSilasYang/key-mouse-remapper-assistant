@@ -12,6 +12,7 @@ class KeyMouseRemapperAssistantApp {
         this.SettingsService := AppSettingsService(this.DataDirectory
             "\settings.ini")
         this.Settings := this.SettingsService.Load()
+        UiScaleService.Configure(this.Settings.UiScalePercent)
         this.RuleAppearanceService := RuleAppearanceService(
             this.DataDirectory "\rule-appearance.json")
         try this.RuleColors := this.RuleAppearanceService.Load()
@@ -58,6 +59,8 @@ class KeyMouseRemapperAssistantApp {
             "ApplyPendingScriptMappings")
         this.ElevationRestartTimer := ObjBindMethod(this,
             "RestartWithConfiguredElevation")
+        this.UiScaleRestartTimer := ObjBindMethod(this,
+            "RestartAfterUiScaleChange")
         this.RawObservationDepth := 0
         this.ShuttingDown := false
         this.CallbacksRegistered := false
@@ -1054,19 +1057,10 @@ class KeyMouseRemapperAssistantApp {
             this.SettingsWindow := ""
     }
 
-    SaveAIConnectionSettings(aiSettings) {
-        candidate := this.SettingsService.Normalize(this.Settings)
-        candidate.AIAddress := aiSettings.AIAddress
-        candidate.AIKey := aiSettings.AIKey
-        candidate.AIModel := aiSettings.AIModel
-        candidate.AITimeoutS := aiSettings.AITimeoutS
-        previousSnapshot := this.SettingsService.GetSnapshot()
-        this.Settings := this.SettingsService.Save(candidate, previousSnapshot)
-        return true
-    }
-
     SaveSettings(candidate) {
         previousSettings := this.Settings
+        previousScale := previousSettings.HasOwnProp("UiScalePercent")
+            ? previousSettings.UiScalePercent : 100
         try {
             previousSnapshot := this.SettingsService.GetSnapshot()
             nextSettings := this.SettingsService.Save(candidate, previousSnapshot)
@@ -1110,11 +1104,22 @@ class KeyMouseRemapperAssistantApp {
             this.Window.SetStatus(Tr("设置未保存：{1}", detail), true)
             return false
         }
-        this.Window.SetStatus(Tr("设置已保存并已应用。"))
+        nextScale := nextSettings.HasOwnProp("UiScalePercent")
+            ? nextSettings.UiScalePercent : previousScale
+        if previousScale != nextScale
+            this.Window.SetStatus(Tr("界面缩放已保存，正在重新加载…"))
+        else
+            this.Window.SetStatus(Tr("设置已保存并已应用。"))
         return true
     }
 
     ApplySettingsRuntime(settings) {
+        requestedScale := settings.HasOwnProp("UiScalePercent")
+            ? settings.UiScalePercent : UiScaleService.GetPercent()
+        scaleChanged := UiScaleService.GetPercent() != requestedScale
+        languageOrFontChanged := LocalizationService.RequestedLanguage
+                != settings.UiLanguage
+            || LocalizationService.RequestedUiFont != settings.UiFont
         appearanceChanged := LocalizationService.RequestedLanguage
                 != settings.UiLanguage
             || LocalizationService.RequestedUiFont != settings.UiFont
@@ -1135,16 +1140,29 @@ class KeyMouseRemapperAssistantApp {
             SetTimer(this.ElevationRestartTimer, -1)
         else
             SetTimer(this.ElevationRestartTimer, 0)
+        if scaleChanged || (UiScaleService.GetPercent() != 100
+                && languageOrFontChanged)
+            SetTimer(this.UiScaleRestartTimer, -50)
         return true
+    }
+
+    RestartAfterUiScaleChange(*) {
+        if this.ShuttingDown
+            return false
+        return this.ReloadApplication(this.Settings.RunAsAdministrator
+            && !A_IsAdmin)
     }
 
     ApplyOpenWindowAppearances() {
         this.Window.ApplyAppearance()
+        UiScaleService.RefreshGuiFonts(this.Window.Gui)
         for propertyName in ["SettingsWindow", "PackageImportPreview",
                 "EventViewer", "SupportInfo", "Help", "Donation", "About"] {
             window := this.%propertyName%
-            if IsObject(window) && !window.Disposed
+            if IsObject(window) && !window.Disposed {
                 window.ApplyAppearance()
+                UiScaleService.RefreshGuiFonts(window.Gui)
+            }
         }
         return true
     }
@@ -1650,6 +1668,8 @@ class KeyMouseRemapperAssistantApp {
             try SetTimer(this.PendingScriptApplyTimer, 0)
         if IsObject(this.ElevationRestartTimer)
             try SetTimer(this.ElevationRestartTimer, 0)
+        if IsObject(this.UiScaleRestartTimer)
+            try SetTimer(this.UiScaleRestartTimer, 0)
         this.PendingScriptApply := ""
         this.TrySaveMainWindowLayout()
         ; Runtime shutdown may wait for isolated script-rule processes. Hide

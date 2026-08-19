@@ -49,9 +49,7 @@ class DarkTooltipWindow {
         if !IsObject(this.Gui)
             return false
 
-        windowDpi := DllCall("user32\GetDpiForWindow", "Ptr", hwnd, "UInt")
-        if !windowDpi
-            windowDpi := 96
+        windowDpi := UiScaleService.GetEffectiveDpi(hwnd)
         point := Buffer(8, 0)
         DllCall("user32\GetCursorPos", "Ptr", point)
         x := NumGet(point, 0, "Int") + Round(12 * windowDpi / 96)
@@ -60,7 +58,8 @@ class DarkTooltipWindow {
         maximumTextWidth := Max(80,
             Floor((workArea.Right - workArea.Left - 32) * 96 / windowDpi))
         size := this.MeasureText(text, Min(440, maximumTextWidth), windowDpi)
-        this.TextControl.Move(, , size.Width, size.Height)
+        UiScaleService.MoveControl(this.TextControl, , , size.Width,
+            size.Height)
         this.Gui.Show("Hide AutoSize")
         this.Gui.GetPos(, , &tooltipWidth, &tooltipHeight)
         tooltipWidth := Min(tooltipWidth,
@@ -86,6 +85,7 @@ class DarkTooltipWindow {
                 LocalizationService.GetUiFontName())
             this.TextControl := this.Gui.Add("Text", "Background"
                 style.Background " c" style.Text " +Wrap", text)
+            UiScaleService.PrepareGui(this.Gui, false)
             if VerCompare(A_OSVersion, "10.0.22000") >= 0
                 try DllCall("dwmapi\DwmSetWindowAttribute", "Ptr",
                     this.Gui.Hwnd, "Int", 33, "Int*", 2, "Int", 4)

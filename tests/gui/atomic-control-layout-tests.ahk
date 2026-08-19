@@ -2,6 +2,7 @@
 #SingleInstance Off
 #Warn All, StdOut
 
+#Include ..\..\src\UI\UiScaleService.ahk
 #Include ..\..\src\UI\AtomicControlLayout.ahk
 
 atomicLayoutExitCode := RunAtomicControlLayoutTests()
@@ -157,6 +158,7 @@ RunAtomicControlLayoutTests() {
                 blockedBefore + 1,
                 AtomicControlLayoutEraseGuard.ActiveHwndCounts.Count))
 
+        ValidateUiScaleGeometry()
         ReportAtomicLayoutResult("PASS atomic-control-layout`n")
     } catch as testError {
         ReportAtomicLayoutResult(testError.Message "`n"
@@ -167,6 +169,52 @@ RunAtomicControlLayoutTests() {
             try guiObj.Destroy()
     }
     return exitCode
+}
+
+ValidateUiScaleGeometry() {
+    scaledGui := ""
+    try {
+        UiScaleService.Configure(125)
+        scaledGui := Gui()
+        scaledGui.MarginX := 0
+        scaledGui.MarginY := 0
+        scaledGui.BackColor := "202020"
+        scaledGui.SetFont("s10", "Segoe UI")
+        control := scaledGui.Add("Text", "x20 y24 w120 h28", "Scale")
+        baseFont := SendMessage(0x0031, 0, 0, , control.Hwnd)
+        baseSpec := Buffer(92, 0)
+        DllCall("gdi32\GetObjectW", "Ptr", baseFont, "Int", baseSpec.Size,
+            "Ptr", baseSpec.Ptr)
+        baseHeight := Abs(NumGet(baseSpec, 0, "Int"))
+        AtomicLayoutAssert(UiScaleService.PrepareGui(scaledGui),
+            "The scaled GUI could not be prepared.")
+        control.GetPos(&x, &y, &width, &height)
+        AtomicLayoutAssert(x == 25 && y == 30 && width == 150
+                && height == 35,
+            "Fixed control geometry did not follow the interface scale.")
+        scaledFont := SendMessage(0x0031, 0, 0, , control.Hwnd)
+        scaledSpec := Buffer(92, 0)
+        DllCall("gdi32\GetObjectW", "Ptr", scaledFont, "Int",
+            scaledSpec.Size, "Ptr", scaledSpec.Ptr)
+        AtomicLayoutAssert(Abs(NumGet(scaledSpec, 0, "Int")) > baseHeight,
+            "Control fonts did not follow the interface scale.")
+        layoutRound := AtomicControlLayout.BeginRound(scaledGui)
+        result := AtomicControlLayout.Apply(scaledGui, [{
+            Control: control, X: 32, Y: 36, Width: 128, Height: 30
+        }], {ParentColor: scaledGui.BackColor, Round: layoutRound})
+        bounds := AtomicControlLayout.GetControlBounds(control.Hwnd,
+            scaledGui.Hwnd)
+        AtomicLayoutAssert(result.Status == AtomicControlLayout.Applied
+                && bounds.Left == Round(32 * layoutRound.Scale)
+                && bounds.Top == Round(36 * layoutRound.Scale)
+                && bounds.Right - bounds.Left
+                    == Round(128 * layoutRound.Scale),
+            "Responsive layout did not use the effective scaled DPI.")
+    } finally {
+        if IsObject(scaledGui)
+            try scaledGui.Destroy()
+        UiScaleService.Configure(100)
+    }
 }
 
 ReportAtomicLayoutResult(message, isError := false) {

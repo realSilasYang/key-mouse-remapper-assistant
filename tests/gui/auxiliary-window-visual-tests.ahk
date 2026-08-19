@@ -28,8 +28,10 @@
 #Include ..\..\src\Config\AppSettingsService.ahk
 #Include ..\..\src\Platform\Win32.ahk
 #Include ..\..\src\Platform\WindowHierarchy.ahk
+#Include ..\..\src\UI\UiScaleService.ahk
 #Include ..\..\src\UI\ThemeHelpers.ahk
 #Include ..\..\src\UI\AtomicControlLayout.ahk
+#Include ..\..\src\UI\WindowWheelPropagationGuard.ahk
 class SystemIntegrationService {
     static ApplicationUserModelId := "realSilasYang.KeyMouseRemapperAssistant"
 }
@@ -127,9 +129,11 @@ RunAuxiliaryWindowVisualTests() {
         textInputVisualDialog := DarkTextInputDialog(
             Tr("我是来帮你的，你要干什么？！"), Tr("生成重映射规则"),
             Tr("生成"), Tr("取消"), Tr("请输入规则目的。"),
-            ownerWindow.Gui, "上次失败时输入的规则目的")
+            ownerWindow.Gui, "上次失败时输入的规则目的",
+            ownerWindow.App.SvgRenderer)
         textInputVisualDialog.TextEdit.GetPos(, , &purposeInputWidth,
             &purposeInputHeight)
+        textInputVisualDialog.TextEdit.GetPos(, &purposeInputY)
         textInputVisualDialog.ConfirmButton.GetPos(, &compactConfirmY)
         inputConfirmState := textInputVisualDialog.Interactions.Controls[
             textInputVisualDialog.ConfirmButton.Hwnd]
@@ -144,11 +148,22 @@ RunAuxiliaryWindowVisualTests() {
                 && textInputVisualDialog.CurrentWindowHeight == 220
                 && !textInputVisualDialog.Status.Visible
                 && compactConfirmY == DarkTextInputDialog.CompactButtonY
+                && compactConfirmY - (purposeInputY + purposeInputHeight)
+                    > DarkTextInputDialog.WindowHeight
+                        - (compactConfirmY + DarkDialogBase.ButtonHeight)
+                && inputConfirmState.Normal
+                    == MappingWindow.Colors.AIButton
+                && inputConfirmState.TextColor
+                    == MappingWindow.Colors.AIButtonText
                 && textInputVisualDialog.Interactions.TextInputTargets.Has(
                     textInputVisualDialog.TextEdit.Hwnd)
-                && !inputConfirmState.HasOwnProp("ButtonImage")
+                && inputConfirmState.HasOwnProp("ButtonImage")
+                && inputConfirmState.ButtonImage.TintColor
+                    == MappingWindow.Colors.AIIcon
+                && InStr(inputConfirmState.ButtonImage.SourcePath,
+                    "pencil-sparkles.svg")
                 && !inputCancelState.HasOwnProp("ButtonImage"),
-            "The AI-purpose dialog does not expose a compact selectable input.")
+            "The AI-purpose dialog does not reuse the AI action style.")
         textInputVisualDialog.TextEdit.Value := "  "
         AuxiliaryVisualAssert(!textInputVisualDialog.Confirm()
                 && textInputVisualDialog.Status.Text
@@ -158,7 +173,12 @@ RunAuxiliaryWindowVisualTests() {
                     == DarkTextInputDialog.ErrorWindowHeight,
             "The AI-purpose dialog accepted an empty purpose.")
         textInputVisualDialog.ConfirmButton.GetPos(, &errorConfirmY)
+        textInputVisualDialog.Status.GetPos(, &errorStatusY, ,
+            &errorStatusHeight)
         AuxiliaryVisualAssert(errorConfirmY == DarkTextInputDialog.ErrorButtonY
+                && errorConfirmY - (errorStatusY + errorStatusHeight)
+                    > DarkTextInputDialog.ErrorWindowHeight
+                        - (errorConfirmY + DarkDialogBase.ButtonHeight)
                 && textInputVisualDialog.ClearValidationError()
                 && !textInputVisualDialog.Status.Visible
                 && textInputVisualDialog.CurrentWindowHeight
@@ -387,6 +407,10 @@ RunAuxiliaryWindowVisualTests() {
         AuxiliaryVisualAssert(WinGetClass("ahk_id "
                 settingsVisualDialog.TabButtons[3].Hwnd) != "Edit",
             "A settings tab was converted into selectable menu text.")
+        persistedAIAddress := ownerWindow.App.Settings.AIAddress
+        persistedAIKey := ownerWindow.App.Settings.AIKey
+        persistedAIModel := ownerWindow.App.Settings.AIModel
+        persistedAITimeout := ownerWindow.App.Settings.AITimeoutS
         settingsVisualDialog.AIAddressInput.Edit.Value := ""
         AuxiliaryVisualAssert(!settingsVisualDialog.TestAIConnection()
                 && settingsVisualDialog.AIConnectionStatus.Text
@@ -405,26 +429,24 @@ RunAuxiliaryWindowVisualTests() {
         AssertRegisteredSelectableEdit(settingsVisualDialog.Interactions,
             settingsVisualDialog.AIConnectionStatus,
             "AI connection result")
-        originalAIAddress := settingsVisualDialog.AIAddressInput.Edit.Value
-        originalAIKey := settingsVisualDialog.AIKeyInput.Edit.Value
-        originalAIModel := settingsVisualDialog.AIModelInput.Edit.Value
-        originalAITimeout := settingsVisualDialog.AITimeoutInput.Edit.Value
-        ownerWindow.App.FailAIConnectionSettingsSave := true
-        AuxiliaryVisualAssert(!settingsVisualDialog.TestAIConnection()
-                && ownerWindow.App.SaveAIConnectionSettingsCount == 1
-                && ownerWindow.App.AIService.NextRequestId == 0
-                && InStr(settingsVisualDialog.AIConnectionStatus.Text,
-                    Tr("AI 参数未保存：")),
-            "Connection testing continued after AI parameter persistence failed.")
-        ownerWindow.App.FailAIConnectionSettingsSave := false
+        draftAIAddress := settingsVisualDialog.AIAddressInput.Edit.Value
+        draftAIKey := settingsVisualDialog.AIKeyInput.Edit.Value
+        draftAIModel := settingsVisualDialog.AIModelInput.Edit.Value
+        draftAITimeout := settingsVisualDialog.AITimeoutInput.Edit.Value
         AuxiliaryVisualAssert(settingsVisualDialog.TestAIConnection()
                 && settingsVisualDialog.AIConnectionTestBusy
-                && ownerWindow.App.SaveAIConnectionSettingsCount == 2
-                && ownerWindow.App.Settings.AIAddress == originalAIAddress
-                && ownerWindow.App.Settings.AIKey == originalAIKey
-                && ownerWindow.App.Settings.AIModel == originalAIModel
+                && ownerWindow.App.AIService.LastSettings.AIAddress
+                    == draftAIAddress
+                && ownerWindow.App.AIService.LastSettings.AIKey == draftAIKey
+                && ownerWindow.App.AIService.LastSettings.AIModel
+                    == draftAIModel
+                && String(ownerWindow.App.AIService.LastSettings.AITimeoutS)
+                    == String(draftAITimeout)
+                && ownerWindow.App.Settings.AIAddress == persistedAIAddress
+                && ownerWindow.App.Settings.AIKey == persistedAIKey
+                && ownerWindow.App.Settings.AIModel == persistedAIModel
                 && String(ownerWindow.App.Settings.AITimeoutS)
-                    == String(originalAITimeout)
+                    == String(persistedAITimeout)
                 && settingsVisualDialog.AIConnectionStatus.Text
                     == Tr("正在测试 AI 连接…")
                 && settingsVisualDialog.ResolveAIConnectionStatusColor(
@@ -472,15 +494,15 @@ RunAuxiliaryWindowVisualTests() {
                     "AI 连接测试失败：{1}",
                     "API 密钥：身份验证失败，密钥或访问令牌无效、已过期或未被接受（HTTP 401）。")
                 && settingsVisualDialog.AIAddressInput.Edit.Value
-                    == originalAIAddress
-                && settingsVisualDialog.AIKeyInput.Edit.Value == originalAIKey
+                    == draftAIAddress
+                && settingsVisualDialog.AIKeyInput.Edit.Value == draftAIKey
                 && settingsVisualDialog.AIModelInput.Edit.Value
-                    == originalAIModel
+                    == draftAIModel
                 && settingsVisualDialog.AITimeoutInput.Edit.Value
-                    == originalAITimeout
-                && ownerWindow.App.Settings.AIAddress == originalAIAddress
-                && ownerWindow.App.Settings.AIKey == originalAIKey
-                && ownerWindow.App.Settings.AIModel == originalAIModel
+                    == draftAITimeout
+                && ownerWindow.App.Settings.AIAddress == persistedAIAddress
+                && ownerWindow.App.Settings.AIKey == persistedAIKey
+                && ownerWindow.App.Settings.AIModel == persistedAIModel
                 && failedConnectionStatusY < testButtonY
                 && failedConnectionStatusHeight > testButtonHeight
                 && failedConnectionStatusY + failedConnectionStatusHeight
@@ -520,16 +542,15 @@ RunAuxiliaryWindowVisualTests() {
             "https://example.test/v1/chat/completions")
         AuxiliaryVisualAssert(!settingsVisualDialog.AIConnectionTestBusy
                 && settingsVisualDialog.AIAddressInput.Edit.Value
-                    == originalAIAddress
-                && settingsVisualDialog.AIKeyInput.Edit.Value == originalAIKey
+                    == draftAIAddress
+                && settingsVisualDialog.AIKeyInput.Edit.Value == draftAIKey
                 && settingsVisualDialog.AIModelInput.Edit.Value
-                    == originalAIModel
+                    == draftAIModel
                 && settingsVisualDialog.AITimeoutInput.Edit.Value
-                    == originalAITimeout
-                && ownerWindow.App.SaveAIConnectionSettingsCount == 3
-                && ownerWindow.App.Settings.AIAddress == originalAIAddress
-                && ownerWindow.App.Settings.AIKey == originalAIKey
-                && ownerWindow.App.Settings.AIModel == originalAIModel
+                    == draftAITimeout
+                && ownerWindow.App.Settings.AIAddress == persistedAIAddress
+                && ownerWindow.App.Settings.AIKey == persistedAIKey
+                && ownerWindow.App.Settings.AIModel == persistedAIModel
                 && settingsVisualDialog.AIConnectionStatus.Text
                     == Tr("AI 连接测试成功。")
                 && settingsVisualDialog.Interactions.Controls[
@@ -539,14 +560,14 @@ RunAuxiliaryWindowVisualTests() {
         reloadedAISettingsDialog := SettingsWindow(ownerWindow, 3)
         try AuxiliaryVisualAssert(
                 reloadedAISettingsDialog.AIAddressInput.Edit.Value
-                    == originalAIAddress
+                    == persistedAIAddress
                 && reloadedAISettingsDialog.AIKeyInput.Edit.Value
-                    == originalAIKey
+                    == persistedAIKey
                 && reloadedAISettingsDialog.AIModelInput.Edit.Value
-                    == originalAIModel
+                    == persistedAIModel
                 && reloadedAISettingsDialog.AITimeoutInput.Edit.Value
-                    == originalAITimeout,
-            "Saved AI connection parameters were not restored in a new window.")
+                    == persistedAITimeout,
+            "Unsaved AI connection parameters leaked into a new settings window.")
         finally reloadedAISettingsDialog.Dispose()
         AuxiliaryVisualAssert(settingsVisualDialog.SetAIConnectionStatus(
                 "persistent result", "Success"),
@@ -564,46 +585,57 @@ RunAuxiliaryWindowVisualTests() {
             "The Appearance tab is not the first settings tab.")
         for label in [settingsVisualDialog.LanguageLabel,
                 settingsVisualDialog.FontLabel,
-                settingsVisualDialog.ThemeLabel]
+                settingsVisualDialog.ThemeLabel,
+                settingsVisualDialog.ScaleLabel]
             AssertSelectableSettingsText(label, "Display settings label")
         settingsVisualDialog.LanguageLabel.GetPos(&languageLabelX,
             &languageLabelY)
         settingsVisualDialog.FontLabel.GetPos(&fontLabelX, &fontLabelY)
         settingsVisualDialog.ThemeLabel.GetPos(&themeLabelX, &themeLabelY)
+        settingsVisualDialog.ScaleLabel.GetPos(&scaleLabelX, &scaleLabelY)
         settingsVisualDialog.LanguageIcon.GetPos(&languageIconX,
             &languageIconY)
         settingsVisualDialog.FontIcon.GetPos(&fontIconX, &fontIconY)
         settingsVisualDialog.ThemeIcon.GetPos(&themeIconX, &themeIconY)
+        settingsVisualDialog.ScaleIcon.GetPos(&scaleIconX, &scaleIconY)
         languageIconState := settingsVisualDialog.Interactions.Controls[
             settingsVisualDialog.LanguageIcon.Hwnd]
         fontIconState := settingsVisualDialog.Interactions.Controls[
             settingsVisualDialog.FontIcon.Hwnd]
         themeIconState := settingsVisualDialog.Interactions.Controls[
             settingsVisualDialog.ThemeIcon.Hwnd]
-        AuxiliaryVisualAssert(languageLabelY
-                == 68 + SettingsWindow.SparseMenuTopOffset
-                && fontLabelY == 136 + SettingsWindow.SparseMenuTopOffset
-                && themeLabelY == 204 + SettingsWindow.SparseMenuTopOffset,
+        scaleIconState := settingsVisualDialog.Interactions.Controls[
+            settingsVisualDialog.ScaleIcon.Hwnd]
+        AuxiliaryVisualAssert(languageLabelY == 68
+                && fontLabelY == 136
+                && themeLabelY == 204
+                && scaleLabelY == 272,
             "The compact Appearance menu has incorrect vertical spacing.")
         AuxiliaryVisualAssert(languageIconX == languageLabelX - 28
                 && fontIconX == fontLabelX - 28
                 && themeIconX == themeLabelX - 28
+                && scaleIconX == scaleLabelX - 28
                 && languageIconY == languageLabelY
-                && fontIconY == fontLabelY && themeIconY == themeLabelY,
+                && fontIconY == fontLabelY && themeIconY == themeLabelY
+                && scaleIconY == scaleLabelY,
             "The Appearance Lucide icons are misaligned with their labels.")
         AuxiliaryVisualAssert(languageIconState.Kind == "icon"
                 && fontIconState.Kind == "icon"
                 && themeIconState.Kind == "icon"
+                && scaleIconState.Kind == "icon"
                 && languageIconState.TextInsetDip == 0
                 && fontIconState.TextInsetDip == 0
-                && themeIconState.TextInsetDip == 0,
+                && themeIconState.TextInsetDip == 0
+                && scaleIconState.TextInsetDip == 0,
             "The Appearance icons are not zero-inset icon surfaces.")
         AuxiliaryVisualAssert(languageIconState.ButtonImage.TintColor
                     == UiThemeService.Color("LanguageIcon")
                 && fontIconState.ButtonImage.TintColor
                     == UiThemeService.Color("FontIcon")
                 && themeIconState.ButtonImage.TintColor
-                    == UiThemeService.Color("ThemeIcon"),
+                    == UiThemeService.Color("ThemeIcon")
+                && scaleIconState.ButtonImage.TintColor
+                    == UiThemeService.Color("DisplayIcon"),
             "The Appearance Lucide icons lack their semantic colors.")
         AuxiliaryVisualAssert(settingsVisualDialog.SwitchTab(2)
                 && settingsVisualDialog.HasOwnProp("StartupTaskButton")
@@ -672,7 +704,9 @@ RunAuxiliaryWindowVisualTests() {
             {Label: settingsVisualDialog.FontLabel,
                 Control: settingsVisualDialog.FontDropDown},
             {Label: settingsVisualDialog.ThemeLabel,
-                Control: settingsVisualDialog.ThemeDropDown}
+                Control: settingsVisualDialog.ThemeDropDown},
+            {Label: settingsVisualDialog.ScaleLabel,
+                Control: settingsVisualDialog.ScaleDropDown}
         ]
         eventFields := [
             {Label: settingsVisualDialog.EventCapacityLabel,
@@ -682,7 +716,8 @@ RunAuxiliaryWindowVisualTests() {
             settingsClientWidth, "Appearance settings",
             [settingsVisualDialog.LanguageIcon,
                 settingsVisualDialog.FontIcon,
-                settingsVisualDialog.ThemeIcon], 28)
+                settingsVisualDialog.ThemeIcon,
+                settingsVisualDialog.ScaleIcon], 28)
         AssertStackedMenuColumn(settingsVisualDialog, eventFields,
             settingsClientWidth, "Event settings",
             [settingsVisualDialog.EscapeCancelCheck,
@@ -1115,7 +1150,10 @@ ValidateUiFontPersistence(explicitFont) {
         settings := service.Load()
         AuxiliaryVisualAssert(settings.RunAsAdministrator,
             "Administrator startup did not default to enabled.")
+        AuxiliaryVisualAssert(settings.UiScalePercent == 100,
+            "Interface scaling did not default to 100 percent.")
         settings.UiFont := explicitFont
+        settings.UiScalePercent := 125
         settings.RunAsAdministrator := false
         settings.AIPrompt := "generate line 1`r`ngenerate=line 2\\literal"
         settings.AIOptimizePrompt := "optimize line 1`noptimize=line 2\\literal"
@@ -1128,11 +1166,16 @@ ValidateUiFontPersistence(explicitFont) {
         reloaded := AppSettingsService(settingsPath).Load()
         AuxiliaryVisualAssert(saved.UiFont == explicitFont
                 && reloaded.UiFont == explicitFont
+                && saved.UiScalePercent == 125
+                && reloaded.UiScalePercent == 125
                 && !saved.RunAsAdministrator
                 && !reloaded.RunAsAdministrator
                 && InStr(service.GetSnapshot(),
                     "RunAsAdministrator=0"),
             "The selected content font did not survive a settings reload.")
+        AuxiliaryVisualAssert(InStr(service.GetSnapshot(),
+                "UiScalePercent=125"),
+            "The interface scaling value was not persisted.")
         AuxiliaryVisualAssert(reloaded.AISystemPrompt
                 == "line 1`nline 2\\literal",
             "The multiline AI system prompt did not survive a settings reload.")
@@ -1692,6 +1735,7 @@ class AuxiliaryVisualApp {
     __New() {
         this.Settings := {
             UiLanguage: "zh-CN", UiFont: "auto", Theme: "dark",
+            UiScalePercent: 100,
             ShowAtStartup: false, RunAsAdministrator: true,
             CheckUpdatesOnStartup: true,
             EscapeCancelsRecording: true, EventBufferCapacity: 1000,
@@ -1708,19 +1752,6 @@ class AuxiliaryVisualApp {
         this.Repository := AuxiliaryVisualRepository()
         this.UpdateService := AuxiliaryVisualUpdateService()
         this.PackageService := AuxiliaryVisualPackageService()
-        this.SaveAIConnectionSettingsCount := 0
-        this.FailAIConnectionSettingsSave := false
-    }
-
-    SaveAIConnectionSettings(settings) {
-        this.SaveAIConnectionSettingsCount++
-        if this.FailAIConnectionSettingsSave
-            throw Error("planned AI settings persistence failure")
-        this.Settings.AIAddress := settings.AIAddress
-        this.Settings.AIKey := settings.AIKey
-        this.Settings.AIModel := settings.AIModel
-        this.Settings.AITimeoutS := settings.AITimeoutS
-        return true
     }
 
     GetStartupTaskState(*) => {Status: "missing"}

@@ -7,6 +7,40 @@
 
 ## 🚧 [未发布]
 
+## 🎉 版本 [1.0.2] - 2026-08-19
+
+### 📦 发布物说明
+
+- **`fonts.zip`（可选字体包）**：提供 Noto 回退界面字体，需先安装到 Windows；它不是程序运行必需。
+- **`key-mouse-remapper-assistant-1.0.2-source.zip`（完整源码版）**：包含可运行 AHK 源码、应用模块、除字体外的资源、13 语 README、双语更新日志、测试和构建工具，适合审阅、开发或从源码运行；本机需要 AutoHotkey v2 x64。
+- **`key-mouse-remapper-assistant-1.0.2-windows-x64.zip`（完整便携版，推荐）**：包含编译 EXE、可编辑映射源码、13 语 README、双语更新日志、许可证、应用模块、除字体外的界面资源、固定 AutoHotkey v2.0.26 x64 运行时及对应源码归档；无需另行安装 AutoHotkey，适合完整解压后长期使用。
+
+---
+
+### ✨ 新增
+
+- **界面缩放**：显示设置新增 100%、110%、125%、150%、175% 和 200% 缩放，可统一放大主窗口、编辑器、设置及其他辅助窗口的文字和控件；更改后自动重新加载应用。
+- **AI 优化撤销**：AI 优化结果应用到编辑器后，可用 `Ctrl+Z` 恢复优化前内容，并用 `Ctrl+Shift+Z` 重做；用户继续手动编辑后回归编辑器自身的撤销历史。
+
+---
+
+### 🚀 优化
+
+- **界面可读性与布局**：统一增大过小字号，并同步调整表头、标签、按钮、状态区和弹窗尺寸；主界面录制区压缩名称输入高度，保存与清空按钮等宽排布，底部状态文本获得完整独立空间。
+- **AI 规则能力**：向模型提供更完整的规则块能力边界、AHK v2 运行环境、输入时序、受托管生命周期和本地校验反馈；生成脚本需提供与实现一致的详细注释，修复与复核阶段沿用同一约束。
+- **设置提交语义**：连接测试只使用窗口中的临时 AI 参数，不再提前写入设置；所有设置统一在点击“保存”后提交，取消窗口不会留下部分更改。
+- **界面预览**：更新 13 种语言 README 使用的深色和浅色主界面截图，使文档与当前录制区、状态栏及列表外观一致。
+
+---
+
+### 🐛 修复
+
+- **窗口滚轮隔离**：子窗口接收滚轮或横向滚轮时不再把消息继续传给上一级窗口，避免编辑器、设置和弹窗滚动时带动后方主界面。
+- **录制与快捷键**：`Ctrl+N` 在主窗口未选中规则时也能新增条目；录制期间点击“清空”会结束本次录制并清空内容，不会把鼠标左键误录为目标输入。
+- **长状态文本绘制**：新增或编辑规则后，过长状态信息会在独立底部区域正确换行，窗口缩放、主题刷新和动态布局不会再造成截断、重叠或按钮残影。
+- **缩放与绘制稳定性**：修复自定义缩放下的控件重复缩放、字体测量、圆角按钮、列表列宽、弹窗区域和窗口最小尺寸不一致问题，并完善相关 GDI 字体资源释放。
+- **内置规则完整性**：恢复 13 条规则块与 5 条受托管脚本组成的 18 条内置规则，并重新启用构建阶段的精确数量检查。
+
 ## 🎉 版本 [1.0.1] - 2026-08-15
 
 ### 📦 发布物说明
@@ -129,7 +163,8 @@
 - **产品与数据目录**：统一中英文产品标识和 `%APPDATA%\KeyMouseRemapperAssistant` 数据位置。
 - **发行与兼容性**：锁定 AutoHotkey 和构建工具，统一 UTF-8 输出与 Windows PowerShell 5.1／PowerShell 7 行为。
 
-[未发布]: https://github.com/realSilasYang/key-mouse-remapper-assistant/compare/v1.0.1...HEAD
+[未发布]: https://github.com/realSilasYang/key-mouse-remapper-assistant/compare/v1.0.2...HEAD
+[1.0.2]: https://github.com/realSilasYang/key-mouse-remapper-assistant/releases/tag/v1.0.2
 [1.0.1]: https://github.com/realSilasYang/key-mouse-remapper-assistant/releases/tag/v1.0.1
 [1.0.0]: https://github.com/realSilasYang/key-mouse-remapper-assistant/releases/tag/v1.0.0
 [0.1.1]: https://github.com/realSilasYang/key-mouse-remapper-assistant/releases/tag/v0.1.1

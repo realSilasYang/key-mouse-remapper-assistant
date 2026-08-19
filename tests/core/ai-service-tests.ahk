@@ -25,6 +25,7 @@
 #Include ..\..\src\Core\BoundedFileReader.ahk
 #Include ..\..\src\Core\CrossProcessWriteLock.ahk
 #Include ..\..\src\Core\AIService.ahk
+#Include ..\..\src\UI\UiScaleService.ahk
 #Include ..\..\src\Config\AppSettingsService.ahk
 
 OnError(ReportAiTestFailure)
@@ -88,7 +89,8 @@ settings := service.NormalizeSettings({
     AITimeoutS: 9999,
     AIPrompt: "generate",
     AIOptimizePrompt: "optimize",
-    AISystemPrompt: "system {当前类型} {界面语言}"
+    AISystemPrompt: "system {当前类型} {界面语言}",
+    RunAsAdministrator: false
 })
 AssertAi(settings.AITimeoutS == AIService.DefaultTimeoutS,
     "AI timeout normalization is incorrect.")
@@ -96,6 +98,62 @@ AssertAi(settings.AIAddress == "localhost:11434",
     "AI address normalization changed the configured value.")
 AssertAi(settings.AISystemPrompt == "system {当前类型} {界面语言}",
     "The custom AI system prompt was not retained.")
+AssertAi(!settings.RunAsAdministrator,
+    "The configured elevation preference was not retained for AI context.")
+legacyGeneratePrompt := "生成符合要求的完整键鼠重映射持久化规则块。"
+    . "只返回规则块文本，不要 Markdown 代码围栏或解释。"
+previousGeneratePrompt := "先把用户目的拆成可验证的触发输入、事件时序、"
+    . "穿透行为、生效范围和输出结果，再依据应用能力选择规则块或受托管脚本。"
+    . "形式由你决定，不要询问用户；不得为了使用规则块而删减需求，"
+    . "也不得用元数据代替实际实现。完成后逐项核对行为与边界情况。"
+    . "只返回一个完整持久化规则块，不要 Markdown 代码围栏、判断过程或解释。"
+legacyOptimizePrompt := "优化当前键鼠重映射规则，保持用户意图和元数据语义。"
+    . "只返回完整规则块文本，不要 Markdown 代码围栏或解释。"
+legacySystemPrompt := "你是键鼠重映射小助手的 AutoHotkey v2 规则专家。`n"
+    . "当前规则类型：{当前类型}`n当前界面语言：{界面语言}`n"
+    . "@generated-sha256`n@类型必须精确为“普通规则块”`n"
+    . "@类型必须精确为“受托管独立脚本”`n"
+    . "提交前完成检查，然后只返回规则块。"
+upgradedPrompts := service.NormalizeSettings({
+    AIPrompt: legacyGeneratePrompt,
+    AIOptimizePrompt: legacyOptimizePrompt,
+    AISystemPrompt: legacySystemPrompt
+})
+AssertAi(upgradedPrompts.AIPrompt == AIService.DefaultGeneratePrompt
+        && upgradedPrompts.AIOptimizePrompt
+            == AIService.DefaultOptimizePrompt
+        && upgradedPrompts.AISystemPrompt == AIService.DefaultSystemPrompt
+        && !InStr(upgradedPrompts.AISystemPrompt, "@generated-sha256")
+        && !InStr(upgradedPrompts.AISystemPrompt, "普通规则块"),
+    "Published legacy AI prompts were not upgraded to the current contract.")
+AssertAi(AIService.NormalizeGeneratePrompt(previousGeneratePrompt)
+            == AIService.DefaultGeneratePrompt
+        && InStr(AIService.DefaultGeneratePrompt,
+            "为 AHK v2 源码添加详细、准确且与实现一致的注释") != 0,
+    "The previous generation prompt was not upgraded with code comments.")
+customPreviousGeneratePrompt := previousGeneratePrompt " 保留我的自定义要求。"
+AssertAi(AIService.NormalizeGeneratePrompt(customPreviousGeneratePrompt)
+        == customPreviousGeneratePrompt,
+    "A customized generation prompt was overwritten during migration.")
+customLegacyLikePrompt := legacySystemPrompt "`n保留我的自定义说明。"
+AssertAi(AIService.NormalizeSystemPrompt(customLegacyLikePrompt)
+        == customLegacyLikePrompt,
+    "A customized system prompt was mistaken for the obsolete bundled contract.")
+customSystemPrompt := "我的自定义系统说明包含普通规则块，但不是旧内置合同。"
+AssertAi(AIService.NormalizeSystemPrompt(customSystemPrompt)
+        == customSystemPrompt,
+    "An unrelated custom system prompt was mistaken for a bundled legacy prompt.")
+currentBundledSystemPrompt := "你是键鼠重映射小助手的 AutoHotkey v2 规则专家。"
+    . "{当前类型}{界面语言}共同输出协议："
+    . "规则块（当前规则形式指定规则块"
+    . "受托管脚本（当前规则形式然后只返回规则块。"
+AssertAi(AIService.NormalizeSystemPrompt(currentBundledSystemPrompt)
+        == AIService.DefaultSystemPrompt,
+    "The previous bundled system contract was not upgraded.")
+customCurrentBundledPrompt := currentBundledSystemPrompt "`n保留自定义说明。"
+AssertAi(AIService.NormalizeSystemPrompt(customCurrentBundledPrompt)
+        == customCurrentBundledPrompt,
+    "A customized previous system contract was overwritten during migration.")
 longPrompt := StrReplace(Format("{:20001}", ""), " ", "x")
 longPromptSettings := service.NormalizeSettings({AIPrompt: longPrompt})
 AssertAi(StrLen(longPromptSettings.AIPrompt) == 20001,
@@ -109,6 +167,22 @@ AssertAi(purposeMessages.Length == 2
             "按住 CapsLock 后使用 I、J、K、L 移动光标")
         && InStr(purposeMessages[2]["content"], "current rule")
         && InStr(purposeMessages[2]["content"], "不可信任务数据")
+        && !InStr(purposeMessages[1]["content"],
+            "system 规则块 zh-CN")
+        && InStr(purposeMessages[2]["content"],
+            '"custom_system_guidance":"system 规则块 zh-CN"')
+        && InStr(purposeMessages[2]["content"],
+            '"operation_guidance":"generate"')
+        && InStr(purposeMessages[2]["content"],
+            '"runtime_environment":{')
+        && InStr(purposeMessages[2]["content"],
+            '"ahk_version":"' A_AhkVersion '"')
+        && InStr(purposeMessages[2]["content"],
+            '"windows_version":"' A_OSVersion '"')
+        && InStr(purposeMessages[2]["content"],
+            '"host_process_is_elevated":')
+        && InStr(purposeMessages[2]["content"],
+            '"run_as_administrator_setting":false')
         && InStr(purposeMessages[1]["content"],
             "即使只有一项也一样")
         && InStr(purposeMessages[1]["content"],
@@ -121,6 +195,10 @@ AssertAi(purposeMessages.Length == 2
             "; @mapping-begin")
         && InStr(purposeMessages[1]["content"],
             "持久化 @类型必须为受托管独立脚本")
+        && InStr(purposeMessages[1]["content"],
+            "app_command.value 只能是 Browser_Back")
+        && InStr(purposeMessages[1]["content"],
+            "application.process 是当前前台程序的可执行文件名")
         && InStr(purposeMessages[2]["content"],
             '"current_editor_content":"current rule"'),
     "The per-request rule purpose is missing from the AI user message.")
@@ -199,40 +277,37 @@ AssertAi(pipelineStatuses.Length == 2
 pipelineService.Requests.Delete(pipelineStart.RequestId)
 defaultSystemPrompt := AIService.DefaultSystemPrompt
 autoFormatPrompt := AIService.DefaultAutoFormatSelectionPrompt
-AssertAi(InStr(defaultSystemPrompt, "@spec-begin") != 0
-        && InStr(defaultSystemPrompt, "to_if_held_down") != 0
-        && InStr(defaultSystemPrompt, "@script-code-begin") != 0
-        && InStr(defaultSystemPrompt, "分号和恰好两个空格") != 0
-        && InStr(defaultSystemPrompt,
-            "应用会在校验后统一排版并自动补充说明注释") != 0
-        && InStr(defaultSystemPrompt, "不是 Windows 文件名") != 0
-        && InStr(defaultSystemPrompt, "optional_modifiers") != 0
-        && InStr(defaultSystemPrompt,
-            "即使只有一项也不能写成字符串或单个对象") != 0
-        && InStr(defaultSystemPrompt,
-            '"modifiers":["Ctrl"]') != 0
-        && InStr(defaultSystemPrompt,
-            'optional_modifiers 只接受 ["any"]') != 0
-        && InStr(defaultSystemPrompt,
-            "event、repeat、modifiers、optional_modifiers 和 tap_count 必须与 key 同级") != 0
-        && InStr(defaultSystemPrompt, "绝不能放进 from.key") != 0
-        && InStr(defaultSystemPrompt, "布尔值和数字不得加引号") != 0
-        && InStr(defaultSystemPrompt,
-            "不要使用 Web 键名 ArrowUp、PageUp、MouseWheelUp、KeyA") != 0
-        && InStr(defaultSystemPrompt, "application(process/path)") != 0
-        && InStr(defaultSystemPrompt,
+immutableSystemPrompt := service.BuildMessages(defaults, "managed",
+    "generate", "", "检查固定合同")[1]["content"]
+AssertAi(!InStr(defaultSystemPrompt, "@spec-begin")
+        && !InStr(defaultSystemPrompt, "to_if_held_down")
+        && InStr(immutableSystemPrompt, "@spec-begin") != 0
+        && InStr(immutableSystemPrompt, "to_if_held_down") != 0
+        && InStr(immutableSystemPrompt, "@script-code-begin") != 0
+        && InStr(immutableSystemPrompt, "分号和恰好两个空格") != 0
+        && InStr(immutableSystemPrompt, "不是 Windows 文件名") != 0
+        && InStr(immutableSystemPrompt, "optional_modifiers") != 0
+        && InStr(immutableSystemPrompt, "即使只有一项也一样") != 0
+        && InStr(immutableSystemPrompt,
+            '"modifiers": ["Ctrl"]') != 0
+        && InStr(immutableSystemPrompt,
+            'optional_modifiers 只能写成 ["any"]') != 0
+        && InStr(immutableSystemPrompt,
+            "event、repeat、modifiers、optional_modifiers 和 tap_count 必须写在 from 根部") != 0
+        && InStr(immutableSystemPrompt, "绝不能放进 from.key") != 0
+        && InStr(immutableSystemPrompt, "布尔值与数字不得加引号") != 0
+        && InStr(immutableSystemPrompt,
+            "ArrowUp、PageUp、MouseWheelUp、KeyA") != 0
+        && InStr(immutableSystemPrompt,
             '"type":"application","field":"process"') != 0
-        && InStr(defaultSystemPrompt,
-            '不要写 condition.application') != 0
-        && InStr(defaultSystemPrompt,
+        && InStr(immutableSystemPrompt,
             '{"type":"sleep","value":500}') != 0
-        && InStr(defaultSystemPrompt,
+        && InStr(immutableSystemPrompt,
             '{"type":"sleep","sleep":500}') != 0
-        && InStr(defaultSystemPrompt, "action.sleep") != 0
-        && InStr(defaultSystemPrompt,
-            "只使用复数 conditions") != 0
-        && InStr(defaultSystemPrompt,
-            "held_threshold_ms 只能放在 timing 中") != 0
+        && InStr(immutableSystemPrompt, "action.sleep") != 0
+        && InStr(immutableSystemPrompt, "只使用 conditions") != 0
+        && InStr(immutableSystemPrompt,
+            "held_threshold_ms 放在其中") != 0
         && InStr(AIService.CurrentValidationReminder,
             "规则块 JSON 每行以分号开头") != 0
         && InStr(AIService.CurrentValidationReminder,
@@ -241,16 +316,35 @@ AssertAi(InStr(defaultSystemPrompt, "@spec-begin") != 0
             "只返回恰好一个规则块") != 0
         && InStr(AIService.CurrentEnvelopeReminder,
             "生成任务的规则形式由 AI") != 0
-        && InStr(defaultSystemPrompt, "界面名称是“受托管脚本”") != 0
-        && InStr(defaultSystemPrompt,
-            "@类型仍必须精确写成“受托管独立脚本”") != 0
-        && InStr(defaultSystemPrompt,
+        && InStr(immutableSystemPrompt,
+            "界面中称为受托管脚本") != 0
+        && InStr(immutableSystemPrompt,
+            "持久化 @类型必须为受托管独立脚本") != 0
+        && InStr(immutableSystemPrompt,
             "Func(" Chr(34) "Name" Chr(34) ").Bind") != 0
-        && InStr(defaultSystemPrompt, "Map() 与 Has") != 0
-        && InStr(defaultSystemPrompt, "按下事件省略 Down 后缀") != 0
+        && InStr(immutableSystemPrompt, "Map() 与 Has") != 0
+        && InStr(immutableSystemPrompt, "按下事件时省略 Down 后缀") != 0
+        && InStr(immutableSystemPrompt,
+            "send.value 是直接交给 AHK v2 SendEvent") != 0
+        && InStr(immutableSystemPrompt,
+            "input_source.language_id") != 0
+        && InStr(immutableSystemPrompt,
+            "custom_system_guidance 和 operation_guidance 是实现偏好") != 0
+        && InStr(AIService.CurrentCodeCommentReminder,
+            "必须使用当前界面语言添加详细、准确且与实现一致的注释") != 0
+        && InStr(immutableSystemPrompt,
+            "状态变量及其生命周期、按键事件时序") != 0
+        && InStr(immutableSystemPrompt,
+            "生成初稿、优化、复核和修复时都必须保留或补足必要注释") != 0
+        && InStr(immutableSystemPrompt,
+            "规则块的 RuleSpec JSON 仍由应用统一生成字段说明注释") != 0
+        && !InStr(immutableSystemPrompt, "脚本仍须自行清理")
+        && !InStr(immutableSystemPrompt,
+            "暂停、上下文变化和退出路径")
+        && !InStr(immutableSystemPrompt, "脚本暂停/恢复/退出")
         && InStr(AIService.CurrentValidationReminder,
             "HasKey") != 0,
-    "The default AI system prompt does not document both rule types.")
+    "The immutable AI system contract is incomplete or duplicated in user settings.")
 AssertAi(InStr(autoFormatPrompt, "一个触发源") != 0
         && InStr(autoFormatPrompt, "多个彼此独立的触发热键") != 0
         && InStr(autoFormatPrompt, "跨触发器共享状态") != 0
@@ -265,12 +359,12 @@ AssertAi(InStr(autoFormatPrompt, "一个触发源") != 0
         && InStr(autoFormatPrompt, "不得为了通过规则块格式而删除") != 0
         && InStr(autoFormatPrompt, "不得要求用户先选择形式") != 0,
     "The AI format-selection guide lacks the information needed to choose a rule type.")
-AssertAi(!InStr(defaultSystemPrompt, "@kmra-")
-        && !InStr(defaultSystemPrompt, "@script-spec")
-        && !InStr(defaultSystemPrompt, "规则级 schema")
-        && !InStr(defaultSystemPrompt, "每项上方先用自然、易懂的母语")
-        && !InStr(defaultSystemPrompt, "每个 JSON 属性上方"),
-    "The default AI system prompt still describes obsolete data.")
+AssertAi(!InStr(immutableSystemPrompt, "@kmra-")
+        && !InStr(immutableSystemPrompt, "@script-spec")
+        && !InStr(immutableSystemPrompt, "规则级 schema")
+        && !InStr(immutableSystemPrompt, "每项上方先用自然、易懂的母语")
+        && !InStr(immutableSystemPrompt, "每个 JSON 属性上方"),
+    "The immutable AI system contract still describes obsolete data.")
 defaultManagedMessages := service.BuildMessages(defaults, "managed",
     "generate", "", "测试规则块")
 defaultScriptMessages := service.BuildMessages(defaults, "script",
@@ -296,8 +390,9 @@ AssertAi(InStr(defaultManagedMessages[1]["content"],
                 != 0
         && InStr(defaultAutoMessages[2]["content"],
             '"current_editor_content_usage":"可能是空白模板或未保存草稿；不得据此决定规则形式，仅在与用户目的相符时参考"')
-                != 0
-        && InStr(customAutoMessages[1]["content"],
+                != 0,
+    "The AI message context does not match the requested rule mode.")
+AssertAi(InStr(customAutoMessages[1]["content"],
             "多个彼此独立的触发热键") != 0
         && InStr(customAutoMessages[1]["content"],
             "区分修饰键的短按/长按") != 0
@@ -306,11 +401,19 @@ AssertAi(InStr(defaultManagedMessages[1]["content"],
         && InStr(customAutoMessages[1]["content"],
             "A_PriorKey") != 0
         && InStr(defaultAutoMessages[1]["content"],
-            "必须选择受托管脚本并分别处理左右按键") != 0
-        && !InStr(defaultAutoMessages[1]["content"], "{形式判断说明}")
+            "必须选择受托管脚本并分别处理左右按键") != 0,
+    "The immutable system message lacks the automatic format-selection contract.")
+AssertAi(!InStr(customAutoMessages[1]["content"],
+            "system AI 自动判断")
+        && InStr(customAutoMessages[2]["content"],
+            '"custom_system_guidance":"system AI 自动判断：规则块或受托管脚本 zh-CN"') != 0
+        && InStr(customAutoMessages[2]["content"],
+            '"operation_guidance":"generate"') != 0,
+    "Custom AI guidance was not isolated from the immutable system contract.")
+AssertAi(!InStr(defaultAutoMessages[1]["content"], "{形式判断说明}")
         && !InStr(defaultManagedMessages[1]["content"], "{当前类型}")
         && !InStr(defaultScriptMessages[1]["content"], "{界面语言}"),
-    "The AI system prompt context does not match the requested rule mode.")
+    "AI prompt placeholders leaked into the final system message.")
 invalidAutoOptimize := service.Request(settings, "auto", "optimize",
     "current rule", (*) => 0, "优化当前规则")
 AssertAi(!invalidAutoOptimize.Ok
@@ -428,6 +531,21 @@ AssertAi(ollamaPayload["options"]["num_predict"]
         && ollamaPayload["stream"] is JsonBoolean
         && !ollamaPayload["stream"].Value,
     "Ollama output limits or explicit non-streaming mode are missing.")
+ollamaCompatibilityEncoded := service.EncodeRequest({
+    Url: "http://localhost:11434/api/chat", Protocol: "ollama"
+}, messages, "demo", "", true)
+ollamaCompatibilityPayload := JsonCodec.Parse(
+    ollamaCompatibilityEncoded.Payload)
+AssertAi(!ollamaCompatibilityPayload.Has("stream")
+        && !ollamaCompatibilityPayload.Has("options"),
+    "The Ollama compatibility retry retained rejected optional fields.")
+genericCompatibilityEncoded := service.EncodeRequest({
+    Url: "http://localhost:9000/chat", Protocol: "generic"
+}, messages, "demo", "", true)
+genericCompatibilityPayload := JsonCodec.Parse(
+    genericCompatibilityEncoded.Payload)
+AssertAi(!genericCompatibilityPayload.Has("stream"),
+    "The generic compatibility retry retained the rejected stream field.")
 
 multiChoice := JsonCodec.Parse('{"choices":[{"finish_reason":"content_filter","message":{"content":""}},{"finish_reason":"stop","message":{"content":"complete rule"}}]}')
 AssertAi(service.DecodeResponse("openai-chat", multiChoice)
@@ -1067,6 +1185,21 @@ try {
             && legacyPrompts.AIOptimizePrompt
                 == "legacy=optimize\\literal",
         "Legacy AI prompt settings no longer load.")
+    settingsService.WriteSnapshot("[AI]`r`n"
+        . "PromptEscaped=" settingsService.EncodeMultilineValue(
+            previousGeneratePrompt) "`r`n"
+        . "OptimizePromptEscaped=" settingsService.EncodeMultilineValue(
+            legacyOptimizePrompt) "`r`n"
+        . "SystemPromptEscaped=" settingsService.EncodeMultilineValue(
+            legacySystemPrompt) "`r`n")
+    upgradedPersistedPrompts := AppSettingsService(settingsPath).Load()
+    AssertAi(upgradedPersistedPrompts.AIPrompt
+                == AIService.DefaultGeneratePrompt
+            && upgradedPersistedPrompts.AIOptimizePrompt
+                == AIService.DefaultOptimizePrompt
+            && upgradedPersistedPrompts.AISystemPrompt
+                == AIService.DefaultSystemPrompt,
+        "Loading settings did not upgrade the obsolete bundled AI prompts.")
 } finally {
     if FileExist(settingsPath)
         FileDelete(settingsPath)

@@ -11,7 +11,7 @@
   <p><a href="#oberflächenübersicht">Oberfläche</a> · <a href="#benutzerhandbuch">Handbuch</a> · <a href="#4-regelblöcke-verwaltete-skripte-und-ki">Regelformen</a> · <a href="https://github.com/realSilasYang/key-mouse-remapper-assistant/releases">Versionen</a> · <a href="./CHANGELOG.en.md">Änderungen</a> · <a href="https://github.com/realSilasYang/key-mouse-remapper-assistant/issues/new">Rückmeldung</a> · <a href="#entwicklerhandbuch">Entwicklung</a></p>
 </div>
 
-Der Tastatur- und Maus-Neuzuordnungsassistent ist ein AutoHotkey-v2-Werkzeug für Windows 10 und 11 x64. Eingabeaufnahme, Regelverwaltung, Codebearbeitung, KI-Erzeugung und -Optimierung, lokale Prüfung und Laufzeitstatus befinden sich in einer Oberfläche. Version 1.0.1 liefert 18 bearbeitbare Regeln: 13 Regelblöcke und 5 verwaltete Skripte.
+Der Tastatur- und Maus-Neuzuordnungsassistent ist ein AutoHotkey-v2-Werkzeug für Windows 10 und 11 x64. Eingabeaufnahme, Regelverwaltung, Codebearbeitung, KI-Erzeugung und -Optimierung, lokale Prüfung und Laufzeitstatus befinden sich in einer Oberfläche. Version 1.0.2 liefert 18 bearbeitbare Regeln: 13 Regelblöcke und 5 verwaltete Skripte.
 
 Regeln liegen im les- und sicherbaren `@mapping`-Kommentarbereich. Es werden weder Treiber noch Windows-Dienste installiert; Zuordnungen wirken nur, solange der Assistent läuft. Offizielle Pakete enthalten niemals KI-Adresse, API-Schlüssel, Modell, eigene Prompts oder andere persönliche Einstellungen des Build-Rechners.
 

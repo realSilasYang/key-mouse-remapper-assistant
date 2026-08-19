@@ -106,10 +106,7 @@ class ListViewSelectionPresenter {
         top := NumGet(rowRect, 4, "Int")
         right := NumGet(rowRect, 8, "Int")
         bottom := NumGet(rowRect, 12, "Int")
-        windowDpi := DllCall("user32\GetDpiForWindow", "Ptr", listView.Hwnd,
-            "UInt")
-        if !windowDpi
-            windowDpi := 96
+        windowDpi := UiScaleService.GetEffectiveDpi(listView.Hwnd)
         horizontalInset := Max(2, Round(
             ListViewSelectionPresenter.HorizontalInsetDip * windowDpi / 96))
         verticalInset := Max(1, Round(

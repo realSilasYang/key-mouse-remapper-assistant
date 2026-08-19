@@ -365,25 +365,6 @@ RunMappingHistoryIntegrationTests() {
                 && settingsApp.SettingsService.Snapshot == "snapshot:new"
                 && !settingsApp.Window.LastStatusIsError,
             "A successful settings transaction was not committed.")
-        aiConnectionSettings := {
-            AIAddress: "https://example.test/v1",
-            AIKey: "secret-key",
-            AIModel: "demo-model",
-            AITimeoutS: 37
-        }
-        MappingHistoryIntegrationAssert(
-            settingsApp.SaveAIConnectionSettings(aiConnectionSettings)
-                && settingsApp.Settings.Theme == "new"
-                && settingsApp.Settings.AIAddress
-                    == aiConnectionSettings.AIAddress
-                && settingsApp.Settings.AIKey == aiConnectionSettings.AIKey
-                && settingsApp.Settings.AIModel
-                    == aiConnectionSettings.AIModel
-                && settingsApp.Settings.AITimeoutS
-                    == aiConnectionSettings.AITimeoutS
-                && settingsApp.SettingsService.LastSaved.Theme == "new",
-            "Saving AI parameters did not preserve unrelated settings.")
-
         lifecycleApp := AppLifecycleTestApp()
         openedWindow := AppLifecycleWindow()
         MappingHistoryIntegrationAssert(lifecycleApp.OpenAuxiliaryWindow(

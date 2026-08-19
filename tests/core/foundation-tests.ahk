@@ -342,6 +342,17 @@ try {
         "value", "ignored")]
     FoundationAssertThrows(() => RuleSpec.Normalize(ignoredValueActionSpec),
         "Valueless actions must reject a silently ignored value.")
+    appCommandSpec := RuleSpec.Clone(baseSpec)
+    appCommandSpec["to"] := [Map("type", "app_command",
+        "value", "VolumeUp")]
+    FoundationAssertEqual("Volume_Up",
+        RuleSpec.Normalize(appCommandSpec)["to"][1]["value"],
+        "App-command aliases were not normalized to an executable AHK name.")
+    unknownAppCommandSpec := RuleSpec.Clone(baseSpec)
+    unknownAppCommandSpec["to"] := [Map("type", "app_command",
+        "value", "Open_Settings")]
+    FoundationAssertThrows(() => RuleSpec.Normalize(unknownAppCommandSpec),
+        "Unknown app commands were accepted and deferred to runtime.")
     invalidGroupConditionSpec := RuleSpec.Clone(baseSpec)
     invalidGroupConditionSpec["conditions"] := [Map("type", "all",
         "operator", "equals", "conditions", [Map("type", "session",

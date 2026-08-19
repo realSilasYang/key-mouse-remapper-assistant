@@ -590,7 +590,6 @@ class TraditionalTaiwanStrings {
         catalog.Set("我是来帮你的，你要干什么？！", "我是來幫你的，你要做什麼？！")
         catalog.Set("请先关闭当前代码编辑器，再优化其他映射。", "請先關閉目前的程式碼編輯器，再最佳化其他映射。")
         catalog.Set("AI 服务尚未初始化。", "The AI service is not initialized.")
-        catalog.Set("AI 参数未保存：{1}", "AI 參數未儲存：{1}")
         catalog.Set("无法读取当前映射代码：{1}", "Could not read the current mapping code: {1}")
         catalog.Set("AI 正在生成规则，请稍候...", "AI is generating a rule. Please wait...")
         catalog.Set("AI 正在优化规则，请稍候...", "AI 正在最佳化規則，請稍候...")
@@ -625,6 +624,8 @@ class TraditionalTaiwanStrings {
         catalog.Set("规则块能力不足，必须改用受托管脚本完整实现。", "普通規則區塊能力不足，必須改用受託管腳本完整實作。")
         catalog.Set("未保存：请先用完整的 AHK v2 脚本替换代码占位文字。", "未儲存：請先用完整的 AHK v2 指令碼取代程式碼預留文字。")
         catalog.Set("当前等待时间：{1} 秒", "目前等待時間：{1} 秒")
+        catalog.Set("界面缩放：", "介面縮放：")
+        catalog.Set("界面缩放已保存，正在重新加载…", "介面縮放已儲存，正在重新載入…")
         return catalog
     }
 }

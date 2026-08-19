@@ -32,7 +32,9 @@ if ($builtInRuleCount -ne 18 -or
         ($builtInManagedRuleCount + $builtInScriptRuleCount) -ne
             $builtInRuleCount) {
     throw ('The application entry must contain exactly 18 complete ' +
-        'built-in mappings.')
+        'built-in mappings: ' +
+        "begin=$builtInRuleCount, end=$builtInRuleEndCount, " +
+        "managed=$builtInManagedRuleCount, script=$builtInScriptRuleCount.")
 }
 $entrySourceHash = (Get-FileHash -Algorithm SHA256 `
     -LiteralPath $entrySourcePath).Hash
@@ -44,6 +46,7 @@ function Get-BuiltInSingleLineAiPromptValues {
     $promptNames = [ordered]@{
         PromptEscaped = 'DefaultGeneratePrompt'
         OptimizePromptEscaped = 'DefaultOptimizePrompt'
+        SystemPromptEscaped = 'DefaultSystemPrompt'
     }
     foreach ($settingName in $promptNames.Keys) {
         $memberName = $promptNames[$settingName]

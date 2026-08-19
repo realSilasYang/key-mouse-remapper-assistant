@@ -591,7 +591,6 @@ class JapaneseStrings {
         catalog.Set("我是来帮你的，你要干什么？！", "お手伝いに来ました。何をしたいですか？！")
         catalog.Set("请先关闭当前代码编辑器，再优化其他映射。", "別のマッピングを最適化する前に、現在のコードエディターを閉じてください。")
         catalog.Set("AI 服务尚未初始化。", "The AI service is not initialized.")
-        catalog.Set("AI 参数未保存：{1}", "AI パラメーターを保存できませんでした：{1}")
         catalog.Set("无法读取当前映射代码：{1}", "Could not read the current mapping code: {1}")
         catalog.Set("AI 正在生成规则，请稍候...", "AI is generating a rule. Please wait...")
         catalog.Set("AI 正在优化规则，请稍候...", "AI がルールを最適化しています。しばらくお待ちください...")
@@ -626,6 +625,8 @@ class JapaneseStrings {
         catalog.Set("规则块能力不足，必须改用受托管脚本完整实现。", "通常のルールブロックでは不十分です。完全な実装には管理対象スクリプトを使用してください。")
         catalog.Set("未保存：请先用完整的 AHK v2 脚本替换代码占位文字。", "未保存：コードのプレースホルダーを完全な AHK v2 スクリプトに置き換えてください。")
         catalog.Set("当前等待时间：{1} 秒", "Current wait time: {1} seconds")
+        catalog.Set("界面缩放：", "UI の拡大率：")
+        catalog.Set("界面缩放已保存，正在重新加载…", "UI の拡大率を保存しました。再読み込みしています…")
         return catalog
     }
 }

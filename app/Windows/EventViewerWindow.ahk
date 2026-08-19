@@ -9,6 +9,8 @@ class EventViewerWindow {
     static DetailColumn := 6
     static EventColumnWidth := 184
     static DetailEditHeight := 96
+    static ListTop := 80
+    static ListHeaderTop := 50
     static SortRefreshDelayMs := 50
     static SnapshotRefreshDelayMs := 50
     static MaximumSnapshotRebuildPasses := 3
@@ -143,9 +145,9 @@ class EventViewerWindow {
         fontName := LocalizationService.GetUiFontName()
         systemFont := LocalizationService.GetLanguageSystemUiFontName()
         this.Gui := Gui("+Owner" this.OwnerWindow.Gui.Hwnd
-            " +Resize +MinimizeBox +MinSize"
-            EventViewerWindow.MinimumWidth "x"
-            EventViewerWindow.MinimumHeight, Tr("事件查看"))
+            " +Resize +MinimizeBox " UiScaleService.ScaleMinSizeOptions(
+                EventViewerWindow.MinimumWidth,
+                EventViewerWindow.MinimumHeight), Tr("事件查看"))
         this.IconHandles := ApplyApplicationWindowIcon(this.Gui.Hwnd)
         this.OwnerLease := WindowHierarchy.Acquire(this.OwnerWindow.Gui,
             this.Gui.Hwnd)
@@ -183,7 +185,7 @@ class EventViewerWindow {
         this.ApplyCommandIcons()
 
         this.List := this.Gui.Add("ListView",
-            "x12 y78 w876 h372 Report +ReadOnly -Multi -Hdr +LV0x10000"
+            "x12 y80 w876 h370 Report +ReadOnly -Multi -Hdr +LV0x10000"
             " -Border -E0x200 Background" colors.Surface " c" colors.Text,
             [Tr("时间"), Tr("类别"), Tr("事件"), Tr("来源 / 规则"),
                 Tr("结果"), Tr("详情")])
@@ -269,7 +271,7 @@ class EventViewerWindow {
         if this.Disposed
             return
         ShowPreparedWindow(this.Gui, "w1100 h650",
-            ObjBindMethod(this, "ApplyNativeThemes"))
+            ObjBindMethod(this, "ApplyNativeThemes"), true)
     }
 
     ApplyNativeThemes(*) {
@@ -895,6 +897,8 @@ class EventViewerWindow {
     OnResize(guiObj, minMax, width, height) {
         if minMax == -1 || this.Disposed || width <= 0 || height <= 0
             return
+        width := UiScaleService.ToDesign(width)
+        height := UiScaleService.ToDesign(height)
         layoutRound := AtomicControlLayout.BeginRound(this.Gui)
         if !IsObject(layoutRound)
             return false
@@ -903,10 +907,11 @@ class EventViewerWindow {
         detailHeight := EventViewerWindow.DetailEditHeight
         detailEditY := statusY - detailHeight - 10
         detailLabelY := detailEditY - 24
-        listHeight := Max(180, detailLabelY - 88)
+        listHeight := Max(180, detailLabelY
+            - EventViewerWindow.ListTop - 10)
         widths := this.CalculateColumnWidths(listWidth)
         entries := [
-            {Control: this.List, X: 12, Y: 78,
+            {Control: this.List, X: 12, Y: EventViewerWindow.ListTop,
                 Width: listWidth, Height: listHeight},
             {Control: this.DetailLabel, X: 12, Y: detailLabelY,
                 Width: listWidth, Height: 22},
@@ -915,7 +920,8 @@ class EventViewerWindow {
             {Control: this.Status, X: 12, Y: statusY,
                 Width: listWidth, Height: 24}
         ]
-        for entry in this.ListHeader.BuildLayoutEntries(12, 50, widths,
+        for entry in this.ListHeader.BuildLayoutEntries(12,
+                EventViewerWindow.ListHeaderTop, widths,
                 listWidth)
             entries.Push(entry)
         ; Keep the native ListView surface closed while its outer rectangle,
@@ -996,7 +1002,8 @@ class EventViewerWindow {
             this.List.Opt("-Redraw")
         try {
             for item in pending {
-                this.List.ModifyCol(item.Index, item.Width)
+                this.List.ModifyCol(item.Index,
+                    UiScaleService.Scale(item.Width))
                 while this.AppliedColumnWidths.Length < item.Index
                     this.AppliedColumnWidths.Push(0)
                 this.AppliedColumnWidths[item.Index] := item.Width
@@ -1039,7 +1046,7 @@ class EventViewerWindow {
             Tr("来源 / 规则"), Tr("结果"), Tr("详情")]
         this.ListHeader.SetLabels(this.HeaderLabels)
         this.ListHeader.ApplyAppearance(colors.Toolbar, colors.Muted,
-            systemFont, 9)
+            systemFont, 10)
         this.List.Opt("Background" colors.Surface " c" colors.Text)
         this.List.SetFont("s10 c" colors.Text, fontName)
         this.DetailLabel.Text := Tr("事件详情")
@@ -1068,6 +1075,7 @@ class EventViewerWindow {
         for button in [this.PauseButton, this.ClearButton, this.ExportButton,
                 this.RawObservationButton]
             button.SetFont("s10 bold", systemFont)
+        UiScaleService.RefreshGuiFonts(this.Gui)
         if this.Paused {
             this.RefreshVisibleEntryLocalization()
             this.UpdateStatus()

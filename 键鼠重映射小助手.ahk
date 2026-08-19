@@ -7,7 +7,7 @@
 
 ;@Ahk2Exe-SetName 键鼠重映射小助手
 ;@Ahk2Exe-SetDescription 键鼠重映射小助手可视化管理器
-;@Ahk2Exe-SetVersion 1.0.1
+;@Ahk2Exe-SetVersion 1.0.2
 ;@Ahk2Exe-SetCopyright Copyright (c) 2026 键鼠重映射小助手 contributors
 ;@Ahk2Exe-SetMainIcon assets\app\key-mouse-remapper-assistant.ico
 
@@ -29,6 +29,7 @@
 #Include src\Localization\ItalianStrings.ahk
 #Include src\Localization\LocalizationService.ahk
 #Include src\UI\UiThemeService.ahk
+#Include src\UI\UiScaleService.ahk
 #Include src\UI\AhkV2Lexer.ahk
 #Include src\Core\AhkV2ScriptValidator.ahk
 #Include src\Config\AppSettingsService.ahk
@@ -64,6 +65,7 @@
 #Include src\Platform\WindowHierarchy.ahk
 #Include src\UI\ThemeHelpers.ahk
 #Include src\UI\AtomicControlLayout.ahk
+#Include src\UI\WindowWheelPropagationGuard.ahk
 #Include src\UI\ApplicationIcon.ahk
 #Include src\UI\CleanupCollector.ahk
 #Include src\UI\SvgRenderLibrary.ahk
@@ -592,127 +594,596 @@ ReleaseApplicationMutexOnExit(*) {
 ; 写清楚按下什么键或鼠标按键会触发这条规则。
 ; @来源按键=Win + D
 ; 写清楚触发后会执行什么按键、鼠标操作或命令。
-; @映射结果=按当前可见窗口栈最小化 / 恢复
+; @映射结果=依次最小化可见应用窗口；桌面无可见窗口时按原层叠顺序逐个确认还原，并恢复置顶状态
 ; 写清楚规则在哪里有效，例如“全局”或某个程序。
 ; @生效范围=全局
 
 ; 下面是一份完整的 AHK v2 脚本；小助手会单独启动和停止它。
 ; @script-code-begin
-;  #Requires AutoHotkey v2.0
-;  #SingleInstance Force
-;  #NoTrayIcon
 ;  #Warn All
 ;  ;
-;  ; ========================================================
-;  ; 1. 防休眠失效机制 (上一题的经验)
-;  ; ========================================================
-;  if not A_IsAdmin {
-;      try Run "*RunAs `"" A_ScriptFullPath "`""
-;      ExitApp
-;  }
-;  InstallKeybdHook
-;  OnMessage(0x218, OnPowerEvent) ; 监听电源消息
-;  OnPowerEvent(wParam, lParam, msg, hwnd) {
-;      if (wParam = 0x12 || wParam = 0x7) { ; 唤醒事件
-;          Sleep 2000
-;          Reload
+;  ; 此脚本完全接管 Win+D，不把原组合键传给 Windows。桌面仍有可见应用窗口时，
+;  ; 按当前 Z 序记录窗口并从底层到顶层逐个最小化；桌面没有可见应用窗口时，
+;  ; 从快照底层开始逐个还原。每一步必须确认目标状态后才会继续处理下一个窗口。
+;  ;
+;  ; Snapshot 跨多次 Win+D 保存仍由本规则管理的窗口。若最小化后出现新窗口，
+;  ; 下一次 Win+D 会把新窗口并入快照，避免遗失此前已经最小化的窗口。
+;  ; Phase 和 WorkRecords 描述当前异步流程；索引与请求时间只在该流程内有效。
+;  global Snapshot := []
+;  global Phase := "idle"
+;  global WorkRecords := []
+;  global WorkIndex := 0
+;  global LastRequestAt := 0
+;  global ItemStartedAt := 0
+;  global OrderStartedAt := 0
+;  ;
+;  OnExit(Cleanup)
+;  ;
+;  ; $ 防止脚本产生的合成输入递归触发；没有使用 ~，所以 Windows 原生 Win+D
+;  ; 不会同时执行。KeyWait 等待物理 D 松开，使一次长按只产生一次操作。
+;  ; 窗口处理由一次性定时器推进，因此等待松键不会阻塞状态机。
+;  $#d::HandleWinD()
+;  ;
+;  HandleWinD(*) {
+;      global Phase
+;      global Snapshot
+;  ;
+;      ; 上一批窗口尚未处理完时忽略新的切换请求，避免两个流程同时修改快照、
+;      ; 层叠顺序或同一个窗口。仍等待本次 D 松开，以屏蔽长按重复。
+;      if Phase != "idle" {
+;          KeyWait("d")
+;          return
 ;      }
+;  ;
+;      visibleRecords := GetVisibleApplicationWindows()
+;  ;
+;      if visibleRecords.Length > 0 {
+;          ; 只要桌面仍存在可见应用窗口，本次操作就是最小化。当前窗口优先并入
+;          ; 快照；此前已被本规则最小化且仍有效的窗口继续保留，供以后统一还原。
+;          Snapshot := MergeSnapshots(visibleRecords, Snapshot)
+;          BeginMinimize(visibleRecords)
+;      } else if Snapshot.Length > 0 {
+;          BeginRestore()
+;      }
+;  ;
+;      KeyWait("d")
 ;  }
 ;  ;
-;  ; ========================================================
-;  ; 2. 全局变量
-;  ; ========================================================
-;  ; 用于存储被脚本最小化的窗口列表
-;  global MinimizedStack := []
+;  BeginMinimize(records) {
+;      global Phase
+;      global WorkRecords
+;      global WorkIndex
+;      global LastRequestAt
+;      global ItemStartedAt
 ;  ;
-;  #d::
-;  {
-;      ; 防止开始菜单弹出
-;      Send "{Blind}{vkE8}"
+;      WorkRecords := records
+;      ; WinGetList 返回从顶层到底层的顺序。最小化从数组末尾开始，可减少处理
+;      ; 过程中前台窗口连续切换造成的视觉干扰。
+;      WorkIndex := WorkRecords.Length
+;      LastRequestAt := 0
+;      ItemStartedAt := 0
+;      Phase := "minimizing"
+;      AdvanceWork()
+;  }
 ;  ;
-;      ; 获取所有“应该被最小化”的当前可见窗口
-;      currentVisibleWins := GetActiveWindowList()
+;  BeginRestore() {
+;      global Snapshot
+;      global Phase
+;      global WorkRecords
+;      global WorkIndex
+;      global LastRequestAt
+;      global ItemStartedAt
 ;  ;
-;      ; ============================================================
-;      ; 核心逻辑变更：基于“当前屏幕是否有窗口”来决定动作
-;      ; ============================================================
+;      WorkRecords := GetValidRecords(Snapshot)
+;      if WorkRecords.Length = 0 {
+;          Snapshot := []
+;          FinishWork()
+;          return
+;      }
 ;  ;
-;      if (currentVisibleWins.Length > 0)
-;      {
-;          ; --- 场景 A：屏幕上有窗口 ---> 执行最小化 ---
+;      ; 从快照最底层向顶层逐个还原。AdvanceRestore 只有确认当前窗口已可见且
+;      ; 不再最小化后才递减索引，因此不会越过尚未完成还原的前一个窗口。
+;      WorkIndex := WorkRecords.Length
+;      LastRequestAt := 0
+;      ItemStartedAt := 0
+;      Phase := "restoring"
+;      AdvanceWork()
+;  }
 ;  ;
-;          ; 将当前发现的这些窗口加入堆栈
-;          ; (使用 Push 而不是直接覆盖，是为了处理“分批最小化”的情况：
-;          ;  比如先Win+D最小化了一批，又手动打开一个，再Win+D，希望恢复时能全部恢复)
-;          for winObj in currentVisibleWins {
-;              MinimizedStack.Push(winObj)
-;              WinMinimize(winObj.id)
+;  AdvanceWork(*) {
+;      global Phase
+;  ;
+;      if Phase = "minimizing"
+;          AdvanceMinimize()
+;      else if Phase = "restoring"
+;          AdvanceRestore()
+;      else if Phase = "ordering"
+;          AdvanceOrderRestoration()
+;  }
+;  ;
+;  AdvanceMinimize() {
+;      global WorkRecords
+;      global WorkIndex
+;      global LastRequestAt
+;      global ItemStartedAt
+;  ;
+;      static ITEM_TIMEOUT_MS := 5000
+;  ;
+;      while WorkIndex >= 1 {
+;          record := WorkRecords[WorkIndex]
+;  ;
+;          ; 已关闭或身份不再匹配的窗口不能继续操作。HWND 可能被 Windows
+;          ; 复用，因此不能仅凭数值句柄认定它仍是原窗口。
+;          if !IsRecordedWindow(record) {
+;              MoveToNextRecord()
+;              continue
+;          }
+;  ;
+;          if IsWindowMinimizedOrHidden(record["hwnd"]) {
+;              MoveToNextRecord()
+;              continue
+;          }
+;  ;
+;          if ItemStartedAt = 0
+;              ItemStartedAt := A_TickCount
+;  ;
+;          ; 某些挂起或拒绝状态变更的窗口可能永远不响应。达到上限后终止本批
+;          ; 流程并保留快照，避免留下永久运行的定时器；不会越过失败窗口继续
+;          ; 最小化后续窗口。
+;          if A_TickCount - ItemStartedAt >= ITEM_TIMEOUT_MS {
+;              FinishWork()
+;              return
+;          }
+;  ;
+;          if LastRequestAt = 0 || A_TickCount - LastRequestAt >= 250 {
+;              RequestMinimize(record)
+;              LastRequestAt := A_TickCount
+;          }
+;  ;
+;          SetTimer(AdvanceWork, -50)
+;          return
+;      }
+;  ;
+;      FinishWork()
+;  }
+;  ;
+;  AdvanceRestore() {
+;      global WorkRecords
+;      global WorkIndex
+;      global LastRequestAt
+;      global ItemStartedAt
+;      global Phase
+;      global OrderStartedAt
+;  ;
+;      static ITEM_TIMEOUT_MS := 5000
+;  ;
+;      while WorkIndex >= 1 {
+;          record := WorkRecords[WorkIndex]
+;  ;
+;          if !IsRecordedWindow(record) {
+;              MoveToNextRecord()
+;              continue
+;          }
+;  ;
+;          if IsWindowRestored(record["hwnd"]) {
+;              MoveToNextRecord()
+;              continue
+;          }
+;  ;
+;          if ItemStartedAt = 0
+;              ItemStartedAt := A_TickCount
+;  ;
+;          ; 若当前窗口无法还原，则停止本批流程且不处理更高层窗口，从而严格
+;          ; 保持“前一个确认还原后才还原下一个”的时序。快照仍会保留。
+;          if A_TickCount - ItemStartedAt >= ITEM_TIMEOUT_MS {
+;              FinishWork()
+;              return
+;          }
+;  ;
+;          if LastRequestAt = 0 || A_TickCount - LastRequestAt >= 250 {
+;              RequestRestore(record)
+;              LastRequestAt := A_TickCount
+;          }
+;  ;
+;          SetTimer(AdvanceWork, -50)
+;          return
+;      }
+;  ;
+;      Phase := "ordering"
+;      OrderStartedAt := A_TickCount
+;      SetTimer(AdvanceWork, -25)
+;  }
+;  ;
+;  MoveToNextRecord() {
+;      global WorkIndex
+;      global LastRequestAt
+;      global ItemStartedAt
+;  ;
+;      WorkIndex -= 1
+;      LastRequestAt := 0
+;      ItemStartedAt := 0
+;  }
+;  ;
+;  AdvanceOrderRestoration() {
+;      global Snapshot
+;      global Phase
+;      global WorkRecords
+;      global WorkIndex
+;      global LastRequestAt
+;      global ItemStartedAt
+;      global OrderStartedAt
+;  ;
+;      static ORDER_TIMEOUT_MS := 5000
+;  ;
+;      validRecords := GetValidRecords(Snapshot)
+;      if validRecords.Length = 0 {
+;          Snapshot := []
+;          FinishWork()
+;          return
+;      }
+;  ;
+;      ; 层叠恢复期间若窗口再次最小化或隐藏，则重新进入逐个还原阶段。
+;      ; 这可处理应用在收到恢复请求后又自行改变显示状态的情况。
+;      if !AreAllRecordsRestored(validRecords) {
+;          WorkRecords := validRecords
+;          WorkIndex := WorkRecords.Length
+;          LastRequestAt := 0
+;          ItemStartedAt := 0
+;          Phase := "restoring"
+;          SetTimer(AdvanceWork, -25)
+;          return
+;      }
+;  ;
+;      ApplyRecordedZOrder(validRecords)
+;  ;
+;      ; SetWindowPos 使用异步标志，返回成功仅代表请求已提交。实际 Z 序和每个
+;      ; 窗口的置顶属性都匹配快照后，才清除快照并结束本次还原。
+;      if IsRecordedOrderApplied(validRecords) {
+;          Snapshot := []
+;          FinishWork()
+;          return
+;      }
+;  ;
+;      ; 外部程序可能持续抢占 Z 序。为避免形成永久定时器，超过上限后停止
+;      ; 重试；所有窗口此时均已还原，仅层叠顺序可能受到外部程序竞争影响。
+;      if A_TickCount - OrderStartedAt >= ORDER_TIMEOUT_MS {
+;          Snapshot := []
+;          FinishWork()
+;          return
+;      }
+;  ;
+;      SetTimer(AdvanceWork, -100)
+;  }
+;  ;
+;  FinishWork() {
+;      global Phase
+;      global WorkRecords
+;      global WorkIndex
+;      global LastRequestAt
+;      global ItemStartedAt
+;      global OrderStartedAt
+;  ;
+;      SetTimer(AdvanceWork, 0)
+;      Phase := "idle"
+;      WorkRecords := []
+;      WorkIndex := 0
+;      LastRequestAt := 0
+;      ItemStartedAt := 0
+;      OrderStartedAt := 0
+;  }
+;  ;
+;  RequestMinimize(record) {
+;      if !IsRecordedWindow(record)
+;          return
+;  ;
+;      ; SW_MINIMIZE=6。使用异步版本避免目标窗口线程无响应时阻塞热键线程。
+;      try DllCall(
+;          "user32\ShowWindowAsync",
+;          "Ptr", record["hwnd"],
+;          "Int", 6,
+;          "Int"
+;      )
+;  }
+;  ;
+;  RequestRestore(record) {
+;      if !IsRecordedWindow(record)
+;          return
+;  ;
+;      ; SW_RESTORE=9 会恢复窗口原来的正常或最大化状态，而不是强制改成普通大小。
+;      try DllCall(
+;          "user32\ShowWindowAsync",
+;          "Ptr", record["hwnd"],
+;          "Int", 9,
+;          "Int"
+;      )
+;  }
+;  ;
+;  IsWindowMinimizedOrHidden(hwnd) {
+;      return !DllCall("user32\IsWindowVisible", "Ptr", hwnd, "Int")
+;          || DllCall("user32\IsIconic", "Ptr", hwnd, "Int")
+;  }
+;  ;
+;  IsWindowRestored(hwnd) {
+;      return DllCall("user32\IsWindowVisible", "Ptr", hwnd, "Int")
+;          && !DllCall("user32\IsIconic", "Ptr", hwnd, "Int")
+;  }
+;  ;
+;  AreAllRecordsRestored(records) {
+;      for record in records {
+;          if IsRecordedWindow(record) && !IsWindowRestored(record["hwnd"])
+;              return false
+;      }
+;  ;
+;      return true
+;  }
+;  ;
+;  MergeSnapshots(visibleRecords, previousRecords) {
+;      merged := []
+;      seen := Map()
+;  ;
+;      ; 当前可见窗口的顺序和置顶属性是最新状态，因此优先采用；旧快照中仍
+;      ; 有效且本次不可见的窗口随后补入，防止已最小化窗口失去还原记录。
+;      for record in visibleRecords {
+;          hwnd := record["hwnd"]
+;          if !seen.Has(hwnd) {
+;              merged.Push(record)
+;              seen[hwnd] := true
 ;          }
 ;      }
-;      else
-;      {
-;          ; --- 场景 B：屏幕上无窗口 (干净的桌面) ---> 执行恢复 ---
 ;  ;
-;          if (MinimizedStack.Length > 0) {
-;              ; 倒序循环，恢复最近最小化的窗口
-;              Loop MinimizedStack.Length {
-;                  index := MinimizedStack.Length - A_Index + 1
-;                  savedWin := MinimizedStack[index]
+;      for record in previousRecords {
+;          if !IsRecordedWindow(record)
+;              continue
 ;  ;
-;                  if WinExist(savedWin.id) {
-;                      ; 只有当窗口确实处于最小化状态时才恢复，防止重复操作
-;                      if (WinGetMinMax(savedWin.id) == -1) {
-;                          WinRestore(savedWin.id)
-;                      }
-;                  }
-;              }
-;              ; 清空记录
-;              global MinimizedStack := []
+;          hwnd := record["hwnd"]
+;          if !seen.Has(hwnd) {
+;              merged.Push(record)
+;              seen[hwnd] := true
 ;          }
+;      }
+;  ;
+;      return CanonicalizeRecords(merged)
+;  }
+;  ;
+;  CanonicalizeRecords(records) {
+;      topmostRecords := []
+;      normalRecords := []
+;  ;
+;      ; Windows 要求所有置顶窗口整体位于普通窗口之前。跨多次操作合并快照后，
+;      ; 按这一系统约束重新分组，同时保持各组内部原有的从上到下顺序。
+;      for record in records {
+;          if record["topmost"]
+;              topmostRecords.Push(record)
+;          else
+;              normalRecords.Push(record)
+;      }
+;  ;
+;      result := []
+;      for record in topmostRecords
+;          result.Push(record)
+;      for record in normalRecords
+;          result.Push(record)
+;  ;
+;      return result
+;  }
+;  ;
+;  GetValidRecords(records) {
+;      validRecords := []
+;  ;
+;      for record in records {
+;          if IsRecordedWindow(record)
+;              validRecords.Push(record)
+;      }
+;  ;
+;      return validRecords
+;  }
+;  ;
+;  ApplyRecordedZOrder(records) {
+;      static HWND_NOTOPMOST := -2
+;      static HWND_TOPMOST := -1
+;      static ORDER_FLAGS := 0x4213
+;  ;
+;      normalRecords := []
+;      topmostRecords := []
+;  ;
+;      for record in records {
+;          if record["topmost"]
+;              topmostRecords.Push(record)
+;          else
+;              normalRecords.Push(record)
+;      }
+;  ;
+;      ; 每组从底向顶插入。ORDER_FLAGS 包含不移动、不缩放、不激活、
+;      ; 不改变所有者层级及异步定位，恢复顺序时不会主动抢走输入焦点。
+;      RestoreZOrderGroup(normalRecords, HWND_NOTOPMOST, ORDER_FLAGS)
+;      RestoreZOrderGroup(topmostRecords, HWND_TOPMOST, ORDER_FLAGS)
+;  }
+;  ;
+;  RestoreZOrderGroup(records, insertAfter, flags) {
+;      Loop records.Length {
+;          index := records.Length - A_Index + 1
+;          record := records[index]
+;  ;
+;          if !IsRecordedWindow(record)
+;              continue
+;  ;
+;          try DllCall(
+;              "user32\SetWindowPos",
+;              "Ptr", record["hwnd"],
+;              "Ptr", insertAfter,
+;              "Int", 0,
+;              "Int", 0,
+;              "Int", 0,
+;              "Int", 0,
+;              "UInt", flags,
+;              "Int"
+;          )
 ;      }
 ;  }
 ;  ;
-;  ; ========================================================
-;  ; 辅助函数：获取当前屏幕上所有“有效的”、“非最小化”的窗口
-;  ; ========================================================
-;  GetActiveWindowList() {
-;      validWindows := []
-;      idList := WinGetList()
+;  IsRecordedOrderApplied(records) {
+;      positions := Map()
+;      position := 0
 ;  ;
-;      for this_id in idList {
-;          ; 1. 过滤桌面和任务栏 (保留你的原始逻辑)
-;          this_class := WinGetClass(this_id)
-;          if (this_class = "Shell_TrayWnd" || this_class = "Progman" || this_class = "WorkerW")
-;              continue
-;  ;
-;          ; 2. 过滤完全不可见窗口
-;          if !(WinGetStyle(this_id) & 0x10000000)
-;              continue
-;  ;
-;          ; 3. 【关键】过滤已经是最小化状态的窗口
-;          ; 我们只关心现在“显示着”的窗口
-;          if (WinGetMinMax(this_id) == -1)
-;              continue
-;  ;
-;          ; 4. 严格的任务栏存在性检测 (保留你的原始逻辑)
-;          exStyle := WinGetExStyle(this_id)
-;          ownerID := DllCall("GetWindow", "Ptr", this_id, "UInt", 4, "Ptr")
-;          isAppWindow := (exStyle & 0x00040000)
-;          isToolWindow := (exStyle & 0x00000080)
-;  ;
-;          if (isToolWindow && !isAppWindow)
-;              continue
-;  ;
-;          if (ownerID != 0 && !isAppWindow)
-;              continue
-;  ;
-;          if (WinGetTitle(this_id) = "")
-;              continue
-;  ;
-;          ; 通过所有检查，加入列表
-;          validWindows.Push({id: this_id})
+;      for hwnd in WinGetList() {
+;          position += 1
+;          positions[hwnd] := position
 ;      }
-;      return validWindows
+;  ;
+;      previousPosition := 0
+;      for record in records {
+;          if !IsRecordedWindow(record)
+;              continue
+;  ;
+;          hwnd := record["hwnd"]
+;          if !positions.Has(hwnd) || !IsWindowRestored(hwnd)
+;              return false
+;  ;
+;          try currentTopmost := (WinGetExStyle("ahk_id " hwnd) & 0x00000008) != 0
+;          catch
+;              return false
+;  ;
+;          if currentTopmost != record["topmost"]
+;              return false
+;  ;
+;          currentPosition := positions[hwnd]
+;          if currentPosition <= previousPosition
+;              return false
+;  ;
+;          previousPosition := currentPosition
+;      }
+;  ;
+;      return true
+;  }
+;  ;
+;  IsRecordedWindow(record) {
+;      if !record.Has("hwnd")
+;          || !record.Has("pid")
+;          || !record.Has("tid")
+;          || !record.Has("class")
+;          return false
+;  ;
+;      hwnd := record["hwnd"]
+;      if !DllCall("user32\IsWindow", "Ptr", hwnd, "Int")
+;          return false
+;  ;
+;      ; HWND 可能被系统复用。进程、窗口线程和窗口类必须同时匹配，才把当前
+;      ; 对象视为快照中的原窗口，避免误操作后来获得相同句柄的其他窗口。
+;      pid := 0
+;      tid := DllCall(
+;          "user32\GetWindowThreadProcessId",
+;          "Ptr", hwnd,
+;          "UInt*", &pid,
+;          "UInt"
+;      )
+;  ;
+;      if pid != record["pid"] || tid != record["tid"]
+;          return false
+;  ;
+;      try return WinGetClass("ahk_id " hwnd) = record["class"]
+;      catch
+;          return false
+;  }
+;  ;
+;  GetVisibleApplicationWindows() {
+;      windows := []
+;  ;
+;      ; WinGetList 按当前 Z 序从上到下返回顶层窗口。这里只收集可见、非最小化、
+;      ; 未被 DWM 隐藏且可作为应用任务窗口的对象，并排除桌面与任务栏外壳。
+;      for hwnd in WinGetList() {
+;          try {
+;              className := WinGetClass("ahk_id " hwnd)
+;              if className = "Shell_TrayWnd"
+;                  || className = "Shell_SecondaryTrayWnd"
+;                  || className = "Progman"
+;                  || className = "WorkerW"
+;                  continue
+;  ;
+;              if !DllCall("user32\IsWindowVisible", "Ptr", hwnd, "Int")
+;                  || DllCall("user32\IsIconic", "Ptr", hwnd, "Int")
+;                  continue
+;  ;
+;              cloaked := 0
+;              try DllCall(
+;                  "dwmapi\DwmGetWindowAttribute",
+;                  "Ptr", hwnd,
+;                  "UInt", 14,
+;                  "UInt*", &cloaked,
+;                  "UInt", 4,
+;                  "Int"
+;              )
+;              if cloaked
+;                  continue
+;  ;
+;              style := WinGetStyle("ahk_id " hwnd)
+;              if style & 0x40000000
+;                  continue
+;  ;
+;              exStyle := WinGetExStyle("ahk_id " hwnd)
+;              ownerHwnd := DllCall(
+;                  "user32\GetWindow",
+;                  "Ptr", hwnd,
+;                  "UInt", 4,
+;                  "Ptr"
+;              )
+;  ;
+;              isAppWindow := (exStyle & 0x00040000) != 0
+;              isToolWindow := (exStyle & 0x00000080) != 0
+;  ;
+;              if isToolWindow && !isAppWindow
+;                  continue
+;              if ownerHwnd != 0 && !isAppWindow
+;                  continue
+;              if WinGetTitle("ahk_id " hwnd) = ""
+;                  continue
+;  ;
+;              pid := 0
+;              tid := DllCall(
+;                  "user32\GetWindowThreadProcessId",
+;                  "Ptr", hwnd,
+;                  "UInt*", &pid,
+;                  "UInt"
+;              )
+;  ;
+;              windows.Push(Map(
+;                  "hwnd", hwnd,
+;                  "pid", pid,
+;                  "tid", tid,
+;                  "class", className,
+;                  "topmost", (exStyle & 0x00000008) != 0
+;              ))
+;          }
+;      }
+;  ;
+;      return windows
+;  }
+;  ;
+;  Cleanup(*) {
+;      global Snapshot
+;      global WorkRecords
+;  ;
+;      ; 宿主停止脚本或进程退出时取消状态机定时器，并同步尽力还原仍在快照中
+;      ; 的有效窗口。这样不会因规则被停止而永久留下由本规则最小化的窗口。
+;      SetTimer(AdvanceWork, 0)
+;  ;
+;      records := Snapshot.Length > 0 ? Snapshot : WorkRecords
+;      validRecords := GetValidRecords(records)
+;  ;
+;      Loop validRecords.Length {
+;          index := validRecords.Length - A_Index + 1
+;          record := validRecords[index]
+;  ;
+;          try DllCall(
+;              "user32\ShowWindow",
+;              "Ptr", record["hwnd"],
+;              "Int", 9,
+;              "Int"
+;          )
+;      }
+;  ;
+;      ; 退出清理使用同步 ShowWindow 后再尽力恢复原 Z 序与置顶分组，不启动
+;      ; 新定时器，也不会覆盖宿主注册的其他退出处理函数。
+;      ApplyRecordedZOrder(validRecords)
 ;  }
 ; @script-code-end
 
@@ -858,6 +1329,92 @@ ReleaseApplicationMutexOnExit(*) {
 ;       "type": "send",
 ;       // 填写要比较的内容，或动作实际使用的参数。
 ;       "value": "!{Tab}"
+;     }
+;   ]
+; }
+; @spec-end
+; @generated-begin
+; 请让开头的内容摘要与上面的详细设置保持一致。
+; 小助手会直接读取并运行这些设置，不需要另写 AHK 脚本。
+; @generated-end
+; @mapping-end
+
+; @mapping-begin
+; 给这条规则起一个容易辨认的名称；它会显示在主界面中。
+; @名称=Alt+M 最小化当前窗口
+; 选择规则的写法；请保留下方已有的类型名称。
+; @类型=规则块
+; 写清楚按下什么键或鼠标按键会触发这条规则。
+; @来源按键=Alt + M
+; 写清楚触发后会执行什么按键、鼠标操作或命令。
+; @映射结果=最小化当前窗口
+; 写清楚规则在哪里有效，例如“全局”或某个程序。
+; @生效范围=全局
+; 下面是规则的详细设置，包括触发方式、生效条件、时间判定和执行动作。
+; @spec-begin
+; {
+;   // 说明什么键盘或鼠标输入会触发这条规则。
+;   "from": {
+;     // 指定作为主要触发来源的单个按键。
+;     "key": {
+;       // 填写 AHK 能识别的按键名称。
+;       "name": "M"
+;     },
+;     // 列出触发时必须按住的 Ctrl、Shift、Alt 或 Win 键。
+;     "modifiers": [
+;       "Alt"
+;     ],
+;     // 决定长按产生自动重复时，是允许、忽略还是只响应重复。
+;     "repeat": "ignore"
+;   },
+;   // 来源按键触发时，立即执行这些动作。
+;   "to": [
+;     {
+;       // 选择这一项属于哪一种条件或执行动作。
+;       "type": "window_minimize"
+;     }
+;   ]
+; }
+; @spec-end
+; @generated-begin
+; 请让开头的内容摘要与上面的详细设置保持一致。
+; 小助手会直接读取并运行这些设置，不需要另写 AHK 脚本。
+; @generated-end
+; @mapping-end
+
+; @mapping-begin
+; 给这条规则起一个容易辨认的名称；它会显示在主界面中。
+; @名称=Alt+W 关闭当前窗口
+; 选择规则的写法；请保留下方已有的类型名称。
+; @类型=规则块
+; 写清楚按下什么键或鼠标按键会触发这条规则。
+; @来源按键=Alt + W
+; 写清楚触发后会执行什么按键、鼠标操作或命令。
+; @映射结果=关闭当前窗口
+; 写清楚规则在哪里有效，例如“全局”或某个程序。
+; @生效范围=全局
+; 下面是规则的详细设置，包括触发方式、生效条件、时间判定和执行动作。
+; @spec-begin
+; {
+;   // 说明什么键盘或鼠标输入会触发这条规则。
+;   "from": {
+;     // 指定作为主要触发来源的单个按键。
+;     "key": {
+;       // 填写 AHK 能识别的按键名称。
+;       "name": "W"
+;     },
+;     // 列出触发时必须按住的 Ctrl、Shift、Alt 或 Win 键。
+;     "modifiers": [
+;       "Alt"
+;     ],
+;     // 决定长按产生自动重复时，是允许、忽略还是只响应重复。
+;     "repeat": "ignore"
+;   },
+;   // 来源按键触发时，立即执行这些动作。
+;   "to": [
+;     {
+;       // 选择这一项属于哪一种条件或执行动作。
+;       "type": "window_close"
 ;     }
 ;   ]
 ; }
@@ -1040,92 +1597,6 @@ ReleaseApplicationMutexOnExit(*) {
 ;       "type": "send",
 ;       // 填写要比较的内容，或动作实际使用的参数。
 ;       "value": "^+{Space}"
-;     }
-;   ]
-; }
-; @spec-end
-; @generated-begin
-; 请让开头的内容摘要与上面的详细设置保持一致。
-; 小助手会直接读取并运行这些设置，不需要另写 AHK 脚本。
-; @generated-end
-; @mapping-end
-
-; @mapping-begin
-; 给这条规则起一个容易辨认的名称；它会显示在主界面中。
-; @名称=Alt+M 最小化当前窗口
-; 选择规则的写法；请保留下方已有的类型名称。
-; @类型=规则块
-; 写清楚按下什么键或鼠标按键会触发这条规则。
-; @来源按键=Alt + M
-; 写清楚触发后会执行什么按键、鼠标操作或命令。
-; @映射结果=最小化当前窗口
-; 写清楚规则在哪里有效，例如“全局”或某个程序。
-; @生效范围=全局
-; 下面是规则的详细设置，包括触发方式、生效条件、时间判定和执行动作。
-; @spec-begin
-; {
-;   // 说明什么键盘或鼠标输入会触发这条规则。
-;   "from": {
-;     // 指定作为主要触发来源的单个按键。
-;     "key": {
-;       // 填写 AHK 能识别的按键名称。
-;       "name": "M"
-;     },
-;     // 列出触发时必须按住的 Ctrl、Shift、Alt 或 Win 键。
-;     "modifiers": [
-;       "Alt"
-;     ],
-;     // 决定长按产生自动重复时，是允许、忽略还是只响应重复。
-;     "repeat": "ignore"
-;   },
-;   // 来源按键触发时，立即执行这些动作。
-;   "to": [
-;     {
-;       // 选择这一项属于哪一种条件或执行动作。
-;       "type": "window_minimize"
-;     }
-;   ]
-; }
-; @spec-end
-; @generated-begin
-; 请让开头的内容摘要与上面的详细设置保持一致。
-; 小助手会直接读取并运行这些设置，不需要另写 AHK 脚本。
-; @generated-end
-; @mapping-end
-
-; @mapping-begin
-; 给这条规则起一个容易辨认的名称；它会显示在主界面中。
-; @名称=Alt+W 关闭当前窗口
-; 选择规则的写法；请保留下方已有的类型名称。
-; @类型=规则块
-; 写清楚按下什么键或鼠标按键会触发这条规则。
-; @来源按键=Alt + W
-; 写清楚触发后会执行什么按键、鼠标操作或命令。
-; @映射结果=关闭当前窗口
-; 写清楚规则在哪里有效，例如“全局”或某个程序。
-; @生效范围=全局
-; 下面是规则的详细设置，包括触发方式、生效条件、时间判定和执行动作。
-; @spec-begin
-; {
-;   // 说明什么键盘或鼠标输入会触发这条规则。
-;   "from": {
-;     // 指定作为主要触发来源的单个按键。
-;     "key": {
-;       // 填写 AHK 能识别的按键名称。
-;       "name": "W"
-;     },
-;     // 列出触发时必须按住的 Ctrl、Shift、Alt 或 Win 键。
-;     "modifiers": [
-;       "Alt"
-;     ],
-;     // 决定长按产生自动重复时，是允许、忽略还是只响应重复。
-;     "repeat": "ignore"
-;   },
-;   // 来源按键触发时，立即执行这些动作。
-;   "to": [
-;     {
-;       // 选择这一项属于哪一种条件或执行动作。
-;       "type": "window_close"
 ;     }
 ;   ]
 ; }

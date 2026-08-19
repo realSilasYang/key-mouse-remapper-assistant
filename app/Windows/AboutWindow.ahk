@@ -56,10 +56,10 @@ class AboutWindow {
             "x" contentX " y70 w" contentWidth
                 " h30 Center 0x200 BackgroundTrans",
             Tr("键鼠重映射小助手"))
-        this.Gui.SetFont("norm s9 c" colors.Muted, fontName)
+        this.Gui.SetFont("norm s10 c" colors.Muted, fontName)
         this.Subtitle := this.Gui.Add("Text",
             "x" contentX " y106 w" contentWidth
-                " h22 Center 0x200 BackgroundTrans",
+                " h24 Center 0x200 BackgroundTrans",
             Tr("让每一条键鼠映射都可录制、可审阅、可掌控"))
 
         this.TopDivider := this.Gui.Add("Text",
@@ -183,7 +183,7 @@ class AboutWindow {
             this.ProductName.SetFont("bold s14 c" colors.Text, systemFont)
             this.Subtitle.Text := Tr(
                 "让每一条键鼠映射都可录制、可审阅、可掌控")
-            this.Subtitle.SetFont("norm s9 c" colors.Muted, fontName)
+            this.Subtitle.SetFont("norm s10 c" colors.Muted, fontName)
             this.VersionLabel.Text := Tr("当前版本")
             this.RuntimeLabel.Text := Tr("运行环境")
             for label in [this.VersionLabel, this.RuntimeLabel]

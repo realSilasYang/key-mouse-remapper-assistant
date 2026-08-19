@@ -100,7 +100,8 @@ RedrawStableWindow(hwnd, eraseBackground := false) {
         "Ptr", 0, "UInt", flags, "Int")
 }
 
-ShowPreparedWindow(guiObj, showOptions, prepareCallback := "") {
+ShowPreparedWindow(guiObj, showOptions, prepareCallback := "",
+        dynamicLayout := false) {
     if !IsObject(guiObj)
         return false
     try hwnd := guiObj.Hwnd
@@ -110,6 +111,7 @@ ShowPreparedWindow(guiObj, showOptions, prepareCallback := "") {
         return false
     if EnvGet("KEY_MOUSE_REMAPPER_GUI_TEST_OFFSCREEN") == "1"
         showOptions .= " NA x-30000 y-30000"
+    showOptions := UiScaleService.ScaleShowOptions(showOptions)
     if DllCall("user32\IsWindowVisible", "Ptr", hwnd, "Int") {
         return ActivatePreparedWindow(guiObj)
     }
@@ -118,16 +120,21 @@ ShowPreparedWindow(guiObj, showOptions, prepareCallback := "") {
     ; 让 Size 回调、滚动条和组合框都按最终尺寸创建，再整树提交首帧。
     if IsObject(prepareCallback)
         prepareCallback.Call()
+    UiScaleService.PrepareGui(guiObj, !dynamicLayout)
     BeginStableWindowUpdate(hwnd)
     try {
         guiObj.Show("Hide " showOptions)
         if IsObject(prepareCallback)
             prepareCallback.Call()
+        UiScaleService.PrepareGui(guiObj, !dynamicLayout)
     } finally EndStableWindowUpdate(hwnd, true)
     guiObj.Show()
     if IsObject(prepareCallback) {
         BeginStableWindowUpdate(hwnd)
-        try prepareCallback.Call()
+        try {
+            prepareCallback.Call()
+            UiScaleService.PrepareGui(guiObj, !dynamicLayout)
+        }
         finally EndStableWindowUpdate(hwnd)
     } else {
         RedrawStableWindow(hwnd)
@@ -444,9 +451,7 @@ UnregisterDarkComboBoxTheme(comboHwnd) {
 SetEditMargins(hwnd, left, right) {
     if !hwnd
         return false
-    marginDpi := DllCall("user32\GetDpiForWindow", "Ptr", hwnd, "UInt")
-    if !marginDpi
-        marginDpi := 96
+    marginDpi := UiScaleService.GetEffectiveDpi(hwnd)
     leftPixels := Max(4, Round(left * marginDpi / 96))
     rightPixels := Max(4, Round(right * marginDpi / 96))
     packed := (rightPixels << 16) | (leftPixels & 0xFFFF)
@@ -488,9 +493,7 @@ SetMultilineEditPadding(hwnd, left := 8, top := 5, right := 8,
     if !DllCall("user32\GetClientRect", "Ptr", hwnd, "Ptr", clientRect,
             "Int")
         return false
-    windowDpi := DllCall("user32\GetDpiForWindow", "Ptr", hwnd, "UInt")
-    if !windowDpi
-        windowDpi := 96
+    windowDpi := UiScaleService.GetEffectiveDpi(hwnd)
     leftPx := Max(1, Round(left * windowDpi / 96))
     topPx := Max(1, Round(top * windowDpi / 96))
     rightPx := Max(1, Round(right * windowDpi / 96))
@@ -510,9 +513,7 @@ GetMultilineEditLineMetrics(hwnd, visibleLines := 2,
             || !DllCall("user32\IsWindow", "Ptr", hwnd, "Int")
         return ""
     if !dpi
-        dpi := DllCall("user32\GetDpiForWindow", "Ptr", hwnd, "UInt")
-    if !dpi
-        dpi := 96
+        dpi := UiScaleService.GetEffectiveDpi(hwnd)
     deviceContext := DllCall("user32\GetDC", "Ptr", hwnd, "Ptr")
     if !deviceContext
         return ""

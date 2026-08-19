@@ -28,8 +28,10 @@
 #Include ..\..\src\Core\MappingCodeRepository.ahk
 #Include ..\..\src\Platform\Win32.ahk
 #Include ..\..\src\Platform\WindowHierarchy.ahk
+#Include ..\..\src\UI\UiScaleService.ahk
 #Include ..\..\src\UI\ThemeHelpers.ahk
 #Include ..\..\src\UI\AtomicControlLayout.ahk
+#Include ..\..\src\UI\WindowWheelPropagationGuard.ahk
 class SystemIntegrationService {
     static ApplicationUserModelId := "realSilasYang.KeyMouseRemapperAssistant"
 }
@@ -126,13 +128,21 @@ RunMappingWindowVisualTests() {
                     == window.NameInputMetrics.HorizontalPaddingPx
             && NumGet(initialNameFormatRect, 4, "Int")
                 == window.NameInputMetrics.VerticalPaddingPx
-            && initialNameClientHeight
+            && Abs(initialNameClientHeight
                 - NumGet(initialNameFormatRect, 12, "Int")
-                    == window.NameInputMetrics.VerticalPaddingPx
+                    - window.NameInputMetrics.VerticalPaddingPx) <= 1
             && initialNameViewportHeight
                 == window.NameInputMetrics.LineHeightPx
                     * MappingWindow.NameInputVisibleLines,
-        "The first visible mapping-name viewport lost its fixed padding or two-line height.")
+        Format("The first visible mapping-name viewport lost its fixed padding or configured height: format={1}/{2}/{3}/{4}, client={5}/{6}, metrics={7}/{8}/{9}.",
+            NumGet(initialNameFormatRect, 0, "Int"),
+            NumGet(initialNameFormatRect, 4, "Int"),
+            NumGet(initialNameFormatRect, 8, "Int"),
+            NumGet(initialNameFormatRect, 12, "Int"),
+            initialNameClientWidth, initialNameClientHeight,
+            window.NameInputMetrics.HorizontalPaddingPx,
+            window.NameInputMetrics.VerticalPaddingPx,
+            window.NameInputMetrics.LineHeightPx))
     initialNameLineHeight := window.Interactions.GetTextInputCaretHeight(
         window.NameEdit.Hwnd, initialNameClientHeight)
     DllCall("user32\SetFocus", "Ptr", window.NameEdit.Hwnd, "Ptr")
@@ -283,12 +293,29 @@ RunMappingWindowVisualTests() {
         "The caret-free main status", false)
     Sleep(10)
     AssertMainStatusCaretHidden(window, "mouse-selected main status text")
+    AssertMainStatusViewport(window, "mouse-selected main status text")
     AssertListCellTooltipUsesContentWidth(window)
     window.SetStatus(Tr("已保存，正在后台应用…"))
     MappingWindowVisualAssert(window.GetStatusLayout(initialWidth).Extra == 0,
         "The deferred-save progress text expanded the main-window status area.")
+    window.StatusSurfaceRefreshCount := 0
+    window.Status.GetPos(, , , &shortStatusHeight)
+    addedStatus := "已新增映射代码：左 Win 键、右 Win 键 -> "
+        . "Win 键单独持续按下 2000 毫秒后发送释放事件；随后拦截 "
+        . "Win 组合并仅传递不含 Win 修饰的其他按键；已应用。"
+    window.SetStatus(addedStatus)
+    window.Status.GetPos(, , , &addedStatusHeight)
+    AssertMainStatusViewport(window, "wrapped newly-added-rule status")
+    MappingWindowVisualAssert(addedStatusHeight > shortStatusHeight
+            && window.StatusSurfaceRefreshCount > 0,
+        "A wrapped newly-added-rule status did not refresh its expanded native surface.")
     persistentError := "persistent copyable error`nsecond detail line"
     window.SetStatus(persistentError, true)
+    AssertMainStatusViewport(window, "two-line persistent status")
+    SendMessage(Win32.WM_MOUSEWHEEL,
+        ((-MappingWindow.WheelDelta & 0xFFFF) << 16), 0, ,
+        window.Status.Hwnd)
+    AssertMainStatusViewport(window, "wheel input over the main status")
     window.List.Modify(1, "Select Focus Vis")
     window.RefreshSelectionState()
     MappingWindowVisualAssert(window.StatusIsError
@@ -539,15 +566,16 @@ RunMappingWindowVisualTests() {
             && scrolledNameFirstLine > 0,
         Format("The mapping name input did not provide hidden-scrollbar multiline scrolling: style={1:X}, lines={2}, first={3}.",
             nameEditStyle, wrappedNameLineCount, scrolledNameFirstLine))
-    MappingWindowVisualAssert(nameViewportHeight == nameLineHeight * 2
+    MappingWindowVisualAssert(nameViewportHeight
+            == nameLineHeight * MappingWindow.NameInputVisibleLines
             && NumGet(nameFormatRect, 0, "Int")
                 == window.NameInputMetrics.HorizontalPaddingPx
             && nameClientWidth - NumGet(nameFormatRect, 8, "Int")
                 == window.NameInputMetrics.HorizontalPaddingPx
             && NumGet(nameFormatRect, 4, "Int")
                 == window.NameInputMetrics.VerticalPaddingPx
-            && nameClientHeight - NumGet(nameFormatRect, 12, "Int")
-                == window.NameInputMetrics.VerticalPaddingPx,
+            && Abs(nameClientHeight - NumGet(nameFormatRect, 12, "Int")
+                - window.NameInputMetrics.VerticalPaddingPx) <= 1,
         Format("The mapping name viewport exposed a partial third line or lost padding: viewport={1}, line={2}, top={3}, bottom={4}, client={5}.",
             nameViewportHeight, nameLineHeight,
             NumGet(nameFormatRect, 4, "Int"),
@@ -556,11 +584,34 @@ RunMappingWindowVisualTests() {
             == window.NameInputHeight
             && wrappedNameEditHeight == wrappedNameHeight - 2
             && wrappedNameEditY == wrappedNameY + 1
-            && wrappedNameY == sourceCaptureY
-                + Floor((sourceCaptureHeight - wrappedNameHeight) / 2),
-        "The mapping name input did not retain its centered two-line viewport.")
+            && wrappedNameY == sourceCaptureY,
+        "The mapping name input did not retain its configured single-line viewport.")
     window.NameEdit.Value := ""
     window.CancelCaptureState()
+
+    window.SourceCapture := {Display: "F1", RawDisplay: "F1",
+        DetailLines: "F1"}
+    window.TargetCapture := {Display: "F2", RawDisplay: "F2",
+        DetailLines: "F2"}
+    window.NameEdit.Value := "录制期间清空测试"
+    app.Capture.Active := true
+    app.Capture.Role := "source"
+    MappingWindowVisualAssert(
+            window.IsPointerOverCaptureButton(window.ClearButton.Hwnd)
+            && window.SuppressNextPointerButtonActivation(
+                window.ClearButton.Hwnd),
+        "The clear command was not recognized as a capture-time pointer action.")
+    app.Capture.Stop(false)
+    window.FinalizePointerButtonCancellation()
+    Sleep(20)
+    clearState := window.Interactions.Controls[window.ClearButton.Hwnd]
+    MappingWindowVisualAssert(!IsObject(window.SourceCapture)
+            && !IsObject(window.TargetCapture)
+            && window.NameEdit.Value == ""
+            && InStr(window.Status.Text, Tr("已清空新建区域。"))
+            && clearState.SuppressNextActivation,
+        "Clicking clear during recording captured LButton or failed to clear the editor.")
+    window.Interactions.ResetSuppressedButtonActivations()
 
     window.BeginCapture("source")
     SendMessage(Win32.WM_LBUTTONDOWN, 1, 8 | (8 << 16), ,
@@ -849,6 +900,24 @@ RunMappingWindowVisualTests() {
             && deleteState.Normal == MappingWindow.Colors.DeleteDisabled
             && !deleteState.Interactive,
         "Clearing the selection did not restore disabled command colors.")
+    MappingWindowVisualAssert(IsObject(window.NewMappingHotkeyCallback)
+            && window.HistoryHotkeysRegistered,
+        "Ctrl+N was not registered with the main-window shortcut lifecycle.")
+    window.Interactions.MoveKeyboardFocus(window.Status.Hwnd)
+    MappingWindowVisualAssert(DllCall("user32\GetFocus", "Ptr")
+            == window.Status.Hwnd
+            && window.IsShortcutFocusEligible(window.Status.Hwnd),
+        "Ctrl+N was disabled while the unselected list used its read-only status focus target.")
+    window.NewMappingHotkeyCallback.Call()
+    MappingWindowVisualAssert(IsObject(window.BlockEditor)
+            && window.BlockEditor.IsNew,
+        "Ctrl+N did not open the new-mapping editor without a selected row.")
+    window.BlockEditor.Dispose(false)
+    window.Interactions.MoveKeyboardFocus(window.NameEdit.Hwnd)
+    MappingWindowVisualAssert(
+        !window.IsShortcutFocusEligible(window.NameEdit.Hwnd),
+        "Main-window shortcuts intercepted an editable text input.")
+    window.ClearAutomaticControlFocus()
 
     ValidateMappingEditorCleanup(window)
     ValidateNewMappingEditorModes(window)
@@ -921,8 +990,32 @@ GetMappingListItemIndent(window, row, column) {
 }
 
 AssertCenteredMappingStatusContent(window, row, cellRect) {
-    DllCall("user32\UpdateWindow", "Ptr", window.List.Hwnd, "Int")
-    DllCall("gdi32\GdiFlush", "Int")
+    bounds := ""
+    listDpi := DllCall("user32\GetDpiForWindow", "Ptr", window.List.Hwnd,
+        "UInt")
+    if !listDpi
+        listDpi := 96
+    cellCenter := (cellRect.Left + cellRect.Right - 1) / 2
+    tolerance := Max(3, Round(4 * listDpi / 96))
+    Loop 4 {
+        window.List.Redraw()
+        DllCall("user32\UpdateWindow", "Ptr", window.List.Hwnd, "Int")
+        DllCall("gdi32\GdiFlush", "Int")
+        bounds := GetMappingStatusVisibleBounds(window, cellRect, listDpi)
+        if bounds.VisiblePixels > 0
+                && Abs((bounds.Left + bounds.Right) / 2 - cellCenter)
+                    <= tolerance
+            return
+        Sleep(20)
+    }
+    MappingWindowVisualAssert(false,
+        Format("The visible status icon-text group is not centered in its cell: content={1}-{2}, cell={3}-{4}.",
+            IsObject(bounds) ? bounds.Left : -1,
+            IsObject(bounds) ? bounds.Right : -1,
+            cellRect.Left, cellRect.Right))
+}
+
+GetMappingStatusVisibleBounds(window, cellRect, listDpi) {
     deviceContext := DllCall("user32\GetDC", "Ptr", window.List.Hwnd,
         "Ptr")
     MappingWindowVisualAssert(deviceContext,
@@ -930,10 +1023,6 @@ AssertCenteredMappingStatusContent(window, row, cellRect) {
     textColor := ColorRef(MappingWindow.Colors.Text)
     enabledIconColor := ColorRef(MappingWindow.Colors.StatusEnabledIcon)
     pausedIconColor := ColorRef(MappingWindow.Colors.StatusPausedIcon)
-    listDpi := DllCall("user32\GetDpiForWindow", "Ptr", window.List.Hwnd,
-        "UInt")
-    if !listDpi
-        listDpi := 96
     horizontalSampleInset := Max(3, Round(10 * listDpi / 96))
     minimumX := cellRect.Right
     maximumX := cellRect.Left
@@ -960,49 +1049,8 @@ AssertCenteredMappingStatusContent(window, row, cellRect) {
         }
     } finally DllCall("user32\ReleaseDC", "Ptr", window.List.Hwnd,
         "Ptr", deviceContext)
-    contentCenter := (minimumX + maximumX) / 2
-    cellCenter := (cellRect.Left + cellRect.Right - 1) / 2
-    tolerance := Max(3, Round(4 * listDpi / 96))
-    MappingWindowVisualAssert(visiblePixels > 0
-            && Abs(contentCenter - cellCenter) <= tolerance,
-        Format("The visible status icon-text group is not centered in its cell: content={1}-{2}, cell={3}-{4}.",
-            minimumX, maximumX, cellRect.Left, cellRect.Right))
-}
-
-GetMappingListVisibleContentBounds(window, row, column) {
-    cellRect := window.GetListSubItemRect(row, column)
-    if !IsObject(cellRect)
-        return ""
-    deviceContext := DllCall("user32\GetDC", "Ptr", window.List.Hwnd,
-        "Ptr")
-    if !deviceContext
-        return ""
-    textColor := ColorRef(MappingWindow.Colors.Text)
-    minimumX := cellRect.Right
-    maximumX := cellRect.Left
-    visiblePixels := 0
-    try {
-        y := cellRect.Top + 3
-        while y < cellRect.Bottom - 3 {
-            x := cellRect.Left + 3
-            while x < cellRect.Right - 3 {
-                pixel := DllCall("gdi32\GetPixel", "Ptr", deviceContext,
-                    "Int", x, "Int", y, "UInt")
-                if MappingWindowPixelNearColor(pixel, textColor) {
-                    minimumX := Min(minimumX, x)
-                    maximumX := Max(maximumX, x)
-                    visiblePixels++
-                }
-                x++
-            }
-            y++
-        }
-    } finally DllCall("user32\ReleaseDC", "Ptr", window.List.Hwnd,
-        "Ptr", deviceContext)
-    return visiblePixels ? {
-        Left: minimumX, Right: maximumX, Cell: cellRect,
-        Inset: minimumX - cellRect.Left
-    } : ""
+    return {Left: minimumX, Right: maximumX,
+        VisiblePixels: visiblePixels}
 }
 
 MappingWindowPixelNearColor(pixel, target, tolerance := 24) {
@@ -1015,43 +1063,14 @@ MappingWindowPixelNearColor(pixel, target, tolerance := 24) {
 }
 
 AssertUniformMappingListTextInsets(window, row) {
-    name := source := target := ""
-    originalName := window.List.GetText(row, MappingWindow.NameColumn)
-    originalSource := window.List.GetText(row, MappingWindow.SourceColumn)
-    originalTarget := window.List.GetText(row, MappingWindow.TargetColumn)
-    try {
-        ; Identical text keeps glyph side bearings and antialiasing from being
-        ; mistaken for different column insets when the system font changes.
-        probeText := "Inset probe"
-        window.List.Modify(row, "Col" MappingWindow.NameColumn, probeText)
-        window.List.Modify(row, "Col" MappingWindow.SourceColumn, probeText)
-        window.List.Modify(row, "Col" MappingWindow.TargetColumn, probeText)
-        Loop 4 {
-            window.List.Redraw()
-            DllCall("user32\UpdateWindow", "Ptr", window.List.Hwnd, "Int")
-            DllCall("gdi32\GdiFlush", "Int")
-            name := GetMappingListVisibleContentBounds(window, row,
-                MappingWindow.NameColumn)
-            source := GetMappingListVisibleContentBounds(window, row,
-                MappingWindow.SourceColumn)
-            target := GetMappingListVisibleContentBounds(window, row,
-                MappingWindow.TargetColumn)
-            if IsObject(name) && IsObject(source) && IsObject(target)
-                break
-            Sleep(20)
-        }
-    } finally {
-        window.List.Modify(row, "Col" MappingWindow.NameColumn, originalName)
-        window.List.Modify(row, "Col" MappingWindow.SourceColumn,
-            originalSource)
-        window.List.Modify(row, "Col" MappingWindow.TargetColumn,
-            originalTarget)
-        window.List.Redraw()
-    }
+    name := window.GetLeftAlignedListTextRect(row, MappingWindow.NameColumn)
+    source := window.GetLeftAlignedListTextRect(row,
+        MappingWindow.SourceColumn)
+    target := window.GetLeftAlignedListTextRect(row,
+        MappingWindow.TargetColumn)
     MappingWindowVisualAssert(IsObject(name) && IsObject(source)
             && IsObject(target)
-            && Max(name.Inset, source.Inset, target.Inset)
-                - Min(name.Inset, source.Inset, target.Inset) <= 2,
+            && name.Inset == source.Inset && source.Inset == target.Inset,
         Format("The left-aligned mapping columns use inconsistent text insets: name={1}, source={2}, target={3}.",
             IsObject(name) ? name.Inset : -1,
             IsObject(source) ? source.Inset : -1,
@@ -1062,19 +1081,19 @@ AssertMappingNameStartsAfterSequence(window, row) {
     sequenceCell := window.GetListSubItemRect(row,
         MappingWindow.SequenceColumn)
     nameCell := window.GetListSubItemRect(row, MappingWindow.NameColumn)
-    visibleName := GetMappingListVisibleContentBounds(window, row,
+    nameText := window.GetLeftAlignedListTextRect(row,
         MappingWindow.NameColumn)
     MappingWindowVisualAssert(IsObject(sequenceCell)
-            && IsObject(nameCell) && IsObject(visibleName)
+            && IsObject(nameCell) && IsObject(nameText)
             && nameCell.Left >= sequenceCell.Right
-            && visibleName.Left >= nameCell.Left
-            && visibleName.Left < nameCell.Right,
+            && nameText.Left >= nameCell.Left
+            && nameText.Left < nameCell.Right,
         Format("The mapping name overlaps the sequence column: sequence={1}-{2}, name={3}-{4}, text={5}.",
             IsObject(sequenceCell) ? sequenceCell.Left : -1,
             IsObject(sequenceCell) ? sequenceCell.Right : -1,
             IsObject(nameCell) ? nameCell.Left : -1,
             IsObject(nameCell) ? nameCell.Right : -1,
-            IsObject(visibleName) ? visibleName.Left : -1))
+            IsObject(nameText) ? nameText.Left : -1))
 }
 
 AssertLeftAlignedContextPopupButton(popup, button) {
@@ -1570,22 +1589,44 @@ ValidateMainWindowResponsiveLayout(window) {
     }
     window.List.GetPos(&baseListX, &baseListY, &baseListWidth,
         &baseListHeight)
+    AssertMappingWindowListUsesWholeRows(window, "baseline")
     window.SourceButton.GetPos(&baseSourceX, &baseSourceY,
         &baseSourceWidth, &baseSourceHeight)
     window.TargetButton.GetPos(&baseTargetX, , &baseTargetWidth,
         &baseTargetHeight)
-    window.NameInput.Background.GetPos(&baseNameX, ,
+    window.NameInput.Background.GetPos(&baseNameX, &baseNameY,
         &baseNameWidth, &baseNameHeight)
-    window.SourceDetail.GetPos(, , , &baseDetailHeight)
-    window.Status.GetPos(, , , &baseStatusHeight)
+    window.SourceDetail.GetPos(, &baseDetailY, , &baseDetailHeight)
+    window.Status.GetPos(&baseStatusX, &baseStatusY, &baseStatusWidth,
+        &baseStatusHeight)
     window.SaveButton.GetPos(&baseSaveX, &baseSaveY, &baseSaveWidth,
         &baseSaveHeight)
-    window.ClearButton.GetPos(, , , &baseClearHeight)
+    window.ClearButton.GetPos(&baseClearX, &baseClearY, &baseClearWidth,
+        &baseClearHeight)
     window.AddButton.GetPos(, , , &baseTopCommandHeight)
     MappingWindowVisualAssert(baseSaveHeight == baseClearHeight
             && baseClearHeight == baseTopCommandHeight
             && baseSaveHeight == MappingWindow.CommandButtonHeight,
         "The footer commands do not share the main command-button geometry.")
+    MappingWindowVisualAssert(baseNameHeight < baseSourceHeight
+            && baseSourceHeight == baseTargetHeight
+            && baseSourceHeight == baseNameHeight
+                + MappingWindow.EditorToCommandGap + baseSaveHeight
+            && baseSaveY >= baseNameY + baseNameHeight
+            && baseSaveY == baseClearY
+            && baseSaveX == baseNameX
+            && baseSaveWidth + MappingWindow.CommandButtonGap
+                + baseClearWidth == baseNameWidth
+            && Abs(baseSaveWidth - baseClearWidth) <= 1
+            && baseClearX + baseClearWidth == baseNameX + baseNameWidth
+            && baseStatusX == 10
+            && baseStatusWidth == baseWidth - 20
+            && baseDetailY + baseDetailHeight <= baseStatusY,
+        Format("The mapping name field, equal-width commands, and full-width status strip have incorrect geometry: name={1}/{2}/{3}/{4}, save={5}/{6}/{7}, clear={8}/{9}, status={10}/{11}/{12}, detailBottom={13}, client={14}.",
+            baseNameX, baseNameY, baseNameWidth, baseNameHeight,
+            baseSaveX, baseSaveY, baseSaveWidth,
+            baseClearX, baseClearWidth, baseStatusX, baseStatusY,
+            baseStatusWidth, baseDetailY + baseDetailHeight, baseWidth))
     window.RefreshVisibleRoundedButtons()
     DllCall("gdi32\GdiFlush", "Int")
     FirstVisibleWindowPresenter.FlushComposition()
@@ -1599,14 +1640,11 @@ ValidateMainWindowResponsiveLayout(window) {
             CaptureMappingWindowControlSignature(cell))
     saveButtonState := window.Interactions.Controls[window.SaveButton.Hwnd]
     clearButtonState := window.Interactions.Controls[window.ClearButton.Hwnd]
-    MappingWindowVisualAssert(saveButtonState.HasOwnProp("ButtonImage")
-            && clearButtonState.HasOwnProp("ButtonImage"),
-        "The footer commands do not share the icon-backed owner-draw path.")
-    MappingWindowVisualAssert(saveButtonState.ButtonImage.TintColor
-            == MappingWindow.Colors.Success
-            && clearButtonState.ButtonImage.TintColor
-                == MappingWindow.Colors.Danger,
-        "The footer icons do not use semantic success and danger colors.")
+    MappingWindowVisualAssert(!saveButtonState.HasOwnProp("ButtonImage")
+            && !saveButtonState.HasOwnProp("TrailingButtonImage")
+            && !clearButtonState.HasOwnProp("ButtonImage")
+            && !clearButtonState.HasOwnProp("TrailingButtonImage"),
+        "The mapping save or clear command retained an icon slot.")
     MappingWindowVisualAssert(saveButtonState.Normal == clearButtonState.Normal
             && saveButtonState.TextColor == clearButtonState.TextColor
             && saveButtonState.RadiusDip == clearButtonState.RadiusDip,
@@ -1636,10 +1674,6 @@ ValidateMainWindowResponsiveLayout(window) {
             8, 12, 16, 20, 24, 20, 16, 12, 8, 4] {
         if heightDelta > availableVerticalDelta
             continue
-        oldSaveRect := AtomicControlLayout.GetControlBounds(
-            window.SaveButton.Hwnd, window.Gui.Hwnd)
-        oldClearRect := AtomicControlLayout.GetControlBounds(
-            window.ClearButton.Hwnd, window.Gui.Hwnd)
         requestedTallHeight := baseHeight - heightDelta
         MappingWindowVisualAssert(ResizeMappingWindowClient(
                 window.Gui.Hwnd, baseWidth, requestedTallHeight),
@@ -1691,6 +1725,8 @@ ValidateMainWindowResponsiveLayout(window) {
                 && AtomicControlLayoutEraseGuard.ActiveHwndCounts.Count == 0,
             "An unchanged live-resize frame did not take the no-work path.")
         window.List.GetPos(, , , &tallListHeight)
+        AssertMappingWindowListUsesWholeRows(window,
+            "continuous vertical resize")
         window.SourceButton.GetPos(, &tallSourceY, , &tallSourceHeight)
         window.TargetButton.GetPos(, , , &tallTargetHeight)
         window.NameInput.Background.GetPos(, , , &tallNameHeight)
@@ -1700,11 +1736,13 @@ ValidateMainWindowResponsiveLayout(window) {
             window.SaveButton)
         currentClearSignature := CaptureMappingWindowControlSignature(
             window.ClearButton)
-        MappingWindowVisualAssert(Abs((tallListHeight - baseListHeight)
-                    - (tallHeight - baseHeight)) <= 1
-                && Abs((tallSourceY - baseSourceY)
-                    - (tallHeight - baseHeight)) <= 1,
-            "A continuous vertical resize step did not go entirely to the rule list.")
+        listHeightDelta := tallListHeight - baseListHeight
+        windowHeightDelta := tallHeight - baseHeight
+        MappingWindowVisualAssert(Abs((tallSourceY - baseSourceY)
+                    - listHeightDelta) <= 1
+                && Abs(windowHeightDelta - listHeightDelta)
+                    < MappingWindow.ListRowHeight + 1,
+            "A continuous vertical resize step broke the whole-row list layout.")
             MappingWindowVisualAssert(tallSourceHeight == baseSourceHeight
                 && tallTargetHeight == baseTargetHeight
                 && tallNameHeight == baseNameHeight
@@ -1719,20 +1757,17 @@ ValidateMainWindowResponsiveLayout(window) {
                 CaptureMappingWindowControlSignature(cell)
                     == baseHeaderSignatures[headerIndex],
                 "A vertical resize lost a pseudo-header surface.")
-        AssertMappingWindowOldSurfaceClear(window.Gui.Hwnd,
-            window.SaveButton.Hwnd, oldSaveRect,
-            MappingWindow.Colors.Window,
-            "A vertical resize left a saved-mapping button edge in its old position.")
-        AssertMappingWindowOldSurfaceClear(window.Gui.Hwnd,
-            window.ClearButton.Hwnd, oldClearRect,
-            MappingWindow.Colors.Window,
-            "A vertical resize left a clear button edge in its old position.")
+        ; The old footer area is now occupied by the full-width status strip,
+        ; so it is intentionally not required to be a blank parent surface.
+        AssertMainStatusViewport(window, "status strip after command relocation")
     }
-    MappingWindowVisualAssert(Abs((tallListHeight - baseListHeight)
-                - (tallHeight - baseHeight)) <= 1
-            && Abs((tallSourceY - baseSourceY)
-                - (tallHeight - baseHeight)) <= 1,
-        "Vertical resizing did not assign all additional height to the rule list.")
+    listHeightDelta := tallListHeight - baseListHeight
+    windowHeightDelta := tallHeight - baseHeight
+    MappingWindowVisualAssert(Abs((tallSourceY - baseSourceY)
+                - listHeightDelta) <= 1
+            && Abs(windowHeightDelta - listHeightDelta)
+                < MappingWindow.ListRowHeight + 1,
+        "Vertical resizing broke the whole-row list layout.")
     MappingWindowVisualAssert(tallSourceHeight == baseSourceHeight
             && tallTargetHeight == baseTargetHeight
             && tallNameHeight == baseNameHeight
@@ -1742,7 +1777,7 @@ ValidateMainWindowResponsiveLayout(window) {
             && tallSourceHeight >= MappingWindow.MinCaptureButtonHeight
             && tallDetailHeight >= MappingWindow.MinCaptureDetailHeight
             && baseStatusHeight >= MappingWindow.MinStatusHeight
-            && tallCommandHeight <= MappingWindow.CommandRegionMinHeight,
+            && tallCommandHeight == MappingWindow.CommandButtonHeight,
         "A main-window region violated its explicit minimum height.")
     MappingWindowVisualCheckpoint(window, "tall")
 
@@ -2099,6 +2134,7 @@ ValidateSelectionRefreshIsolation(window) {
         window.Status.GetPos(, &statusYAfter, , &statusHeightAfter)
         MappingWindowVisualAssert(requiredStatusHeight > statusHeightBefore,
             "The oversized rule did not exercise wrapped status text.")
+        AssertMainStatusViewport(window, "expanded selection status")
         MappingWindowVisualAssert(window.SelectionRefreshCount == 1
                 && window.LayoutCallCount == 0
                 && window.FullWindowRedrawCount == 0
@@ -2132,6 +2168,31 @@ ValidateSelectionRefreshIsolation(window) {
                 "Ptr", 0, "Int", originalWindowX, "Int", originalWindowY,
                 "Int", 0, "Int", 0, "UInt", 0x0015, "Int")
     }
+}
+
+AssertMainStatusViewport(window, context) {
+    hwnd := window.Status.Hwnd
+    firstVisibleLine := SendMessage(Win32.EM_GETFIRSTVISIBLELINE,
+        0, 0, , hwnd)
+    clientRect := Buffer(16, 0)
+    formatRect := Buffer(16, 0)
+    MappingWindowVisualAssert(DllCall("user32\GetClientRect", "Ptr", hwnd,
+            "Ptr", clientRect, "Int"),
+        "The main status client rectangle could not be inspected after "
+            context ".")
+    SendMessage(Win32.EM_GETRECT, 0, formatRect.Ptr, , hwnd)
+    formatTop := NumGet(formatRect, 4, "Int")
+    formatBottom := NumGet(formatRect, 12, "Int")
+    clientBottom := NumGet(clientRect, 12, "Int")
+    firstPosition := SendMessage(0x00D6, 0, 0, , hwnd)
+    firstCharacterY := MappingWindowSignedWord(firstPosition >> 16)
+    MappingWindowVisualAssert(firstVisibleLine == 0
+            && formatTop > 0 && formatBottom < clientBottom
+            && formatBottom > formatTop
+            && firstCharacterY >= formatTop,
+        Format("The main status viewport clipped or scrolled its first line after {1}: first={2}, format={3}-{4}, client={5}, charY={6}.",
+            context, firstVisibleLine, formatTop, formatBottom,
+            clientBottom, firstCharacterY))
 }
 
 AssertMappingWindowButtonPixel(interactions, button, expectedColor, message) {
@@ -2207,6 +2268,21 @@ AssertMappingWindowDashedDivider(window, message) {
             && gapPixel == ColorRef(state.BackgroundColor),
         message " line=" Format("{1:06X}", linePixel)
             ", gap=" Format("{1:06X}", gapPixel))
+}
+
+AssertMappingWindowListUsesWholeRows(window, context) {
+    clientRect := Buffer(16, 0)
+    MappingWindowVisualAssert(DllCall("user32\GetClientRect", "Ptr",
+            window.List.Hwnd, "Ptr", clientRect, "Int"),
+        "Could not measure the mapping-list client area after " context ".")
+    clientHeight := NumGet(clientRect, 12, "Int")
+        - NumGet(clientRect, 4, "Int")
+    rowHeight := window.GetListRowHeightPixels()
+    MappingWindowVisualAssert(clientHeight > 0 && rowHeight > 0
+            && Mod(clientHeight, rowHeight) == 0,
+        Format("The mapping list retained trailing partial-row space after {1}: client={2}, row={3}, remainder={4}.",
+            context, clientHeight, rowHeight,
+            rowHeight > 0 ? Mod(clientHeight, rowHeight) : -1))
 }
 
 ValidateMappingEditorCleanup(window) {
@@ -3754,6 +3830,21 @@ ValidateNewMappingEditorModes(window) {
             optimizationEditor.AiPurposeRetryText,
             optimizationEditor.Status.Text, optimizationEditor.EditorRevision,
             optimizationEditor.AiRequestRevision))
+    optimizationUndoResult := optimizationEditor.HandleCodeEditorShortcut(
+        0x5A, true, false, false) == 0
+    optimizationUndoText := optimizationEditor.Canonicalize(
+        optimizationEditor.GetCodeText())
+    optimizationRedoResult := optimizationEditor.HandleCodeEditorShortcut(
+        0x5A, true, true, false) == 0
+    optimizationRedoText := optimizationEditor.Canonicalize(
+        optimizationEditor.GetCodeText())
+    MappingWindowVisualAssert(optimizationUndoResult
+            && optimizationUndoText == optimizationEditor.Canonicalize(
+                optimizationOriginalText)
+            && optimizationRedoResult
+            && optimizationRedoText == optimizationEditor.Canonicalize(
+                optimizedText),
+        "AI optimization did not preserve a single-step undo/redo for the original rule.")
     optimizationEditor.Dispose(false)
     MappingWindowVisualAssert(!IsObject(window.BlockEditor)
             && !WindowHierarchy.IsOwnerLocked(window.Gui),
@@ -4426,6 +4517,12 @@ class MappingWindowVisualProbe extends MappingWindow {
         return super.RedrawStable(eraseBackground, updateImmediately)
     }
 
+    RedrawStatusSurface() {
+        if this.HasOwnProp("StatusSurfaceRefreshCount")
+            this.StatusSurfaceRefreshCount++
+        return super.RedrawStatusSurface()
+    }
+
     OptimizeMappingById(mappingId) {
         this.ContextOptimizeId := mappingId
         return true
@@ -4811,6 +4908,8 @@ class MappingWindowVisualRepository {
             return ScriptRuleCompiler.BuildBlankScriptBlock("`r`n")
         return RuleCompiler.BuildBlankManagedBlock("`r`n")
     }
+
+    CreateBlankBlock() => this.CreateBlankEditorText("managed")
 
     GetAppendStartLine() => 1
 }

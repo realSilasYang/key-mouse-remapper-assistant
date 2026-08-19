@@ -591,7 +591,6 @@ class PortugueseBrazilStrings {
         catalog.Set("我是来帮你的，你要干什么？！", "Estou aqui para ajudar. O que você quer fazer?!")
         catalog.Set("请先关闭当前代码编辑器，再优化其他映射。", "Feche o editor de código atual antes de otimizar outro mapeamento.")
         catalog.Set("AI 服务尚未初始化。", "The AI service is not initialized.")
-        catalog.Set("AI 参数未保存：{1}", "Os parâmetros de IA não foram salvos: {1}")
         catalog.Set("无法读取当前映射代码：{1}", "Could not read the current mapping code: {1}")
         catalog.Set("AI 正在生成规则，请稍候...", "AI is generating a rule. Please wait...")
         catalog.Set("AI 正在优化规则，请稍候...", "A IA está otimizando a regra. Aguarde...")
@@ -626,6 +625,8 @@ class PortugueseBrazilStrings {
         catalog.Set("规则块能力不足，必须改用受托管脚本完整实现。", "Um bloco de regras padrão é insuficiente`; use um script gerenciado para a implementação completa.")
         catalog.Set("未保存：请先用完整的 AHK v2 脚本替换代码占位文字。", "Não salvo: primeiro substitua o espaço reservado por um script AHK v2 completo.")
         catalog.Set("当前等待时间：{1} 秒", "Current wait time: {1} seconds")
+        catalog.Set("界面缩放：", "Escala da interface:")
+        catalog.Set("界面缩放已保存，正在重新加载…", "A escala da interface foi salva. Recarregando…")
         return catalog
     }
 }

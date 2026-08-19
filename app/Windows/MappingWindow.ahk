@@ -13,13 +13,12 @@ class MappingWindow {
     static SmoothScrollTimerResolutionMs := 1
     static WheelDelta := 120
     static ListWheelSubclassId := 0x4D575343
-    static ListTop := 88
+    static ListTop := 90
     static ListToEditorGap := 10
     static EditorHeadingTopPadding := 6
     static EditorHeadingBandMinHeight := 62
-    static CaptureDetailGap := 4
+    static CaptureDetailGap := 10
     static EditorToCommandGap := 2
-    static CommandRegionMinHeight := 52
     static MinSourceColumnWidth := 140
     static MinTargetColumnWidth := 140
     static ListTextInsetDip := 10
@@ -32,11 +31,11 @@ class MappingWindow {
     static MinNameColumnWidth := 210
     static StatusColumnWidth := 92
     static MinCaptureButtonHeight := 52
-    static NameInputInitialHeight := 55
-    static NameInputVisibleLines := 2
+    static NameInputInitialHeight := 28
+    static NameInputVisibleLines := 1
     static NameInputHorizontalPadding := 8
-    static NameInputVerticalPadding := 6
-    static MinCaptureDetailHeight := 68
+    static NameInputVerticalPadding := 3
+    static MinCaptureDetailHeight := 72
     static MinStatusHeight := 24
     static StatusBottomMargin := 22
     static CompactToolbarButtonWidth := 70
@@ -122,7 +121,11 @@ class MappingWindow {
         this.SmoothListTimerResolutionActive := false
         this.ResizeMessagesRegistered := false
         this.HistoryHotkeysRegistered := false
+        this.NewMappingHotkeyCallback := ""
         this.EscapeAfterCaptureDeadline := 0
+        this.PendingCapturePointerAction := ""
+        this.PendingCapturePointerActionTimer := ObjBindMethod(this,
+            "RunPendingCapturePointerAction")
         this.CaptureButtonHwnds := Map()
         this.ListRowImageList := 0
         this.ListMetricsImageList := 0
@@ -136,8 +139,8 @@ class MappingWindow {
         this.FontName := LocalizationService.GetUiFontName()
         this.SystemFontName := LocalizationService.GetLanguageSystemUiFontName()
         this.UpdateLanguageLayoutMetrics()
-        this.Gui := Gui("+Resize +MinSize"
-            this.MinClientWidth "x" MappingWindow.BaseMinClientHeight,
+        this.Gui := Gui("+Resize " UiScaleService.ScaleMinSizeOptions(
+            this.MinClientWidth, MappingWindow.BaseMinClientHeight),
             Tr("键鼠重映射小助手"))
         this.IconHandles := ApplyApplicationWindowIcon(this.Gui.Hwnd)
         this.Gui.BackColor := MappingWindow.Colors.Window
@@ -202,6 +205,8 @@ class MappingWindow {
             "UndoMappingChange")
         this.RedoHotkeyCallback := ObjBindMethod(this.App,
             "RedoMappingChange")
+        this.NewMappingHotkeyCallback := ObjBindMethod(this,
+            "OpenNewMappingEditor", true)
         this.RegisterHistoryHotkeys()
         this.Gui.OnEvent("Size", ObjBindMethod(this, "OnResize"))
         this.Gui.OnEvent("Close", ObjBindMethod(this, "Hide"))
@@ -217,7 +222,8 @@ class MappingWindow {
         this.AddButton := this.AddCommandButton(10, 15,
             this.AddButtonWidth,
             this.GetAddButtonText(), colors.Add,
-            ObjBindMethod(this, "OpenNewMappingEditor"), colors.ButtonText,
+            ObjBindMethod(this, "OpenNewMappingEditor", false),
+            colors.ButtonText,
             MappingWindow.CommandButtonHeight)
         this.PauseResumeButton := this.AddCommandButton(this.PauseButtonX,
             15,
@@ -266,7 +272,7 @@ class MappingWindow {
             Tr("映射结果"), Tr("生效范围"), Tr("状态")]
         this.Gui.SetFont("s12 c" colors.Text, this.FontName)
         this.List := this.Gui.Add("ListView",
-            "x10 y88 w960 h324 Report +ReadOnly -Hdr Background" colors.Surface
+            "x10 y90 w960 h322 Report +ReadOnly -Hdr Background" colors.Surface
             " c" colors.Text " +LV0x10002 -E0x200 -HScroll",
             [Tr("名称"), Tr("状态"), Tr("来源按键"), Tr("映射结果"),
                 Tr("序号"), Tr("生效范围"), "启用状态"])
@@ -402,42 +408,45 @@ class MappingWindow {
         this.ApplyNameInputViewport()
 
         this.SourceDetail := this.Gui.Add("Text",
-            "x10 y514 w280 h68 +Wrap Background" colors.Window " c" colors.Hint,
+            "x10 y514 w280 h72 +Wrap Background" colors.Window " c" colors.Hint,
             this.GetCaptureDetail(""))
         this.TargetDetail := this.Gui.Add("Text",
-            "x334 y514 w280 h68 +Wrap Background" colors.Window " c" colors.Hint,
+            "x334 y514 w280 h72 +Wrap Background" colors.Window " c" colors.Hint,
             this.GetCaptureDetail(""))
-        this.SourceDetail.SetFont("s9", this.FontName)
-        this.TargetDetail.SetFont("s9", this.FontName)
+        this.SourceDetail.SetFont("s10", this.FontName)
+        this.TargetDetail.SetFont("s10", this.FontName)
 
-        mappingClearButtonX := 980 - MappingWindow.CommandRightMargin
+        mappingClearButtonX := MappingWindow.DefaultClientWidth
+            - MappingWindow.CommandRightMargin
             - MappingWindow.ClearButtonWidth
         mappingSaveButtonX := mappingClearButtonX
             - MappingWindow.CommandButtonGap
             - this.SaveButtonWidth
-        this.SaveButton := this.AddCommandButton(mappingSaveButtonX, 548,
+        this.SaveButton := this.AddCommandButton(mappingSaveButtonX, 514,
             this.SaveButtonWidth,
             Tr("保存映射"), colors.Toolbar,
             ObjBindMethod(this, "SaveMapping"), "",
             MappingWindow.CommandButtonHeight)
-        this.Interactions.SetButtonLucideIcon(this.SaveButton,
-            "circle-check-big.svg", 16, 7, colors.Success)
-        this.ClearButton := this.AddCommandButton(mappingClearButtonX, 548,
+        this.Interactions.ClearButtonIcon(this.SaveButton)
+        this.ClearButton := this.AddCommandButton(mappingClearButtonX, 514,
             MappingWindow.ClearButtonWidth,
             Tr("清空"), colors.Toolbar,
             ObjBindMethod(this, "ClearEditor"), "",
             MappingWindow.CommandButtonHeight)
-        this.Interactions.SetButtonLucideIcon(this.ClearButton,
-            "eraser.svg", 16, 7, colors.Danger)
+        this.Interactions.ClearButtonIcon(this.ClearButton)
+        this.CaptureButtonHwnds[this.ClearButton.Hwnd] := "clear"
         this.Status := this.Gui.Add("Edit",
-            "x10 y554 w700 h24 ReadOnly Multi Wrap -TabStop -Border"
+            "x10 y604 w1020 h24 ReadOnly Multi Wrap -TabStop -Border"
                 . " -VScroll -HScroll -E0x200 Background" colors.Window
                 . " c" colors.Muted,
             Tr("准备就绪"))
         ApplyDarkControl(this.Status.Hwnd)
         if !this.Interactions.RegisterTextInput(this.Status, "", "text", true)
             throw Error("无法注册主窗口状态复制交互。")
+        if !this.Interactions.SuppressTextInputWheelScroll(this.Status)
+            throw Error("无法固定主窗口状态文字视口。")
         this.Interactions.SetFocusSink(this.Status)
+        this.NormalizeStatusViewport()
     }
 
     AddCommandButton(x, y, width, text, color, callback, textColor := "",
@@ -514,7 +523,8 @@ class MappingWindow {
         bindings := [
             {Name: "^z", Callback: this.UndoHotkeyCallback},
             {Name: "^+z", Callback: this.RedoHotkeyCallback},
-            {Name: "^y", Callback: this.RedoHotkeyCallback}
+            {Name: "^y", Callback: this.RedoHotkeyCallback},
+            {Name: "^n", Callback: this.NewMappingHotkeyCallback}
         ]
         changedBindings := []
         try {
@@ -544,13 +554,27 @@ class MappingWindow {
     CanUseHistoryShortcuts(*) {
         if this.Disposed || !WinActive("ahk_id " this.Gui.Hwnd)
             return false
-        focusedHwnd := DllCall("user32\GetFocus", "Ptr")
+        return this.IsShortcutFocusEligible()
+    }
+
+    IsShortcutFocusEligible(focusedHwnd := 0) {
+        if !focusedHwnd
+            focusedHwnd := DllCall("user32\GetFocus", "Ptr")
         if !focusedHwnd
             return true
         try className := WinGetClass("ahk_id " focusedHwnd)
         catch
             return true
-        return className != "Edit" && !InStr(className, "RichEdit")
+        if className != "Edit" && !InStr(className, "RichEdit")
+            return true
+        ; The status Edit is the main window's deliberate focus sink. AHK's
+        ; ReadOnly option is applied through the native control state on some
+        ; versions and is not always reflected in GWL_STYLE.
+        if IsObject(this.Status) && focusedHwnd == this.Status.Hwnd
+            return true
+        style := DllCall("user32\GetWindowLongPtrW", "Ptr", focusedHwnd,
+            "Int", Win32.GWL_STYLE, "Ptr")
+        return (style & 0x0800) != 0 ; ES_READONLY
     }
 
     HandleListKeyDown(wParam, lParam, msg, hwnd) {
@@ -565,10 +589,20 @@ class MappingWindow {
 
     HandleListMouseWheel(wParam, lParam, msg, hwnd) {
         if this.Disposed || this.DragActive
+                || !this.IsMessageFromMainWindow(hwnd)
                 || !this.IsScreenPointInsideList(lParam, hwnd)
             return
         wheelDelta := this.SignedWord(wParam >> 16)
         return this.ProcessListWheelDelta(wheelDelta)
+    }
+
+    IsMessageFromMainWindow(hwnd) {
+        if !hwnd || !IsObject(this.Gui) || !this.Gui.Hwnd
+                || !DllCall("user32\IsWindow", "Ptr", hwnd, "Int")
+            return false
+        rootHwnd := DllCall("user32\GetAncestor", "Ptr", hwnd,
+            "UInt", 2, "Ptr") ; GA_ROOT, deliberately excludes owners.
+        return rootHwnd == this.Gui.Hwnd
     }
 
     ProcessListWheelDelta(wheelDelta) {
@@ -883,7 +917,7 @@ class MappingWindow {
         if this.HistoryHotkeysRegistered {
             try this.SetHistoryHotkeyState(false)
             catch as hotkeyError
-                cleanupFailures.Push("撤销重做热键：" hotkeyError.Message)
+                cleanupFailures.Push("主界面快捷键：" hotkeyError.Message)
         }
         this.DisposeOwnedResource(cleanupFailures, "映射编辑器",
             "BlockEditor", false)
@@ -898,6 +932,12 @@ class MappingWindow {
             this.SelectionTimer := ""
         } catch as timerError
             cleanupFailures.Push("选择计时器：" timerError.Message)
+        try {
+            SetTimer(this.PendingCapturePointerActionTimer, 0)
+            this.PendingCapturePointerActionTimer := ""
+            this.PendingCapturePointerAction := ""
+        } catch as timerError
+            cleanupFailures.Push("录制界面命令：" timerError.Message)
         this.DisposeOwnedResource(cleanupFailures, "列表表头",
             "ListHeader")
         this.DisposeOwnedResource(cleanupFailures, "交互服务",
@@ -930,6 +970,7 @@ class MappingWindow {
             this.HistoryHotIf := ""
             this.UndoHotkeyCallback := ""
             this.RedoHotkeyCallback := ""
+            this.NewMappingHotkeyCallback := ""
         }
         if cleanupFailures.Length
             throw Error("主窗口资源清理失败："
@@ -1353,9 +1394,12 @@ class MappingWindow {
             ? NumGet(frame, 8, "Int") - NumGet(frame, 0, "Int") : 0
         frameHeight := adjusted
             ? NumGet(frame, 12, "Int") - NumGet(frame, 4, "Int") : 0
+        effectiveDpi := UiScaleService.GetEffectiveDpi(this.Gui.Hwnd)
         return {
-            Width: Max(1, Floor((workWidth - frameWidth) * 96 / dpi)),
-            Height: Max(1, Floor((workHeight - frameHeight) * 96 / dpi))
+            Width: Max(1, Floor((workWidth - frameWidth) * 96
+                / effectiveDpi)),
+            Height: Max(1, Floor((workHeight - frameHeight) * 96
+                / effectiveDpi))
         }
     }
 
@@ -1366,7 +1410,8 @@ class MappingWindow {
         try {
             this.Gui.GetClientPos(, , &width, &height)
             if width > 0 && height > 0
-                return {Width: Round(width), Height: Round(height)}
+                return {Width: Round(UiScaleService.ToDesign(width)),
+                    Height: Round(UiScaleService.ToDesign(height))}
         }
         return false
     }
@@ -1390,6 +1435,9 @@ class MappingWindow {
             return true
         presentationOptions := this.HasShown ? Trim(String(showOptions))
             : this.BuildFirstShowOptions(showOptions)
+        presentationOptions := UiScaleService.ScaleShowOptions(
+            presentationOptions)
+        UiScaleService.PrepareGui(this.Gui, false)
         result := FirstVisibleWindowPresenter.Show(this.Gui,
             presentationOptions, this.HasShown,
             ObjBindMethod(this, "PrepareFirstVisibleSurface"),
@@ -1495,6 +1543,8 @@ class MappingWindow {
                 colors.Toolbar, colors.ToolbarText, true)
             this.Interactions.SetButtonAppearance(this.ClearButton,
                 colors.Toolbar, colors.ToolbarText, true)
+            this.Interactions.ClearButtonIcon(this.SaveButton)
+            this.Interactions.ClearButtonIcon(this.ClearButton)
             this.ApplyCommandIcons()
             this.UpdateCommandButtonGroupWidths()
             this.RefreshToolbarTooltips()
@@ -1503,11 +1553,6 @@ class MappingWindow {
             this.Interactions.SetButtonTooltip(this.TargetButton,
                 Tr("演奏你的和弦！"))
             this.RefreshCaptureButtonIcons()
-            this.Interactions.SetButtonLucideIcon(this.ClearButton,
-                "eraser.svg", 16, 7, colors.Danger)
-            this.Interactions.SetButtonLucideIcon(this.SaveButton,
-                "circle-check-big.svg", 16, 7,
-                colors.Success)
             this.Interactions.SetIconSurfaceAppearance(this.ArrowText,
                 colors.Window, colors.Hint)
             this.Interactions.SetControlLucideIcon(this.ArrowText,
@@ -1518,7 +1563,7 @@ class MappingWindow {
                 Tr("映射结果"), Tr("生效范围"), Tr("状态")]
             this.ListHeader.SetLabels(this.HeaderLabels)
             this.ListHeader.ApplyAppearance(colors.Toolbar, colors.Muted,
-                this.SystemFontName, 9)
+                this.SystemFontName, 10)
             this.List.Opt("Background" colors.Surface " c" colors.Text)
             this.List.SetFont("s12 c" colors.Text, this.FontName)
 
@@ -1560,7 +1605,7 @@ class MappingWindow {
                     this.SystemFontName)
             for detail in [this.SourceDetail, this.TargetDetail] {
                 detail.Opt("Background" colors.Window)
-                detail.SetFont("s9 c" colors.Hint, this.FontName)
+                detail.SetFont("s10 c" colors.Hint, this.FontName)
             }
             this.NameInput.Background.Opt("Background" colors.Input)
             this.NameEdit.Opt("Background" colors.Input " c" colors.Text)
@@ -1571,6 +1616,8 @@ class MappingWindow {
             this.Status.SetFont("s10 c" (this.StatusIsError
                 ? colors.Error : colors.Muted), this.FontName)
             ApplyDarkControl(this.Status.Hwnd)
+            UiScaleService.RefreshGuiFonts(this.Gui)
+            this.RefreshNameInputMetrics(0, true)
             this.EnsureListRowMetrics("", true)
             this.UpdateSelectionButtons(this.List.GetNext())
             this.ContextPopup.ApplyAppearance()
@@ -1578,6 +1625,8 @@ class MappingWindow {
                 this.BlockEditor.ApplyAppearance()
             this.LastLayoutSignature := ""
             this.Gui.GetClientPos(, , &clientWidth, &clientHeight)
+            clientWidth := UiScaleService.ToDesign(clientWidth)
+            clientHeight := UiScaleService.ToDesign(clientHeight)
             this.ApplyLayout(clientWidth, clientHeight, true)
             this.ApplyNativeThemes(false)
             ; 与公共窗口初始化顺序一致：先许可原生主题，再提交应用客户区颜色。
@@ -1679,14 +1728,20 @@ class MappingWindow {
         this.RequestHide()
     }
 
-    OpenNewMappingEditor(*) {
+    OpenNewMappingEditor(forceOpen := false, *) {
         if IsObject(this.BlockEditor) {
-            this.BlockEditor.Activate()
-            return
+            if this.BlockEditor.HasOwnProp("Disposed")
+                    && this.BlockEditor.Disposed {
+                this.BlockEditor := ""
+            } else {
+                this.BlockEditor.Activate()
+                return
+            }
         }
         if IsObject(this.ContextPopup) && this.ContextPopup.IsVisible() {
             this.ContextPopup.Hide()
-            return
+            if !forceOpen
+                return
         }
         try {
             blockText := this.App.Repository.CreateBlankBlock()
@@ -1713,6 +1768,7 @@ class MappingWindow {
     }
 
     BeginCapture(role, *) {
+        this.PendingCapturePointerAction := ""
         if this.App.Capture.Active {
             this.App.Capture.Cancel()
             return
@@ -2466,16 +2522,32 @@ class MappingWindow {
         controlHwnd := this.GetPointerButtonHwnd(controlHwnd)
         return controlHwnd == this.SourceButton.Hwnd
             || controlHwnd == this.TargetButton.Hwnd
+            || controlHwnd == this.ClearButton.Hwnd
     }
 
-    SuppressNextPointerButtonActivation() {
-        buttonHwnd := this.GetPointerButtonHwnd()
-        return buttonHwnd
-            && this.Interactions.SuppressNextButtonActivation(buttonHwnd)
+    SuppressNextPointerButtonActivation(controlHwnd := 0) {
+        buttonHwnd := this.GetPointerButtonHwnd(controlHwnd)
+        if !buttonHwnd
+            return false
+        this.PendingCapturePointerAction := buttonHwnd
+                == this.ClearButton.Hwnd ? "clear" : ""
+        return this.Interactions.SuppressNextButtonActivation(buttonHwnd)
     }
 
     FinalizePointerButtonCancellation() {
-        return this.Interactions.ScheduleSuppressedButtonActivationReset()
+        result := this.Interactions.ScheduleSuppressedButtonActivationReset()
+        if this.PendingCapturePointerAction == "clear" {
+            this.PendingCapturePointerAction := ""
+            SetTimer(this.PendingCapturePointerActionTimer, -1)
+        }
+        return result
+    }
+
+    RunPendingCapturePointerAction(*) {
+        if this.Disposed
+            return false
+        this.ClearEditor()
+        return true
     }
 
     SuppressEscapeAfterCapture(timeoutMs := 500) {
@@ -2501,7 +2573,8 @@ class MappingWindow {
             try {
                 hookPoint := this.App.Capture.InputGuard.GetLastMousePoint(2000)
                 if IsObject(hookPoint) {
-                    for button in [this.SourceButton, this.TargetButton] {
+                    for button in [this.SourceButton, this.TargetButton,
+                        this.ClearButton] {
                         if this.IsPointInsideWindow(button.Hwnd, hookPoint.X,
                                 hookPoint.Y)
                             return button.Hwnd
@@ -2515,7 +2588,8 @@ class MappingWindow {
                 return 0
             x := NumGet(point, 0, "Int")
             y := NumGet(point, 4, "Int")
-            for button in [this.SourceButton, this.TargetButton] {
+            for button in [this.SourceButton, this.TargetButton,
+                this.ClearButton] {
                 if this.IsPointInsideWindow(button.Hwnd, x, y)
                     return button.Hwnd
             }
@@ -2571,10 +2645,12 @@ class MappingWindow {
                 DllCall("user32\ShowWindow", "Ptr", this.Status.Hwnd,
                     "Int", 0, "Int")
             this.Interactions.SetTextNoErase(this.Status, text)
+            this.NormalizeStatusViewport(true)
             if wasVisible {
                 DllCall("user32\ShowWindow", "Ptr", this.Status.Hwnd,
                     "Int", 4, "Int")
-                this.Interactions.Redraw(this.Status.Hwnd)
+                this.NormalizeStatusViewport()
+                this.RedrawStatusSurface()
             }
         }
         styleChanged := this.StatusIsError != isError
@@ -2583,11 +2659,49 @@ class MappingWindow {
         if advanceRevision
             this.StatusRevision++
         this.StatusIsError := isError
-        if styleChanged
+        if styleChanged {
             this.Status.SetFont("c" (isError ? MappingWindow.Colors.Error
                 : MappingWindow.Colors.Muted))
+            UiScaleService.RefreshGuiFonts(this.Gui)
+            ; WM_SETFONT resets the native Edit formatting rectangle. Restore
+            ; the wrapped-status viewport after the new font is installed.
+            this.NormalizeStatusViewport()
+            this.RedrawStatusSurface()
+        }
         this.Interactions.HideTextInputCaret(this.Status.Hwnd)
         return true
+    }
+
+    NormalizeStatusViewport(resetSelection := false) {
+        if this.Disposed || !IsObject(this.Status) || !this.Status.Hwnd
+            return false
+        hwnd := this.Status.Hwnd
+        if !DllCall("user32\IsWindow", "Ptr", hwnd, "Int")
+            return false
+        if resetSelection
+            SendMessage(Win32.EM_SETSEL, 0, 0, , hwnd)
+        ; The status control is sized to its wrapped text. Keep the native
+        ; Edit formatting rectangle in sync with that size, then remove any
+        ; focus- or wheel-induced vertical offset so the first line is whole.
+        SetMultilineEditPadding(hwnd, 1, 2, 1, 2)
+        SendMessage(Win32.EM_LINESCROLL, 0, -0x7FFF, , hwnd)
+        this.Interactions.HideTextInputCaret(hwnd)
+        return true
+    }
+
+    RedrawStatusSurface() {
+        if this.Disposed || !IsObject(this.Status) || !this.Status.Hwnd
+            return false
+        hwnd := this.Status.Hwnd
+        if !DllCall("user32\IsWindow", "Ptr", hwnd, "Int")
+            return false
+        if !DllCall("user32\IsWindowVisible", "Ptr", hwnd, "Int")
+            return true
+        ; EM_SETRECT updates the native Edit viewport but does not repaint it.
+        ; Erase and redraw only this child so a newly exposed first line never
+        ; retains pixels rendered against the previous one-line viewport.
+        return DllCall("user32\RedrawWindow", "Ptr", hwnd,
+            "Ptr", 0, "Ptr", 0, "UInt", 0x0105, "Int") != 0
     }
 
     RefreshStatusLayoutIfNeeded() {
@@ -2598,8 +2712,11 @@ class MappingWindow {
             return false
         if width <= 0 || height <= 0
             return false
+        width := UiScaleService.ToDesign(width)
+        height := UiScaleService.ToDesign(height)
         statusLayout := this.GetStatusLayout(width)
-        try this.Status.GetPos(, , &currentWidth, &currentHeight)
+        try UiScaleService.GetControlDesignPos(this.Status, , ,
+            &currentWidth, &currentHeight)
         catch
             return false
         if currentWidth == statusLayout.Width
@@ -2616,13 +2733,15 @@ class MappingWindow {
             return false
         if width <= 0 || height <= 0
             return false
+        width := UiScaleService.ToDesign(width)
+        height := UiScaleService.ToDesign(height)
         statusLayout := IsSet(text)
             ? this.GetStatusLayout(width, "", text)
             : this.GetStatusLayout(width)
         statusY := height - MappingWindow.StatusBottomMargin
             - statusLayout.Height
-        try this.Status.GetPos(&currentX, &currentY, &currentWidth,
-            &currentHeight)
+        try UiScaleService.GetControlDesignPos(this.Status, &currentX,
+            &currentY, &currentWidth, &currentHeight)
         catch
             return false
         if currentX == 10 && currentY == statusY
@@ -2648,11 +2767,11 @@ class MappingWindow {
             if wasVisible {
                 DllCall("user32\ShowWindow", "Ptr", statusHwnd, "Int", 4,
                     "Int") ; SW_SHOWNOACTIVATE
-                this.Interactions.Redraw(statusHwnd)
                 if hadFocus {
                     DllCall("user32\SetFocus", "Ptr", statusHwnd, "Ptr")
-                    this.Interactions.HideTextInputCaret(statusHwnd)
                 }
+                this.NormalizeStatusViewport()
+                this.RedrawStatusSurface()
             }
         }
         changed := IsObject(result)
@@ -2663,11 +2782,7 @@ class MappingWindow {
     }
 
     GetStatusLayout(width, layoutRound := "", text := unset) {
-        clearButtonX := width - MappingWindow.CommandRightMargin
-            - MappingWindow.ClearButtonWidth
-        saveButtonX := clearButtonX - MappingWindow.CommandButtonGap
-            - this.SaveButtonWidth
-        statusWidth := Max(1, saveButtonX - 20)
+        statusWidth := Max(1, width - 20)
         statusText := IsSet(text) ? String(text) : this.Status.Text
         textHeight := this.Interactions.Painter.MeasureTextHeight(this.Status,
             statusText, statusWidth, 0, 0, layoutRound)
@@ -2675,9 +2790,22 @@ class MappingWindow {
         return {
             Width: statusWidth,
             Height: statusHeight,
-            Extra: Max(0, statusHeight - MappingWindow.MinStatusHeight),
-            SaveButtonX: saveButtonX,
-            ClearButtonX: clearButtonX
+            Extra: Max(0, statusHeight - MappingWindow.MinStatusHeight)
+        }
+    }
+
+    GetCommandLayout(editor) {
+        availableWidth := Max(1, editor.NameWidth)
+        buttonGap := MappingWindow.CommandButtonGap
+        saveWidth := Max(1, Floor((availableWidth - buttonGap) / 2))
+        clearWidth := Max(1, availableWidth - buttonGap - saveWidth)
+        saveX := editor.NameX
+        clearX := saveX + saveWidth + buttonGap
+        return {
+            SaveButtonX: saveX,
+            SaveButtonWidth: saveWidth,
+            ClearButtonX: clearX,
+            ClearButtonWidth: clearWidth
         }
     }
 
@@ -2690,6 +2818,8 @@ class MappingWindow {
             return false
         if width <= 0 || height <= 0
             return false
+        width := UiScaleService.ToDesign(width)
+        height := UiScaleService.ToDesign(height)
         return this.ApplyLayout(width, height, force)
     }
 
@@ -2711,9 +2841,12 @@ class MappingWindow {
                 this.Interactions.Painter.MeasureTextHeight(control,
                     control.Text, inputWidth, 0, 0, layoutRound))
         }
+        nameCommandStackHeight := this.NameInputHeight
+            + MappingWindow.EditorToCommandGap
+            + MappingWindow.CommandButtonHeight
         return {
             Button: Max(MappingWindow.MinCaptureButtonHeight,
-                buttonTextHeight + 16),
+                nameCommandStackHeight, buttonTextHeight + 16),
             Detail: Max(MappingWindow.MinCaptureDetailHeight,
                 detailTextHeight + 4)
         }
@@ -2724,7 +2857,8 @@ class MappingWindow {
                 || this.MinClientWidth != this.RequiredClientWidth {
             this.RequiredClientHeight := requiredHeight
             this.RequiredClientWidth := this.MinClientWidth
-            this.Gui.Opt("+MinSize" this.MinClientWidth "x" requiredHeight)
+            this.Gui.Opt(UiScaleService.ScaleMinSizeOptions(
+                this.MinClientWidth, requiredHeight))
         }
         if (currentWidth >= this.MinClientWidth
                 && currentHeight >= requiredHeight) || this.LayoutResizeActive
@@ -2738,7 +2872,7 @@ class MappingWindow {
                 this.Gui.Hwnd, "Int")
                 ? sizeOptions " NoActivate"
                 : "Hide " sizeOptions " NoActivate"
-            this.Gui.Show(showOptions)
+            this.Gui.Show(UiScaleService.ScaleShowOptions(showOptions))
             this.ApplyNativeThemes()
         } finally {
             this.LayoutResizeActive := false
@@ -2750,10 +2884,8 @@ class MappingWindow {
         if this.Disposed || !IsObject(this.List) || !this.List.Hwnd
             return false
         rowDpi := IsObject(layoutRound) && layoutRound.HasOwnProp("Dpi")
-            ? layoutRound.Dpi : DllCall("user32\GetDpiForWindow", "Ptr",
-                this.List.Hwnd, "UInt")
-        if !rowDpi
-            rowDpi := 96
+            ? layoutRound.Dpi
+            : UiScaleService.GetEffectiveDpi(this.List.Hwnd)
         if this.ListRowImageList && this.ListMetricsImageList
                 && this.ListRowDpi == rowDpi && !forceRefresh
             return false
@@ -3033,6 +3165,13 @@ class MappingWindow {
     }
 
     GetListCellTextAvailableWidth(row, column) {
+        if column == MappingWindow.NameColumn
+                || column == MappingWindow.SourceColumn
+                || column == MappingWindow.TargetColumn {
+            textRect := this.GetLeftAlignedListTextRect(row, column)
+            return IsObject(textRect)
+                ? Max(0, textRect.Right - textRect.Left) : ""
+        }
         cellRect := this.GetListSubItemRect(row, column)
         if !IsObject(cellRect)
             return ""
@@ -3040,13 +3179,6 @@ class MappingWindow {
         if cellWidth <= 0
             return 0
         dpi := this.GetListDpi()
-        if column == MappingWindow.NameColumn
-                || column == MappingWindow.SourceColumn
-                || column == MappingWindow.TargetColumn {
-            inset := Max(1,
-                Round(MappingWindow.ListTextInsetDip * dpi / 96))
-            return Max(0, cellWidth - inset * 2)
-        }
         if column == MappingWindow.StatusColumn {
             iconWidth := Max(MappingWindow.ListStatusIconSlotDip,
                 Round(MappingWindow.ListStatusIconSlotDip * dpi / 96))
@@ -3064,6 +3196,26 @@ class MappingWindow {
             return Max(0, cellWidth - iconWidth - gap)
         }
         return ""
+    }
+
+    GetLeftAlignedListTextRect(row, column) {
+        if column != MappingWindow.NameColumn
+                && column != MappingWindow.SourceColumn
+                && column != MappingWindow.TargetColumn
+            return ""
+        cellRect := this.GetListSubItemRect(row, column)
+        if !IsObject(cellRect)
+            return ""
+        dpi := this.GetListDpi()
+        inset := Max(1, Round(MappingWindow.ListTextInsetDip * dpi / 96))
+        return {
+            Left: cellRect.Left + inset,
+            Top: cellRect.Top,
+            Right: Max(cellRect.Left + inset, cellRect.Right - inset),
+            Bottom: cellRect.Bottom,
+            Cell: cellRect,
+            Inset: inset
+        }
     }
 
     DrawListSubItem(listView, notification) {
@@ -3273,20 +3425,17 @@ class MappingWindow {
         row := NumGet(notification, itemSpecOffset, "UPtr") + 1
         if row < 1 || row > listView.GetCount()
             return Win32.CDRF_SKIPDEFAULT
-        cellRect := this.GetListSubItemRect(row, column)
+        textBounds := this.GetLeftAlignedListTextRect(row, column)
         hdcOffset := A_PtrSize == 8 ? 32 : 16
         hdc := NumGet(notification, hdcOffset, "Ptr")
-        if !IsObject(cellRect) || !hdc
+        if !IsObject(textBounds) || !hdc
             return Win32.CDRF_SKIPDEFAULT
 
-        dpi := this.GetListDpi()
-        inset := Max(1, Round(MappingWindow.ListTextInsetDip * dpi / 96))
         textRect := Buffer(16, 0)
-        NumPut("Int", cellRect.Left + inset, textRect, 0)
-        NumPut("Int", cellRect.Top, textRect, 4)
-        NumPut("Int", Max(cellRect.Left + inset,
-            cellRect.Right - inset), textRect, 8)
-        NumPut("Int", cellRect.Bottom, textRect, 12)
+        NumPut("Int", textBounds.Left, textRect, 0)
+        NumPut("Int", textBounds.Top, textRect, 4)
+        NumPut("Int", textBounds.Right, textRect, 8)
+        NumPut("Int", textBounds.Bottom, textRect, 12)
         text := listView.GetText(row, column)
         font := SendMessage(Win32.WM_GETFONT, 0, 0, , listView.Hwnd)
         previousFont := font ? DllCall("gdi32\SelectObject", "Ptr", hdc,
@@ -3313,9 +3462,7 @@ class MappingWindow {
     }
 
     GetListDpi() {
-        dpi := DllCall("user32\GetDpiForWindow", "Ptr", this.List.Hwnd,
-            "UInt")
-        return dpi ? dpi : 96
+        return UiScaleService.GetEffectiveDpi(this.List.Hwnd)
     }
 
     RefreshListStatusIcons() {
@@ -3342,11 +3489,43 @@ class MappingWindow {
                     return rowHeight
             }
         }
-        rowDpi := DllCall("user32\GetDpiForWindow", "Ptr", this.List.Hwnd,
-            "UInt")
-        if !rowDpi
-            rowDpi := 96
+        rowDpi := UiScaleService.GetEffectiveDpi(this.List.Hwnd)
         return Max(1, Round(MappingWindow.ListRowHeight * rowDpi / 96))
+    }
+
+    GetListFrameHeightPixels() {
+        if !IsObject(this.List) || !this.List.Hwnd
+            return 0
+        windowRect := Buffer(16, 0)
+        clientRect := Buffer(16, 0)
+        if !DllCall("user32\GetWindowRect", "Ptr", this.List.Hwnd,
+                "Ptr", windowRect, "Int")
+                || !DllCall("user32\GetClientRect", "Ptr", this.List.Hwnd,
+                    "Ptr", clientRect, "Int")
+            return 0
+        windowHeight := NumGet(windowRect, 12, "Int")
+            - NumGet(windowRect, 4, "Int")
+        clientHeight := NumGet(clientRect, 12, "Int")
+            - NumGet(clientRect, 4, "Int")
+        return Max(0, windowHeight - clientHeight)
+    }
+
+    AlignListHeightToWholeRows(height, layoutRound, roundUp := false) {
+        scale := IsObject(layoutRound) && layoutRound.HasOwnProp("Scale")
+            ? layoutRound.Scale : UiScaleService.GetEffectiveDpi(
+                this.List.Hwnd) / 96
+        scale := Max(0.01, scale)
+        rowHeightPixels := this.GetListRowHeightPixels()
+        frameHeightPixels := this.GetListFrameHeightPixels()
+        outerHeightPixels := Max(frameHeightPixels + rowHeightPixels,
+            Round(Max(1, height) * scale))
+        rowSpacePixels := Max(rowHeightPixels,
+            outerHeightPixels - frameHeightPixels)
+        rowCount := roundUp
+            ? Ceil(rowSpacePixels / rowHeightPixels)
+            : Floor(rowSpacePixels / rowHeightPixels)
+        rowCount := Max(1, rowCount)
+        return (frameHeightPixels + rowCount * rowHeightPixels) / scale
     }
 
     ReleaseListRowImageList() {
@@ -3370,6 +3549,8 @@ class MappingWindow {
     OnResize(guiObj, minMax, width, height) {
         if minMax == -1
             return
+        width := UiScaleService.ToDesign(width)
+        height := UiScaleService.ToDesign(height)
         if minMax == 0 && width > 0 && height > 0 {
             this.LastNormalClientWidth := width
             this.LastNormalClientHeight := height
@@ -3395,8 +3576,8 @@ class MappingWindow {
             + MappingWindow.ListToEditorGap
             + MappingWindow.EditorHeadingBandMinHeight
             + MappingWindow.CaptureDetailGap
-            + MappingWindow.EditorToCommandGap
-            + MappingWindow.CommandRegionMinHeight
+            + MappingWindow.MinStatusHeight
+            + MappingWindow.StatusBottomMargin
     }
 
     SuspendListResizeRedraw() {
@@ -3422,19 +3603,31 @@ class MappingWindow {
         captureHeights.Button := Max(captureHeights.Button,
             this.NameInputHeight)
         statusLayout := this.GetStatusLayout(width, layoutRound)
+        statusSizeChanged := true
+        try {
+            UiScaleService.GetControlDesignPos(this.Status, , ,
+                &currentStatusWidth, &currentStatusHeight)
+            statusSizeChanged := Round(currentStatusWidth)
+                    != Round(statusLayout.Width)
+                || Round(currentStatusHeight) != Round(statusLayout.Height)
+        }
         fixedHeight := this.GetFixedVerticalLayoutHeight()
+        minimumListHeight := this.AlignListHeightToWholeRows(
+            MappingWindow.MinListHeight, layoutRound, true)
         requiredHeight := Max(MappingWindow.BaseMinClientHeight,
             fixedHeight
                 + statusLayout.Extra
-                + MappingWindow.MinListHeight
+                + minimumListHeight
                 + captureHeights.Button + captureHeights.Detail)
         if this.EnsureCaptureMinimumSize(requiredHeight, width, height)
             return false
 
-        listHeight := Max(MappingWindow.MinListHeight,
-            height - fixedHeight
-                - statusLayout.Extra
-                - captureHeights.Button - captureHeights.Detail)
+        availableListHeight := height - fixedHeight
+            - statusLayout.Extra
+            - captureHeights.Button - captureHeights.Detail
+        listHeight := Max(minimumListHeight,
+            this.AlignListHeightToWholeRows(availableListHeight,
+                layoutRound))
         signature := layoutRound.Dpi "|" width "|" height "|"
             . editor.SourceWidth "|"
             . editor.TargetWidth "|" editor.NameWidth "|"
@@ -3451,15 +3644,18 @@ class MappingWindow {
         controlY := sectionY + MappingWindow.EditorHeadingBandMinHeight
         detailY := controlY + captureHeights.Button
             + MappingWindow.CaptureDetailGap
-        commandY := height - MappingWindow.CommandRegionMinHeight
         statusY := height - MappingWindow.StatusBottomMargin
             - statusLayout.Height
         columnWidths := this.CalculateProportionalColumnWidths(
             this.GetExpectedListContentWidth(contentWidth, listHeight))
         innerNameHeight := Min(captureHeights.Button,
             this.NameInputHeight)
-        innerNameY := controlY + Floor((captureHeights.Button
-            - innerNameHeight) / 2)
+        ; The shortened name field is top-aligned with the capture controls;
+        ; its freed lower area is reserved for the two mapping commands.
+        innerNameY := controlY
+        commandLayout := this.GetCommandLayout(editor)
+        commandY := innerNameY + innerNameHeight
+            + MappingWindow.EditorToCommandGap
         entries := [
             {Control: this.AddButton, X: 10, Y: 15,
                 Width: this.AddButtonWidth,
@@ -3509,11 +3705,11 @@ class MappingWindow {
                 Width: editor.SourceWidth, Height: captureHeights.Detail},
             {Control: this.TargetDetail, X: editor.TargetX, Y: detailY,
                 Width: editor.TargetWidth, Height: captureHeights.Detail},
-            {Control: this.SaveButton, X: statusLayout.SaveButtonX,
-                Y: commandY, Width: this.SaveButtonWidth,
+            {Control: this.SaveButton, X: commandLayout.SaveButtonX,
+                Y: commandY, Width: commandLayout.SaveButtonWidth,
                 Height: MappingWindow.CommandButtonHeight},
-            {Control: this.ClearButton, X: statusLayout.ClearButtonX,
-                Y: commandY, Width: MappingWindow.ClearButtonWidth,
+            {Control: this.ClearButton, X: commandLayout.ClearButtonX,
+                Y: commandY, Width: commandLayout.ClearButtonWidth,
                 Height: MappingWindow.CommandButtonHeight},
             {Control: this.Status, X: 10, Y: statusY,
                 Width: statusLayout.Width, Height: statusLayout.Height}
@@ -3542,6 +3738,12 @@ class MappingWindow {
             if result.Status == AtomicControlLayout.Applied
                     && result.ChangedHwnds.Has(this.NameEdit.Hwnd)
                 this.ApplyNameInputViewport()
+            if result.Status == AtomicControlLayout.Applied
+                    && result.ChangedHwnds.Has(this.Status.Hwnd) {
+                this.NormalizeStatusViewport()
+                if statusSizeChanged
+                    this.RedrawStatusSurface()
+            }
             this.ApplyColumnWidths(columnWidths, false)
             this.ListHeader.RefreshSurface()
             this.LastLayoutSignature := signature
@@ -3581,17 +3783,14 @@ class MappingWindow {
             return Max(1, fallbackWidth)
         physicalWidth := NumGet(clientRect, 8, "Int")
             - NumGet(clientRect, 0, "Int")
-        dpi := DllCall("user32\GetDpiForWindow", "Ptr", this.List.Hwnd,
-            "UInt")
-        if !dpi
-            dpi := 96
+        dpi := UiScaleService.GetEffectiveDpi(this.List.Hwnd)
         return Max(1, Floor(physicalWidth * 96 / dpi))
     }
 
     RefreshListColumnLayout() {
         if this.Disposed || !IsObject(this.List) || !this.List.Hwnd
             return false
-        try this.List.GetPos(, , &outerWidth)
+        try UiScaleService.GetControlDesignPos(this.List, , , &outerWidth)
         catch
             return false
         if outerWidth <= 0
@@ -3618,10 +3817,7 @@ class MappingWindow {
                     deviceContext, "Str", text, "Int", StrLen(text),
                     "Ptr", extent, "Int")
                 return StrLen(text) * 12
-            windowDpi := DllCall("user32\GetDpiForWindow", "Ptr",
-                control.Hwnd, "UInt")
-            if !windowDpi
-                windowDpi := 96
+            windowDpi := UiScaleService.GetDesignMeasurementDpi(control.Hwnd)
             return Ceil(NumGet(extent, 0, "Int") * 96 / windowDpi)
         } finally {
             if previousFont
@@ -3745,7 +3941,9 @@ class MappingWindow {
         if this.AppliedColumnWidths.Has(column)
                 && this.AppliedColumnWidths[column] == width
             return false
-        modifyOptions := options == "" ? width : options " " width
+        scaledWidth := UiScaleService.Scale(width)
+        modifyOptions := options == "" ? scaledWidth
+            : options " " scaledWidth
         this.List.ModifyCol(column, modifyOptions)
         this.AppliedColumnWidths[column] := width
         return true

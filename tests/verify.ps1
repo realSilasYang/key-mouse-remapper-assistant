@@ -28,7 +28,6 @@ function Assert-PowerShellScriptParses {
     -AutoHotkeyPath $AutoHotkeyPath -SkipGui:$SkipGui `
     -IncludeGui:$IncludeGui `
     -AllowDesktopInput:$AllowDesktopInput
-Write-Host 'SKIP brittle source-based UI contracts (covered by GUI behavior tests)'
 & (Join-Path $PSScriptRoot 'static\application-update-tests.ps1')
 & (Join-Path $PSScriptRoot 'static\localization-catalog-tests.ps1')
 & (Join-Path $PSScriptRoot 'static\release-build-tests.ps1')

@@ -591,7 +591,6 @@ class VietnameseStrings {
         catalog.Set("我是来帮你的，你要干什么？！", "Tôi ở đây để giúp bạn. Bạn muốn làm gì?!")
         catalog.Set("请先关闭当前代码编辑器，再优化其他映射。", "Đóng trình soạn thảo mã hiện tại trước khi tối ưu một ánh xạ khác.")
         catalog.Set("AI 服务尚未初始化。", "The AI service is not initialized.")
-        catalog.Set("AI 参数未保存：{1}", "Không thể lưu tham số AI: {1}")
         catalog.Set("无法读取当前映射代码：{1}", "Could not read the current mapping code: {1}")
         catalog.Set("AI 正在生成规则，请稍候...", "AI is generating a rule. Please wait...")
         catalog.Set("AI 正在优化规则，请稍候...", "AI đang tối ưu quy tắc. Vui lòng chờ...")
@@ -626,6 +625,8 @@ class VietnameseStrings {
         catalog.Set("规则块能力不足，必须改用受托管脚本完整实现。", "Khối quy tắc thông thường không đủ`; hãy dùng tập lệnh được quản lý để triển khai đầy đủ.")
         catalog.Set("未保存：请先用完整的 AHK v2 脚本替换代码占位文字。", "Chưa lưu: trước tiên hãy thay phần giữ chỗ bằng một tập lệnh AHK v2 hoàn chỉnh.")
         catalog.Set("当前等待时间：{1} 秒", "Current wait time: {1} seconds")
+        catalog.Set("界面缩放：", "Tỷ lệ giao diện:")
+        catalog.Set("界面缩放已保存，正在重新加载…", "Đã lưu tỷ lệ giao diện. Đang tải lại…")
         return catalog
     }
 }

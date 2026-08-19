@@ -591,7 +591,6 @@ class KoreanStrings {
         catalog.Set("我是来帮你的，你要干什么？！", "도와드리러 왔어요. 무엇을 하고 싶으신가요?!")
         catalog.Set("请先关闭当前代码编辑器，再优化其他映射。", "다른 매핑을 최적화하기 전에 현재 코드 편집기를 닫으세요.")
         catalog.Set("AI 服务尚未初始化。", "The AI service is not initialized.")
-        catalog.Set("AI 参数未保存：{1}", "AI 매개변수를 저장하지 못했습니다: {1}")
         catalog.Set("无法读取当前映射代码：{1}", "Could not read the current mapping code: {1}")
         catalog.Set("AI 正在生成规则，请稍候...", "AI is generating a rule. Please wait...")
         catalog.Set("AI 正在优化规则，请稍候...", "AI가 규칙을 최적화하고 있습니다. 잠시 기다려 주세요...")
@@ -626,6 +625,8 @@ class KoreanStrings {
         catalog.Set("规则块能力不足，必须改用受托管脚本完整实现。", "일반 규칙 블록으로는 부족하므로 관리형 스크립트로 완전히 구현해야 합니다.")
         catalog.Set("未保存：请先用完整的 AHK v2 脚本替换代码占位文字。", "저장되지 않음: 코드 자리 표시자를 완전한 AHK v2 스크립트로 먼저 바꾸세요.")
         catalog.Set("当前等待时间：{1} 秒", "Current wait time: {1} seconds")
+        catalog.Set("界面缩放：", "인터페이스 배율:")
+        catalog.Set("界面缩放已保存，正在重新加载…", "인터페이스 배율을 저장했습니다. 다시 불러오는 중…")
         return catalog
     }
 }

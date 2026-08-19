@@ -592,7 +592,6 @@ class FrenchStrings {
         catalog.Set("我是来帮你的，你要干什么？！", "Je suis là pour vous aider. Que voulez-vous faire ?!")
         catalog.Set("请先关闭当前代码编辑器，再优化其他映射。", "Fermez l’éditeur de code actuel avant d’optimiser un autre mappage.")
         catalog.Set("AI 服务尚未初始化。", "The AI service is not initialized.")
-        catalog.Set("AI 参数未保存：{1}", "Les paramètres de l’IA n’ont pas été enregistrés : {1}")
         catalog.Set("无法读取当前映射代码：{1}", "Could not read the current mapping code: {1}")
         catalog.Set("AI 正在生成规则，请稍候...", "AI is generating a rule. Please wait...")
         catalog.Set("AI 正在优化规则，请稍候...", "L'IA optimise la règle. Veuillez patienter...")
@@ -627,6 +626,8 @@ class FrenchStrings {
         catalog.Set("规则块能力不足，必须改用受托管脚本完整实现。", "Un bloc de règle standard ne suffit pas `; utilisez un script géré pour l’implémentation complète.")
         catalog.Set("未保存：请先用完整的 AHK v2 脚本替换代码占位文字。", "Non enregistré : remplacez d’abord le texte réservé par un script AHK v2 complet.")
         catalog.Set("当前等待时间：{1} 秒", "Current wait time: {1} seconds")
+        catalog.Set("界面缩放：", "Mise à l’échelle de l’interface :")
+        catalog.Set("界面缩放已保存，正在重新加载…", "La mise à l’échelle de l’interface a été enregistrée. Rechargement…")
         return catalog
     }
 }

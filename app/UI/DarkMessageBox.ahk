@@ -12,9 +12,9 @@ ShowDarkConfirmBox(message, title, confirmText, cancelText, ownerGui := "") {
 }
 
 ShowDarkTextInputBox(message, title, confirmText, cancelText, emptyMessage,
-        ownerGui := "", initialValue := "") {
+        ownerGui := "", initialValue := "", svgRenderer := "") {
     dialog := DarkTextInputDialog(message, title, confirmText, cancelText,
-        emptyMessage, ownerGui, initialValue)
+        emptyMessage, ownerGui, initialValue, svgRenderer)
     return dialog.Show()
 }
 
@@ -66,10 +66,7 @@ MeasureDarkDialogButtonWidth(button, minimumWidthDip) {
         if !DllCall("gdi32\GetTextExtentPoint32W", "Ptr", deviceContext,
                 "Str", text, "Int", StrLen(text), "Ptr", extent, "Int")
             return minimumWidthDip
-        windowDpi := DllCall("user32\GetDpiForWindow", "Ptr", button.Hwnd,
-            "UInt")
-        if !windowDpi
-            windowDpi := 96
+        windowDpi := UiScaleService.GetDesignMeasurementDpi(button.Hwnd)
         textWidthDip := Ceil(NumGet(extent, 0, "Int") * 96 / windowDpi)
         return Max(minimumWidthDip, textWidthDip + 24)
     } finally {
@@ -87,7 +84,7 @@ class DarkDialogBase {
     static MessageX := 60
     static ButtonHeight := 30
 
-    InitializeWindow(title, ownerGui) {
+    InitializeWindow(title, ownerGui, svgRenderer := "") {
         this.OwnerGui := ownerGui
         guiOptions := "-MinimizeBox -MaximizeBox +OwnDialogs"
         if this.IsOwnerAlive()
@@ -104,7 +101,8 @@ class DarkDialogBase {
         this.Gui.BackColor := colors.Window
         this.Gui.MarginX := 0
         this.Gui.MarginY := 0
-        this.Interactions := MappingUiInteractions(this.Gui, colors.Window)
+        this.Interactions := MappingUiInteractions(this.Gui, colors.Window,
+            svgRenderer)
         return colors
     }
 
@@ -345,17 +343,23 @@ class DarkTextInputDialog extends DarkDialogBase {
     static WindowHeight := 220
     static ErrorWindowHeight := 252
     static EditorHeight := 108
-    static CompactButtonY := 170
-    static ErrorButtonY := 202
+    ; Keep the bottom action group closer to the window edge than to the
+    ; preceding content.  These are design-space coordinates and are scaled
+    ; by UiScaleService when the controls are moved.
+    static CompactButtonY := 174
+    static ErrorButtonY := 207
 
     __New(message, title, confirmText, cancelText, emptyMessage, ownerGui,
-            initialValue := "") {
+            initialValue := "", svgRenderer := "") {
         this.Message := String(message)
         this.Title := String(title)
         this.ConfirmText := String(confirmText)
         this.CancelText := String(cancelText)
         this.EmptyMessage := String(emptyMessage)
         this.InitialValue := String(initialValue)
+        this.SvgRenderer := IsObject(svgRenderer) ? svgRenderer : ""
+        this.IsAiAction := this.ConfirmText == Tr("生成")
+            || this.ConfirmText == Tr("优化")
         this.OwnerLease := ""
         this.IconHandles := []
         this.Accepted := false
@@ -370,7 +374,8 @@ class DarkTextInputDialog extends DarkDialogBase {
     }
 
     Build(ownerGui) {
-        colors := this.InitializeWindow(this.Title, ownerGui)
+        colors := this.InitializeWindow(this.Title, ownerGui,
+            this.SvgRenderer)
         this.Gui.SetFont("s10 c" colors.Text,
             LocalizationService.GetUiFontName())
         this.MessageText := this.Gui.Add("Text",
@@ -389,10 +394,16 @@ class DarkTextInputDialog extends DarkDialogBase {
         this.TextEdit.OnEvent("Change", ObjBindMethod(this, "OnTextChanged"))
         this.Status := this.Gui.Add("Text",
             "x20 y168 w420 h22 BackgroundTrans c" colors.Error " Hidden", "")
+        confirmColor := this.IsAiAction ? colors.AIButton : colors.Save
+        confirmTextColor := this.IsAiAction
+            ? colors.AIButtonText : colors.ButtonText
         this.ConfirmButton := this.AddButton(144,
             DarkTextInputDialog.CompactButtonY, 80,
-            this.ConfirmText, colors.Primary, colors.ButtonText,
+            this.ConfirmText, confirmColor, confirmTextColor,
             ObjBindMethod(this, "Confirm"))
+        if this.IsAiAction
+            this.Interactions.SetButtonLucideIcon(this.ConfirmButton,
+                "pencil-sparkles.svg", 14, 6, colors.AIIcon)
         this.CancelButton := this.AddButton(236,
             DarkTextInputDialog.CompactButtonY, 80,
             this.CancelText, colors.Toolbar, colors.ToolbarText,
@@ -438,8 +449,10 @@ class DarkTextInputDialog extends DarkDialogBase {
     ShowValidationError() {
         this.Status.Text := this.EmptyMessage
         this.Status.Visible := true
-        this.ConfirmButton.Move(, DarkTextInputDialog.ErrorButtonY)
-        this.CancelButton.Move(, DarkTextInputDialog.ErrorButtonY)
+        UiScaleService.MoveControl(this.ConfirmButton, ,
+            DarkTextInputDialog.ErrorButtonY)
+        UiScaleService.MoveControl(this.CancelButton, ,
+            DarkTextInputDialog.ErrorButtonY)
         return this.SetWindowHeight(DarkTextInputDialog.ErrorWindowHeight)
     }
 
@@ -448,8 +461,10 @@ class DarkTextInputDialog extends DarkDialogBase {
             return false
         this.Status.Text := ""
         this.Status.Visible := false
-        this.ConfirmButton.Move(, DarkTextInputDialog.CompactButtonY)
-        this.CancelButton.Move(, DarkTextInputDialog.CompactButtonY)
+        UiScaleService.MoveControl(this.ConfirmButton, ,
+            DarkTextInputDialog.CompactButtonY)
+        UiScaleService.MoveControl(this.CancelButton, ,
+            DarkTextInputDialog.CompactButtonY)
         this.SetWindowHeight(DarkTextInputDialog.WindowHeight)
         return true
     }
@@ -465,7 +480,7 @@ class DarkTextInputDialog extends DarkDialogBase {
             return false
         this.CurrentWindowHeight := height
         if DllCall("user32\IsWindowVisible", "Ptr", this.Gui.Hwnd, "Int")
-            this.Gui.Show("NA h" height)
+            this.Gui.Show(UiScaleService.ScaleShowOptions("NA h" height))
         return true
     }
 
@@ -506,8 +521,9 @@ class DarkTextComparisonDialog extends DarkDialogBase {
     Build(ownerGui) {
         DarkTextComparisonDialog.EnsureRichEditModule()
         colors := this.InitializeWindow(this.Title, ownerGui)
-        this.Gui.Opt("+Resize +MinSize" DarkTextComparisonDialog.MinimumWidth
-            "x" DarkTextComparisonDialog.MinimumHeight)
+        this.Gui.Opt("+Resize " UiScaleService.ScaleMinSizeOptions(
+            DarkTextComparisonDialog.MinimumWidth,
+            DarkTextComparisonDialog.MinimumHeight))
         fontName := LocalizationService.GetUiFontName()
         this.Gui.SetFont("s10 c" colors.Text, fontName)
         this.LineDiff := DarkTextComparisonDialog.CalculateLineDiff(
@@ -557,8 +573,9 @@ class DarkTextComparisonDialog extends DarkDialogBase {
         this.Gui.OnEvent("Size", ObjBindMethod(this, "OnResize"))
         this.Gui.OnEvent("Close", ObjBindMethod(this, "Cancel"))
         this.Gui.OnEvent("Escape", ObjBindMethod(this, "Cancel"))
-        this.OnResize(this.Gui, 0, DarkTextComparisonDialog.WindowWidth,
-            DarkTextComparisonDialog.WindowHeight)
+        this.OnResize(this.Gui, 0,
+            UiScaleService.Scale(DarkTextComparisonDialog.WindowWidth),
+            UiScaleService.Scale(DarkTextComparisonDialog.WindowHeight))
     }
 
     Show() {
@@ -568,7 +585,7 @@ class DarkTextComparisonDialog extends DarkDialogBase {
         ShowPreparedWindow(this.Gui,
             "Center w" DarkTextComparisonDialog.WindowWidth
                 . " h" DarkTextComparisonDialog.WindowHeight,
-            ObjBindMethod(this, "ApplyNativeThemes"))
+            ObjBindMethod(this, "ApplyNativeThemes"), true)
         WinWaitClose("ahk_id " hwnd)
         return this.Accepted
     }
@@ -584,6 +601,8 @@ class DarkTextComparisonDialog extends DarkDialogBase {
     OnResize(guiObj, minMax, width, height) {
         if this.Disposed || minMax == -1 || width <= 0 || height <= 0
             return false
+        width := UiScaleService.ToDesign(width)
+        height := UiScaleService.ToDesign(height)
         margin := DarkTextComparisonDialog.Margin
         gap := DarkTextComparisonDialog.PaneGap
         paneWidth := Max(280, Floor((width - margin * 2 - gap) / 2))
@@ -594,18 +613,31 @@ class DarkTextComparisonDialog extends DarkDialogBase {
         groupWidth := DarkTextComparisonDialog.ButtonWidth * 2
             + DarkTextComparisonDialog.ButtonGap
         firstButtonX := Floor((width - groupWidth) / 2)
-        this.Summary.Move(margin, 14, width - margin * 2, 24)
-        this.CurrentLabel.Move(margin, 46, paneWidth, 22)
-        this.ProposedLabel.Move(rightX, 46, rightWidth, 22)
-        this.CurrentEdit.Move(margin, 70, paneWidth, editHeight)
-        this.ProposedEdit.Move(rightX, 70, rightWidth, editHeight)
-        this.AcceptButton.Move(firstButtonX, buttonY,
-            DarkTextComparisonDialog.ButtonWidth, 30)
-        this.KeepButton.Move(firstButtonX
-            + DarkTextComparisonDialog.ButtonWidth
-            + DarkTextComparisonDialog.ButtonGap, buttonY,
-            DarkTextComparisonDialog.ButtonWidth, 30)
-        return true
+        entries := [
+            {Control: this.Summary, X: margin, Y: 14,
+                Width: width - margin * 2, Height: 24},
+            {Control: this.CurrentLabel, X: margin, Y: 46,
+                Width: paneWidth, Height: 22},
+            {Control: this.ProposedLabel, X: rightX, Y: 46,
+                Width: rightWidth, Height: 22},
+            {Control: this.CurrentEdit, X: margin, Y: 70,
+                Width: paneWidth, Height: editHeight},
+            {Control: this.ProposedEdit, X: rightX, Y: 70,
+                Width: rightWidth, Height: editHeight},
+            {Control: this.AcceptButton, X: firstButtonX, Y: buttonY,
+                Width: DarkTextComparisonDialog.ButtonWidth, Height: 30},
+            {Control: this.KeepButton,
+                X: firstButtonX + DarkTextComparisonDialog.ButtonWidth
+                    + DarkTextComparisonDialog.ButtonGap,
+                Y: buttonY, Width: DarkTextComparisonDialog.ButtonWidth,
+                Height: 30}
+        ]
+        result := AtomicControlLayout.Apply(this.Gui, entries, {
+            ParentColor: UiThemeService.GetPalette().Window,
+            ClearMargin: 2
+        })
+        return result.Status == AtomicControlLayout.Applied
+            || result.Status == AtomicControlLayout.Unchanged
     }
 
     Accept(*) {
