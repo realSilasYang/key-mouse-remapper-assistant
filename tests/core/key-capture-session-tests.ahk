@@ -60,6 +60,32 @@ try {
             && drainApp.CancelledCount == 1,
         "The input drain did not finish after all physical keys were released.")
 
+    CaptureAssertEqual(10000, KeyCaptureSession.CaptureTimeoutMs,
+        "The key recording hard timeout is not 10 seconds.")
+    timeoutLifecycle := []
+    timeoutApp := CaptureTestApp(timeoutLifecycle)
+    timeoutGuard := CaptureTestInputGuard(timeoutLifecycle)
+    timeoutSession := KeyCaptureSession(timeoutApp, timeoutGuard)
+    CaptureAssertTrue(timeoutSession.Start("source"),
+        "The hard-timeout capture test did not start.")
+    timeoutSession.ForceStopAfterTimeout()
+    CaptureAssertTrue(!timeoutSession.Active && !timeoutSession.Draining
+            && !timeoutGuard.Active && !timeoutGuard.HasResources()
+            && timeoutApp.CancelledCount == 1,
+        "The 30-second recording timeout did not force a complete stop.")
+
+    CaptureAssertTrue(timeoutSession.Start("target"),
+        "The timeout stop-failure test did not start.")
+    timeoutGuard.FailStop := true
+    CaptureAssertTrue(!timeoutSession.ForceStopAfterTimeout()
+            && timeoutSession.PendingCaptureStopFailure != "",
+        "A failed forced recording stop was not retained for restart.")
+    timeoutGuard.FailStop := false
+    timeoutSession.Stop(false, false, false)
+    timeoutSession.HandleCaptureStopFailure()
+    CaptureAssertTrue(timeoutApp.StopFailureCount == 1,
+        "A failed forced recording stop did not request application restart.")
+
     lifecycleLog := []
     app := CaptureTestApp(lifecycleLog)
     inputGuard := CaptureTestInputGuard(lifecycleLog)
@@ -546,7 +572,6 @@ CaptureEvent(name, vk, sc, phase, deviceId := "keyboard-a") {
         (sc & 0x100) != 0, deviceId, deviceId, 1, 6)
     return InputEvent.Create(identity, phase, false, false, "raw-input")
 }
-
 CaptureRelease(session, name, vk, sc, deviceId := "keyboard-a") {
     result := session.ObserveRawInputEvent(CaptureEvent(name, vk, sc, "up",
         deviceId))
@@ -624,6 +649,7 @@ class CaptureTestApp {
         this.RejectedCount := 0
         this.ResumeFailureCount := 0
         this.CancelledCount := 0
+        this.StopFailureCount := 0
         this.PointerFinalizedCount := 0
         this.SuppressEscapeCount := 0
         this.ResumeThrows := false
@@ -658,6 +684,7 @@ class CaptureTestApp {
     OnCaptureRejected(reason) => this.RejectedCount++
     OnCaptureResumeFailed(*) => this.ResumeFailureCount++
     OnCaptureCancelled(*) => this.CancelledCount++
+    OnCaptureStopFailed(*) => this.StopFailureCount++
     ShouldCancelCaptureForPointer(*) => this.CancelForPointer
     PrepareCapturePointerCancellation(*) => true
     FinalizeCapturePointerCancellation(*) => this.PointerFinalizedCount++
@@ -731,3 +758,4 @@ class CapturePriorityRuntime {
         return true
     }
 }
+

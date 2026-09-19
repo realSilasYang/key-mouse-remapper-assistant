@@ -3,6 +3,10 @@ class KeyCaptureSession {
     static PointerCancellationTimeoutMs := 2000
     static InputDrainRetryMs := 15
     static InputDrainTimeoutMs := 2000
+    ; A recording session must never own the global input guard indefinitely.
+    ; This is deliberately independent from the shorter input-drain retry
+    ; window: a stuck key-up or helper process must reach the restart path.
+    static CaptureTimeoutMs := 10000
     static ModifierOrder := [
         "LCtrl", "RCtrl", "LShift", "RShift",
         "LAlt", "RAlt", "LWin", "RWin"]
@@ -37,6 +41,11 @@ class KeyCaptureSession {
         this.DrainRole := ""
         this.InputDrainDeadline := 0
         this.InputDrainTimer := ObjBindMethod(this, "FinalizeInputDrain")
+        this.CaptureTimeoutTimer := ObjBindMethod(this,
+            "ForceStopAfterTimeout")
+        this.CaptureStopFailureTimer := ObjBindMethod(this,
+            "HandleCaptureStopFailure")
+        this.PendingCaptureStopFailure := ""
         this.PointerButtonCancelPending := false
         this.PointerCancelTimer := ObjBindMethod(this,
             "FinalizePointerCancellationTimeout")
@@ -85,6 +94,8 @@ class KeyCaptureSession {
             if !this.SuspensionOwned
                 throw Error("无法取得录制期间的重映射暂停状态。")
             this.SeedObservedModifiers()
+            SetTimer(this.CaptureTimeoutTimer,
+                -KeyCaptureSession.CaptureTimeoutMs)
             this.Trace("capture_started", {Outcome: role})
             return true
         } catch as startError {
@@ -96,7 +107,8 @@ class KeyCaptureSession {
         }
     }
 
-    Stop(notifyCancelled := false, resumeRemapping := true) {
+    Stop(notifyCancelled := false, resumeRemapping := true,
+            restartOnFailure := true) {
         wasActive := this.Active || this.Draining || this.SuspensionOwned
             || this.InputGuardOwned
         pointerCancellationPending := this.PointerButtonCancelPending
@@ -115,6 +127,7 @@ class KeyCaptureSession {
         SetTimer(this.PointerCancelTimer, 0)
         SetTimer(this.AppCommandTimer, 0)
         SetTimer(this.InputDrainTimer, 0)
+        SetTimer(this.CaptureTimeoutTimer, 0)
         this.PendingAppCommand := ""
         this.HeldKeys.Clear()
         this.RecordedKeys.Clear()
@@ -150,8 +163,53 @@ class KeyCaptureSession {
         if IsObject(resumeError)
             this.Trace("capture_resume_failed", {Outcome: "error",
                 Detail: resumeError.Message})
-        return wasActive && !IsObject(inputGuardError)
+        cleanupSucceeded := wasActive && !IsObject(inputGuardError)
             && !IsObject(resumeError)
+        if wasActive && !cleanupSucceeded && restartOnFailure {
+            detail := ""
+            if IsObject(inputGuardError)
+                detail := inputGuardError.Message
+            if IsObject(resumeError)
+                detail .= (detail == "" ? "" : "；") resumeError.Message
+            this.PendingCaptureStopFailure := detail
+            SetTimer(this.CaptureStopFailureTimer, -1)
+        }
+        return cleanupSucceeded
+    }
+
+    ForceStopAfterTimeout(*) {
+        if !this.Active && !this.Draining && !this.SuspensionOwned
+                && !this.InputGuardOwned
+            return false
+        this.Trace("capture_timeout", {Outcome: "forced",
+            Detail: KeyCaptureSession.CaptureTimeoutMs})
+        ; Do not enter the normal input-drain phase here. The timeout is the
+        ; final safety boundary and must release the guard immediately.
+        this.Active := false
+        this.Draining := false
+        this.DrainCapture := ""
+        this.DrainCancelled := false
+        this.DrainCancelReason := ""
+        this.DrainRole := ""
+        this.InputDrainDeadline := 0
+        this.ObservedHeld.Clear()
+        stopped := this.Stop(true, true, true)
+        if stopped
+            this.Trace("capture_timeout_stopped", {Outcome: "cancelled"})
+        return stopped
+    }
+
+    HandleCaptureStopFailure(*) {
+        detail := this.PendingCaptureStopFailure
+        this.PendingCaptureStopFailure := ""
+        if !IsObject(this.App)
+            return false
+        try return this.App.OnCaptureStopFailed(detail)
+        catch as restartError {
+            this.Trace("capture_restart_failed", {Outcome: "error",
+                Detail: restartError.Message})
+            return false
+        }
     }
 
     InputGuardHasResources() {

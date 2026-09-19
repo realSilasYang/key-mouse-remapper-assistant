@@ -43,6 +43,10 @@ class EventViewerWindow {
         "capture_cancelled", "按键录制已取消",
         "capture_rejected", "按键录制已拒绝",
         "capture_resume_failed", "录制后恢复重映射失败",
+        "capture_timeout", "按键录制已达到 10 秒上限",
+        "capture_timeout_stopped", "超时录制已强制停止",
+        "capture_stop_failed", "录制停止失败",
+        "capture_restart_failed", "录制失败后的重启未完成",
         "capture_device_lost", "录制设备已断开",
         "update", "更新操作",
         "update_check", "更新检查",
@@ -58,6 +62,7 @@ class EventViewerWindow {
         "session_lock_failed", "会话锁定时输入恢复失败",
         "session_unlock", "会话已解锁",
         "session_unlock_failed", "会话解锁时输入恢复失败",
+        "forced_restart_failed", "强制重启失败",
         "session_notification_registration_failed", "会话通知注册失败")
     static OutcomeLabels := Map(
         "ok", "成功", "error", "失败",

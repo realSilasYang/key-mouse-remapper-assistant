@@ -131,7 +131,7 @@ class KeyMouseRemapperAssistantApp {
                 () => this.UpdateService.Shutdown())
         if IsObject(this.Capture)
             this.RunConstructionCleanup(failures, "录制会话",
-                () => this.Capture.Stop(false, false))
+                () => this.Capture.Stop(false, false, false))
         if IsObject(this.RawInput)
             this.RunConstructionCleanup(failures, "Raw Input",
                 () => this.RawInput.Shutdown())
@@ -1364,6 +1364,18 @@ class KeyMouseRemapperAssistantApp {
             message), true)
     }
 
+    OnCaptureStopFailed(message := "", *) {
+        this.TraceEvent("input", "capture_stop_failed", {Outcome: "error",
+            Detail: message})
+        if this.ShuttingDown
+            return false
+        ; The recorder still owns global hooks when this callback runs. Use the
+        ; normal handoff path so the old process is torn down and Windows
+        ; releases any hook/helper resources it could not release in-process.
+        return this.ReloadApplication(this.Settings.RunAsAdministrator
+            && !A_IsAdmin, true)
+    }
+
     ShouldCancelCaptureForPointer(*) => this.Window.IsPointerOverCaptureButton()
     PrepareCaptureEscapeCancellation(*) => this.Window.SuppressEscapeAfterCapture(3000)
     PrepareCapturePointerCancellation(*) => this.Window.SuppressNextPointerButtonActivation()
@@ -1618,14 +1630,14 @@ class KeyMouseRemapperAssistantApp {
         return this.ReloadApplication(true)
     }
 
-    ReloadApplication(runElevated := false) {
+    ReloadApplication(runElevated := false, force := false) {
         if this.ShuttingDown
             return false
         previousCritical := A_IsCritical
         reloadMarkerWritten := false
         try {
             Critical("On")
-            if !A_IsCompiled {
+            if !A_IsCompiled && !force {
                 validationCommand := BuildReloadValidationCommand(A_AhkPath,
                     A_ScriptFullPath)
                 if RunWait(validationCommand, A_ScriptDir, "Hide") != 0
@@ -1642,6 +1654,16 @@ class KeyMouseRemapperAssistantApp {
             Run((runElevated ? "*RunAs " : "") handoffCommand,
                 A_ScriptDir)
         } catch as reloadError {
+            if force {
+                try this.TraceEvent("system", "forced_restart_failed", {
+                    Outcome: "error", Detail: reloadError.Message})
+                ; There is no safe in-process fallback after capture cleanup
+                ; failed. Shut down best-effort and terminate so the next
+                ; launch cannot inherit a stuck recorder state.
+                try this.Shutdown()
+                ExitApp(1)
+                return false
+            }
             if reloadMarkerWritten
                 try this.WriteShowAfterReloadMarker(false)
             Critical(previousCritical ? previousCritical : "Off")
@@ -1687,7 +1709,7 @@ class KeyMouseRemapperAssistantApp {
         try SetTimer(this.ExternalTakeoverTimer, 0)
         try this.UpdateService.Shutdown()
         try this.AIService.Shutdown()
-        try this.Capture.Stop(false, false)
+        try this.Capture.Stop(false, false, false)
         try this.RawInput.Shutdown()
         try this.Runtime.Shutdown()
         for windowName in ["PackageImportPreview", "SettingsWindow",
