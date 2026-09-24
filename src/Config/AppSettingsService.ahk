@@ -39,6 +39,8 @@ class AppSettingsService {
                     "Startup", "RunAsAdministrator", "1"),
                 CheckUpdatesOnStartup: this.ReadSnapshotValue(values,
                     "Startup", "CheckUpdatesOnStartup", "1"),
+                CheckInterceptionOnStartup: this.ReadSnapshotValue(values,
+                    "Interception", "CheckOnStartup", "1"),
                 EscapeCancelsRecording: this.ReadSnapshotValue(values, "Recording",
                     "EscapeCancelsRecording", "1"),
                 EventBufferCapacity: this.ReadSnapshotValue(values, "Events",
@@ -90,6 +92,9 @@ class AppSettingsService {
                 true),
             CheckUpdatesOnStartup: this.NormalizeBoolean(
                 this.GetProperty(settings, "CheckUpdatesOnStartup", true),
+                true),
+            CheckInterceptionOnStartup: this.NormalizeBoolean(
+                this.GetProperty(settings, "CheckInterceptionOnStartup", true),
                 true),
             EscapeCancelsRecording: this.NormalizeBoolean(
                 this.GetProperty(settings, "EscapeCancelsRecording", true),
@@ -236,6 +241,9 @@ class AppSettingsService {
                 . (settings.RunAsAdministrator ? 1 : 0) "`r`n"
             . "CheckUpdatesOnStartup="
                 . (settings.CheckUpdatesOnStartup ? 1 : 0) "`r`n`r`n"
+            . "[Interception]`r`n"
+            . "CheckOnStartup="
+                . (settings.CheckInterceptionOnStartup ? 1 : 0) "`r`n`r`n"
             . "[Recording]`r`n"
             . "EscapeCancelsRecording="
                 . (settings.EscapeCancelsRecording ? 1 : 0) "`r`n`r`n"

@@ -22,7 +22,8 @@ class AIService {
         . "9. WheelUp/WheelDown/WheelLeft/WheelRight、MouseMove 等没有可观察松开事件的来源，若需求还要求长按、松开分支或保持某个输出键按下，选择受托管脚本。`n"
         . "10. 选择规则块后必须完整保留用户要求；不得为了通过规则块格式而删除、弱化或改写超出其能力的行为。只要有一项必要行为无法表达，就选择受托管脚本。`n"
         . "11. 不要根据当前编辑器显示的是哪种空白模板决定形式；它只是界面初始内容。判断依据只能是用户目的和上述能力边界。`n"
-        . "12. 需求含糊但没有明确超出规则块能力时，采用满足需求的最小解释并优先规则块；不得要求用户先选择形式。"
+        . "12. 用户要求屏蔽或吞掉某个来源按键且不需要替代输出时，使用规则块并设置根部 block=true，不要伪造 sleep 或空动作；block=true 不得与 passthrough=true 或其它输出动作并用。`n"
+        . "13. 需求含糊但没有明确超出规则块能力时，采用满足需求的最小解释并优先规则块；不得要求用户先选择形式。"
     static CurrentEnvelopeReminder := "不可变输出外壳：只返回恰好一个规则块，"
         . "第一行和最后一行必须分别为“; @mapping-begin”与“; @mapping-end”，"
         . "不要代码围栏、解释或第二个规则块。五项元数据依次使用“; @名称=”、"
@@ -35,11 +36,13 @@ class AIService {
         . "生成任务的规则形式由 AI 根据需求与能力边界判断，不要询问用户；"
         . "优化任务必须保持当前规则形式。"
     static CurrentMetadataReminder := "元数据合同：五项元数据按名称、类型、来源按键、映射结果、生效范围的顺序填写。@名称是界面中的规则标识，不是 Windows 文件名；必须非空且不超过 128 个字符，可以包含 Windows 文件名保留标点和结尾点号，首尾水平空白会由应用去除。其余显示元数据必须用当前界面语言真实、简洁地概括正文实现，不能用摘要代替实现。应用会统一排版外壳元数据和规则块 JSON，并为这些结构化字段补充说明注释；不要手写字段说明或未知元数据。受托管脚本只有暂停时才写 @enabled=false。"
+    static CurrentBlockingReminder := "屏蔽规则合同：当用户要求屏蔽、吞掉或禁用来源按键且不需要替代输出时，规则块使用根部 block=true，to 和其它动作字段留空；block=true 不得与 passthrough=true 或任何输出动作并用。"
     static CurrentValidationReminder := "本次请求使用当前应用结构：规则块的 from.key 必须是对象且只描述按键身份；event、repeat、modifiers、optional_modifiers 和 tap_count 必须写在 from 根部，与 key 同级，绝不能放进 from.key。modifiers、optional_modifiers、simultaneous、conditions、all/any 子条件和全部动作字段必须是 JSON 数组，即使只有一项也一样；in/not_in 的 value 必须是数组；布尔值与数字不得加引号。每个动作对象必须用 type 指定动作类型，并把参数放进 value，例如 {`"type`":`"sleep`",`"value`":500}；不要写 {`"sleep`":500}、{`"type`":`"sleep`",`"sleep`":500} 或 action.sleep。条件叶节点必须使用 type、field、operator、value 字段，例如 {`"type`":`"application`",`"field`":`"process`",`"operator`":`"equals`",`"value`":`"notepad.exe`"}，不要使用 application 属性或嵌套简写。单个修饰键必须写成例如 `"modifiers`": [`"Ctrl`"]，optional_modifiers 只能写成 [`"any`"]。from.key.name 必须使用当前 AHK v2 运行时能由 GetKeyName 识别的按键名：方向键写 Up/Down/Left/Right，翻页键写 PgUp/PgDn，滚轮写 WheelUp/WheelDown；不要写 ArrowUp、PageUp、MouseWheelUp、KeyA，也不要把组合键整体放进 name。key.kind 只允许 keyboard、mouse、wheel、app-command、named；vk 是 00 至 FF 的十六进制虚拟键码，sc 是 000 至 1FF 的十六进制扫描码，extended 必须是布尔值，command 必须是 0 至 65535 的整数；name 与 vk/sc 必须描述同一按键。Ctrl+K 应拆成 name:`"K`" 与 modifiers:[`"Ctrl`"]；CapsLock+I 等非标准修饰组合应写进 simultaneous 按键对象数组。规则块 JSON 正文不要重复 id/display；只使用 conditions，不要使用单数 condition；timing 必须是对象且 held_threshold_ms 放在其中。受托管脚本必须使用严格 AHK v2：不要使用 Func(`"Name`").Bind(...)，应写 Name.Bind(...)；键值状态表使用 Map() 与 Has(...)，不要使用 {} 与 HasKey(...)；Hotkey() 注册按下事件时省略 Down 后缀，只有释放事件添加 Up 后缀；绑定 Hotkey 回调后要接收或用 * 吸收运行时传入的热键参数。规则块 JSON 每行以分号开头；受托管脚本源码区每行以分号和恰好两个空格开头。"
     static CurrentActionReminder := "规则块动作参数合同：send.value 是直接交给 AHK v2 SendEvent 的发送串，例如 {Delete}、^{C}、{WheelDown 3}；不要把按键组合拆成模型臆造的对象。mouse.value 同样必须是合法的 SendEvent 鼠标发送串，例如 {LButton}、{WheelDown 3}、{Click 100 200}，只移动不点击可用 {Click 100 200 0}；不要写 Move 10 20、click_x、mouse.move 等伪语法。app_command.value 只能是 Browser_Back、Browser_Forward、Browser_Refresh、Browser_Stop、Browser_Search、Browser_Favorites、Browser_Home、Volume_Mute、Volume_Down、Volume_Up、Media_Next、Media_Prev、Media_Stop、Media_Play_Pause、Launch_Mail、Launch_Media、Launch_App1、Launch_App2 之一，值本身不要再加花括号。text.value 是要逐字输入的原文；sleep.value 是 0 至 5000 的整数毫秒；key_down/key_up.value 是单个 AHK v2 按键名。window_minimize、window_close、lock_workstation 不接受 value。"
     static CurrentConditionReminder := "规则块条件值合同：application.process 是当前前台程序的可执行文件名并包含 .exe，例如 WINWORD.EXE；application.path 是该程序的完整可执行文件路径。window.title 是当前窗口标题，window.class 是 Win32 窗口类名，window.hwnd 是数值窗口句柄。input_source.language_id 是当前前台线程键盘布局的四位大写十六进制 LANGID 字符串，例如简体中文 0804、美国英语 0409。session.state 当前唯一可匹配值是 active，不要生成 locked、remote、disconnected 等当前运行时不会提供的值。文本比较默认不区分大小写；in/not_in 的 value 使用同类型值组成的数组。无法从用户目的确定真实进程名、路径、窗口类或语言 ID 时，不要虚构，优先使用用户明确提供的信息或选择能可靠表达的最小条件。"
     static CurrentBehaviorReminder := "行为正确性约束：语法通过不代表效果正确。处理 Alt、Ctrl、Shift、Win 等系统修饰键时，必须按 Windows 实际收到输入的时序设计并保留所需组合键；已经用 ~ 前缀穿透的物理按键，不能在松开时靠发送同名 key up 撤销。若需求是在 Office 或其他 Windows 程序中禁止单按 Alt 激活菜单或 KeyTips，同时保留 Alt 组合键，应在 LAlt/RAlt 按下且物理 Alt 仍按住时发送未分配的虚拟键，例如 ~*LAlt::SendEvent(`"{Blind}{vkE8}`") 与 ~*RAlt::SendEvent(`"{Blind}{vkE8}`")，使系统不再把本次输入判定为单按 Alt；不要使用“Alt 按下穿透、Alt 松开时再发送 Alt up”的补救写法，也不要依赖 A_PriorKey 完成这种菜单抑制。"
-    static CurrentCapabilityReminder := "当前应用能力清单（覆盖旧自定义提示中的冲突描述）：规则块根部只允许 enabled、passthrough、priority、stop_processing、description、from、conditions、to、to_if_alone、to_if_held_down、to_after_key_up、timing。from 只允许 key、simultaneous、event、repeat、modifiers、optional_modifiers、tap_count；key 只允许 name、kind、vk、sc、extended、command；tap_count 当前只能为 1。规则块动作只允许 send、key_down、key_up、text、mouse、app_command、sleep、window_minimize、window_close、lock_workstation，动作参数统一放在 value，repeat_interval_ms 当前只能为 0；条件只允许 application、window、input_source、session、all、any、not，叶条件统一使用 type、field、operator、value、case_sensitive，运算符只允许 equals、not_equals、contains、not_contains、starts_with、ends_with、regex、in、not_in、exists、not_exists。timing 只允许 held_threshold_ms。一个规则块只能有一个触发源；多个独立热键、序列、多击、跨热键状态、动态定时、任意键取消、外部 API 或超出上述字段的行为必须使用受托管脚本，不得臆造 RuleSpec 字段。受托管脚本由宿主分别启动、暂停、恢复和停止；宿主自动加 #Requires AutoHotkey v2.0 64-bit、#NoTrayIcon、父进程监控及管理定时器。用户源码不得重复这些指令，不得使用 #SingleInstance Force 干扰托管，也不要自行 Reload 或无条件 ExitApp。宿主暂停使用 Suspend，且没有提供用户代码可调用的暂停或恢复回调；不要虚构这类生命周期 API。需要退出清理时注册 OnExit，但不得覆盖或破坏宿主管理符号。"
+    static CurrentCapabilityReminder := "当前应用能力清单（覆盖旧自定义提示中的冲突描述）：规则块根部只允许 enabled、passthrough、priority、stop_processing、description、from、conditions、to、to_if_alone、to_if_held_down、to_after_key_up、timing。from 只允许 key、simultaneous、event、repeat、modifiers、optional_modifiers、tap_count、device；device 只允许 backend、number、type、hardware_id，其中 backend 当前只能为 interception，键盘 number 为 1..10，鼠标 number 为 11..20；key 只允许 name、kind、vk、sc、extended、command；tap_count 当前只能为 1。规则块动作只允许 send、key_down、key_up、text、mouse、app_command、sleep、window_minimize、window_close、lock_workstation，动作参数统一放在 value，repeat_interval_ms 当前只能为 0；条件只允许 application、window、input_source、session、all、any、not，叶条件统一使用 type、field、operator、value、case_sensitive，运算符只允许 equals、not_equals、contains、not_contains、starts_with、ends_with、regex、in、not_in、exists、not_exists。timing 只允许 held_threshold_ms。一个规则块只能有一个触发源；多个独立热键、序列、多击、跨热键状态、动态定时、任意键取消、外部 API 或超出上述字段的行为必须使用受托管脚本，不得臆造 RuleSpec 字段。受托管脚本由宿主分别启动、暂停、恢复和停止；宿主自动加 #Requires AutoHotkey v2.0 64-bit、#NoTrayIcon、父进程监控及管理定时器。用户源码不得重复这些指令，不得使用 #SingleInstance Force 干扰托管，也不要自行 Reload 或无条件 ExitApp。宿主暂停使用 Suspend，且没有提供用户代码可调用的暂停或恢复回调；不要虚构这类生命周期 API。需要退出清理时注册 OnExit，但不得覆盖或破坏宿主管理符号。"
+    static CurrentInterceptionReminder := "Interception 能力说明：应用集成官方 x64 interception.dll、可视化设备识别、一键提权安装驱动、来源设备录制和集中式设备规则运行时。简单的指定物理键盘/鼠标映射必须优先生成规则块，在 from.device 中写 backend=interception、项目设备编号 number、type 和已知的 hardware_id；运行时会用单一 context 集中过滤并原样回送未匹配 stroke。键盘项目编号为 1..10，鼠标为 11..20；官方 identify 样例通常显示零基索引（按设备类型分别计数），不能把 Raw Input 的设备路径或句柄当成 Interception 编号。只有需要直接处理原始 stroke、超出 RuleSpec 动作能力的复杂底层逻辑时才选择受托管脚本，并明确驱动/DLL 前置条件、非目标输入回送、异常和退出清理；不得为简单设备专属映射再创建独立 Interception consumer。驱动安装需要显式用户确认、管理员权限和重启 Windows；不要声称能够处理安全桌面或 Ctrl+Alt+Delete。不要用名为 buffer 的局部变量遮蔽 AHK v2 的 Buffer 类，硬件 ID 缓冲可命名为 hardwareIdBuffer。"
     static CurrentIntentReminder := "需求理解与验收约束：先在内部把用户目的拆成可验证的行为契约，至少确认触发输入、按下/松开/重复时序、短按/长按/多击、左右修饰键、原输入是否穿透、组合键是否保留、作用窗口或进程、上下文切换、输出顺序、并发按键、取消条件和退出清理。逐项检查最终规则是否实现，不得只按关键词套模板，不得用元数据声称源码没有实现的效果，也不得为了简化而遗漏例外条件。用户未明确的细节采用最小且符合常规使用习惯的解释；会改变核心效果的歧义应在代码中选择可逆、保守的行为，不要虚构用户没有要求的程序、路径、按键或时间值。优化任务以用户本次要求为最高目标，保留现有规则中不冲突的行为、名称语义、启用状态和作用范围；删除死代码、重复发送、不可达分支和会造成卡键或递归的逻辑。"
     static CurrentAhkV2EngineeringReminder := "AHK v2 实现约束：充分使用 AHK v2，但只使用确有必要且能解释行为的机制。热键前缀 ~ 表示物理输入继续传给系统，* 表示额外修饰键不阻止触发，$ 或合理的 SendLevel/#InputLevel 用于防止发送结果递归触发；不要混淆这些含义。需要物理状态时使用 GetKeyState(key, `"P`")；依赖 A_PriorKey/A_TimeSincePriorHotkey 时确保键盘或鼠标钩子能够观察所需输入，并考虑合成输入的影响。需要序列、任意键取消、多击、超时或跨热键状态时，可使用 InputHook、Hotkey()、SetTimer、Map、闭包或显式状态机；不要用长时间 Sleep 阻塞本应并发响应的热键线程。#HotIf 表达式应快速、无副作用；如果按下后窗口可能切换，不能只把对应 Up 热键放在同一 #HotIf 中，否则松开事件可能丢失并造成卡键，应该用全局 Up 清理或显式记录已接管状态。任何主动发送的 key down 都必须在正常松开、取消、上下文变化和退出路径可靠发送匹配的 key up；必要时注册 OnExit 清理。发送自身触发键时防止递归，保留用户要求的其他修饰键并注意 RAlt 在部分键盘布局中是 AltGr。滚轮和 MouseMove 没有物理 Up；裸 Ctrl/Alt/Shift 热键存在释放时触发特性；普通权限脚本不能保证控制管理员权限窗口。受托管 worker 已自动添加 #Requires AutoHotkey v2.0 64-bit、#NoTrayIcon 和启停管理，不要重复添加这些指令，也不要使用 #SingleInstance Force 干扰托管。只写 v2 函数调用、对象、Map、异常处理和热键语法，不混入 v1 命令式写法。"
     static CurrentCodeCommentReminder := "源码注释合同：受托管脚本的 AHK v2 源码必须使用当前界面语言添加详细、准确且与实现一致的注释。注释应说明整体实现思路、状态变量及其生命周期、按键事件时序、热键前缀与穿透行为、定时或并发处理、取消与清理路径，以及不直观的 AHK v2 或 Windows 输入机制；复杂分支应说明为什么这样处理。不要逐行复述显而易见的语句，也不要用注释声称代码没有实现的行为。生成初稿、优化、复核和修复时都必须保留或补足必要注释。规则块的 RuleSpec JSON 仍由应用统一生成字段说明注释，不得为注释添加伪字段、非 JSON 内容或破坏持久化格式；description 应准确概括实际行为，但不能代替实现。"
@@ -1243,9 +1246,11 @@ class AIService {
             . "`n`n" AIService.CurrentEnvelopeReminder
             . "`n`n" AIService.CurrentMetadataReminder
             . "`n`n" AIService.CurrentValidationReminder
+            . "`n`n" AIService.CurrentBlockingReminder
             . "`n`n" AIService.CurrentActionReminder
             . "`n`n" AIService.CurrentConditionReminder
             . "`n`n" AIService.CurrentCapabilityReminder
+            . "`n`n" AIService.CurrentInterceptionReminder
             . "`n`n" AIService.CurrentBehaviorReminder
             . "`n`n" AIService.CurrentIntentReminder
             . "`n`n" AIService.CurrentAhkV2EngineeringReminder
@@ -1269,7 +1274,14 @@ class AIService {
                 "AutoHotkey v2 direct hotkeys in host process",
             "managed_script_worker_architecture", architecture,
             "managed_script_worker_privilege",
-                "inherits host process token and elevation")
+                "inherits host process token and elevation",
+            "interception_supported", JsonBoolean(!!A_Is64bitOS),
+            "interception_library_architecture", "x64",
+            "interception_keyboard_device_range", "1..10",
+            "interception_mouse_device_range", "11..20",
+            "interception_identify_available", JsonBoolean(!!A_Is64bitOS),
+            "interception_driver_installation_managed_by_app",
+                JsonBoolean(false))
     }
 
     BuildPhaseInstructions(phase) {

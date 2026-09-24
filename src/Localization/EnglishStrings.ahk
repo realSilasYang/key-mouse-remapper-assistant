@@ -9,9 +9,7 @@ class EnglishStrings {
         catalog.Set(
             "键鼠重映射小助手",
                 "Keyboard & Mouse Remapper Assistant")
-        catalog.Set(
-            "新增",
-                "Add")
+        catalog.Set("新建", "New")
         catalog.Set(
             "删除",
                 "Delete")
@@ -38,8 +36,8 @@ class EnglishStrings {
             "名称",
                 "Name")
         catalog.Set(
-            "新建映射",
-                "New mapping")
+            "新建简易规则",
+                "New simple rule")
         catalog.Set(
             "映射为",
                 "Map to")
@@ -287,9 +285,6 @@ class EnglishStrings {
             "请先完成或取消当前按键录制。",
                 "Finish or cancel the current recording first.")
         catalog.Set(
-            "请先录制来源按键和目标按键。",
-                "Record both the source and target keys first.")
-        catalog.Set(
             "已清空新建区域。",
                 "Cleared the new mapping area.")
         catalog.Set(
@@ -473,7 +468,7 @@ class EnglishStrings {
         catalog.Set("无法打开反馈页面：{1}", "Could not open the feedback page: {1}")
         catalog.Set("键鼠重映射小助手用于录制、审阅和维护键盘与鼠标映射。关闭主窗口只会隐藏到系统托盘，已经启用的映射仍会继续生效。", "Keyboard & Mouse Remapper Assistant records, reviews, and maintains keyboard and mouse mappings. Closing the main window only hides it in the system tray; enabled mappings remain active.")
         catalog.Set("一、快速上手", "1. Quick start")
-        catalog.Set("• 点击顶部“新增”，会打开已经填好元数据字段的 @mapping 编辑器；也可以在下方分别录制来源按键和目标按键，填写名称后保存。", "• Select Add in the top bar to open an @mapping editor with the metadata fields already prepared. You can also record the source and target below, enter a name, and save the mapping.")
+        catalog.Set("• 点击顶部“新建”，会打开已经填好元数据字段的 @mapping 编辑器；也可以在下方分别录制来源按键和目标按键，填写名称后保存。", "• Select New in the top bar to open an @mapping editor with the metadata fields already prepared. You can also record the source and target below, enter a name, and save the mapping.")
         catalog.Set("• 录制会实时显示原始规范名称、阅读友好名称、虚拟键码和扫描码，并区分左右 Ctrl、Shift、Alt、Win 以及键盘、鼠标和滚轮输入。", "• Recording shows the canonical name, readable name, virtual-key code, and scan code in real time. It distinguishes left and right Ctrl, Shift, Alt, and Win, as well as keyboard, mouse, and wheel input.")
         catalog.Set("二、主界面与代码编辑", "2. Main window and code editing")
         catalog.Set("• 单击选择映射；双击条目、选中后按 F2 或使用右键菜单，可编辑完整 @mapping 代码块。", "• Select a mapping with one click. Double-click a row, press F2 after selecting it, or use the context menu to edit the complete @mapping block.")
@@ -546,7 +541,38 @@ class EnglishStrings {
         catalog.Set("自定义 AHK 代码可读取文件、启动程序、控制窗口并请求管理员权限。确认运行当前代码吗？", "Custom AHK code can read and write files, launch programs, control windows, and request administrator privileges. Run this code?")
         catalog.Set("规则未应用：{1}", "Rules were not applied: {1}")
         catalog.Set("• 映射区域以注释形式保存规则块和受托管脚本。规则块在主进程热应用；受托管脚本的自定义 AHK v2 源码在独立受管进程运行，保存、暂停、恢复、删除和退出均由小助手统一管理。", "• The mapping region stores standard rule blocks and managed scripts as comments. Standard rule blocks are hot-applied in the main process. Custom AutoHotkey v2 source runs in an isolated managed process controlled by the assistant.")
-        catalog.Set("区分左右修饰键", "Distinguish left/right modifier keys")
+        catalog.Set("区分左/右侧修饰键", "Distinguish left/right modifier keys")
+        catalog.Set("区分来源设备", "Distinguish source device")
+        catalog.Set("目标按键可留空，表示屏蔽来源按键。", "Leave the target key empty to block the source key.")
+        catalog.Set("请先录制来源按键。", "Record a source key first.")
+        catalog.Set("安装 Interception 驱动", "Install Interception driver")
+        catalog.Set("安装驱动", "Install driver")
+        catalog.Set("来源设备：Interception {1} {2}{3}", "Source device: Interception {1} {2}{3}")
+        catalog.Set("已启用来源设备区分，请重新录制来源按键。", "Source-device distinction is enabled. Record the source keys again.")
+        catalog.Set("Interception 驱动", "Interception driver")
+        catalog.Set("驱动状态：", "Driver status:")
+        catalog.Set("重新检测", "Check again")
+        catalog.Set("已就绪", "Ready")
+        catalog.Set("{1}`r`n状态：{2}`r`n{3}", "{1}`r`nStatus: {2}`r`n{3}")
+        catalog.Set("启动时自动检测并提醒", "Check and notify at startup")
+        catalog.Set("Interception 驱动未安装。可在设置的 Interception 选项卡检测或安装。", "The Interception driver is not installed. Check or install it on the Interception tab in Settings.")
+        catalog.Set("Interception 规则未运行；请在设置中安装驱动，或暂停这些规则。", "Interception rules are not running. Install the driver in Settings or pause these rules.")
+        catalog.Set("以下启用规则需要 Interception 驱动，但当前不可用：{1}`n`n选择“安装驱动”尝试提权安装；选择“暂停规则”则停用这些规则。安装成功后需要重启 Windows。", "These enabled rules require the Interception driver, which is unavailable: {1}`n`nChoose Install driver to run the installer with administrator privileges, or Pause rules to disable them. Restart Windows after installation.")
+        catalog.Set("Interception 驱动缺失", "Interception driver unavailable")
+        catalog.Set("暂停规则", "Pause rules")
+        catalog.Set("已暂停 {1} 条需要 Interception 驱动的规则。", "Paused {1} rules that require the Interception driver.")
+        catalog.Set("暂停 Interception 规则失败：{1}", "Failed to pause Interception rules: {1}")
+        catalog.Set("Interception 设备专属规则需要内核驱动。小助手可以请求管理员权限并运行随包官方安装器；安装后必须重启 Windows。是否继续？", "Interception device-specific rules require a kernel driver. The assistant can request administrator privileges and run the bundled official installer. Windows must be restarted afterward. Continue?")
+        catalog.Set("Interception 驱动安装程序已成功返回。请重启 Windows 后再启用相关规则。", "The Interception installer completed successfully. Restart Windows before enabling the affected rules.")
+        catalog.Set("Interception 驱动已经安装，请重启 Windows 后再录制来源设备。", "The Interception driver is installed. Restart Windows before recording a source device.")
+        catalog.Set("Interception 不可用，且发行包中未找到驱动安装器：{1}", "Interception is unavailable and the driver installer is missing from the package: {1}")
+        catalog.Set("区分来源设备需要安装 Interception 内核驱动。小助手可以立即请求管理员权限并自动安装；安装后必须重启 Windows。是否继续？", "Distinguishing source devices requires the Interception kernel driver. The assistant can request administrator access and install it now. Windows must be restarted afterward. Continue?")
+        catalog.Set("Interception 驱动安装失败：{1}", "Failed to install the Interception driver: {1}")
+        catalog.Set("设备过滤驱动", "Device filter driver")
+        catalog.Set("脚本规则 {1} 运行失败：{2}", "Script rule {1} failed: {2}")
+        catalog.Set("Interception 驱动已安装；请重启 Windows 后再运行规则 {1}。", "The Interception driver is installed. Restart Windows before running rule {1}.")
+        catalog.Set("规则 {1} 未运行：{2}", "Rule {1} did not run: {2}")
+        catalog.Set("规则 {1} 无法使用 Interception：{2}", "Rule {1} cannot use Interception: {2}")
         catalog.Set("帮助", "Help")
         catalog.Set("打赏", "Donate")
         catalog.Set("打开帮助`n可选择查看使用说明、运行日志或提交反馈", "Open Help`nChoose the user guide, runtime log, or feedback page")

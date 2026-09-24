@@ -3,6 +3,7 @@ class KeyMouseRemapperAssistantApp {
         this.UpdateService := ""
         this.Capture := ""
         this.RawInput := ""
+        this.Interception := ""
         this.Runtime := ""
         this.Window := ""
         this.SvgRenderer := ""
@@ -39,7 +40,9 @@ class KeyMouseRemapperAssistantApp {
         this.ContextService := DirectContextService()
         this.SvgRenderer := SvgRenderLibrary(GetApplicationRootFilePath(
             "third_party\resvg\resvg.dll"))
-        this.Runtime := CompositeRemappingRuntime(this)
+        this.Interception := InterceptionService()
+        this.Runtime := CompositeRemappingRuntime(this, "", "",
+            InterceptionMappingRuntime(this, this.Interception))
         this.Window := MappingWindow(this)
         this.WindowLayoutService := WindowLayoutService(this.DataDirectory
             "\window-layout.ini", MappingWindow.DefaultClientWidth,
@@ -110,6 +113,8 @@ class KeyMouseRemapperAssistantApp {
         this.ExitCallback := ObjBindMethod(this, "HandleExit")
         this.StartupUpdateTimer := ObjBindMethod(this,
             "BeginApplicationUpdateCheck")
+        this.InterceptionDriverStartupTimer := ObjBindMethod(this,
+            "CheckInterceptionDriverAtStartup")
         this.ExternalTakeoverTimer := ObjBindMethod(this,
             "ExitForExternalLaunch")
         this.SourceRevision := ReadApplicationSourceRevision()
@@ -138,6 +143,9 @@ class KeyMouseRemapperAssistantApp {
         if IsObject(this.Runtime)
             this.RunConstructionCleanup(failures, "热键运行时",
                 () => this.Runtime.Shutdown())
+        if this.HasOwnProp("Interception") && IsObject(this.Interception)
+            this.RunConstructionCleanup(failures, "Interception",
+                () => this.Interception.Shutdown())
         if IsObject(this.Window)
             this.RunConstructionCleanup(failures, "主窗口",
                 () => this.Window.Dispose())
@@ -221,8 +229,16 @@ class KeyMouseRemapperAssistantApp {
             throw Error("无法注册主窗口单实例唤醒入口。")
         }
         this.MainWindowRegistered := true
+        ; Interception is optional, but detect a missing driver once the UI is
+        ; initialized so device-specific rules can be enabled without waiting
+        ; for the user to discover the recording workflow first.
+        if this.Settings.CheckInterceptionOnStartup
+                || (IsObject(this.RuntimeReport)
+                    && this.RuntimeReport.Issues.Length
+                    && this.GetEnabledInterceptionMappings().Length)
+            SetTimer(this.InterceptionDriverStartupTimer, -1000)
         if this.Settings.CheckUpdatesOnStartup
-            SetTimer(this.StartupUpdateTimer, -1500)
+            SetTimer(this.StartupUpdateTimer, -2500)
         return fatalError == ""
     }
 
@@ -259,7 +275,8 @@ class KeyMouseRemapperAssistantApp {
     }
 
     AddMapping(sourceCapture, targetCapture, name,
-            distinguishModifierSides := true) {
+            distinguishModifierSides := true,
+            distinguishSourceDevice := false) {
         if this.NormalizeSignature(sourceCapture.Display) == "lbutton" {
             this.Window.SetStatus(Tr(
                 "为避免失去界面操作，来源按键不能是无修饰的鼠标左键。"), true)
@@ -268,7 +285,7 @@ class KeyMouseRemapperAssistantApp {
         try {
             callback := ObjBindMethod(this, "AppendCapturedMapping",
                 sourceCapture, targetCapture, name,
-                distinguishModifierSides)
+                distinguishModifierSides, distinguishSourceDevice)
             mapping := this.RunMappingMutation(callback, {Kind: "add"})
             this.Window.AddMappingRow(mapping, this.MappingCount)
             this.Window.SetStatus(Tr(
@@ -283,11 +300,13 @@ class KeyMouseRemapperAssistantApp {
     }
 
     AppendCapturedMapping(sourceCapture, targetCapture, name,
-            distinguishModifierSides := true) {
+            distinguishModifierSides := true,
+            distinguishSourceDevice := false) {
         mappings := this.Repository.Load()
         name := RuleSpec.NormalizeId(name)
         spec := RuleSpec.CreateFromCaptures(name, sourceCapture,
-            targetCapture, distinguishModifierSides)
+            targetCapture, distinguishModifierSides,
+            distinguishSourceDevice)
         return this.Repository.AppendManagedSpec(spec)
     }
 
@@ -726,6 +745,8 @@ class KeyMouseRemapperAssistantApp {
         report := this.Runtime.ApplyMappings(mappings)
         this.MappingCount := mappings.Length
         this.RuntimeReport := report
+        if report.Issues.Length && this.GetEnabledInterceptionMappings().Length
+            SetTimer(this.InterceptionDriverStartupTimer, -1000)
         return report
     }
 
@@ -948,6 +969,271 @@ class KeyMouseRemapperAssistantApp {
     ResumeRemappingAfterCapture(changed) => changed
         ? this.Runtime.ResumeAfterCapture() : false
 
+    HasActiveInterceptionRule() {
+        if !this.HasOwnProp("Runtime") || !IsObject(this.Runtime)
+            return false
+        if this.Runtime.HasOwnProp("Interception")
+                && IsObject(this.Runtime.Interception)
+                && this.Runtime.Interception.HasOwnProp("ContextActive")
+                && this.Runtime.Interception.ContextActive
+            return true
+        if !this.Runtime.HasOwnProp("Scripts")
+                || !IsObject(this.Runtime.Scripts)
+                || !this.Runtime.Scripts.HasOwnProp("Mappings")
+            return false
+        for mapping in this.Runtime.Scripts.Mappings {
+            if !IsObject(mapping) || !mapping.HasOwnProp("Spec")
+                continue
+            spec := mapping.Spec
+            if !IsObject(spec)
+                continue
+            enabled := spec.Get("enabled", JsonBoolean(true))
+            if enabled is JsonBoolean {
+                if !enabled.Value
+                    continue
+            } else if !enabled
+                continue
+            code := spec.Get("code", "")
+            if InStr(StrLower(String(code)), "interception")
+                return true
+        }
+        return false
+    }
+
+    PrepareInterceptionDeviceCapture(ownerGui := "") {
+        status := this.Interception.GetStatus()
+        if status.Get("available", false)
+            return true
+        if status.Get("code", "") == "restart_required" {
+            ShowDarkMsgBox(Tr("Interception 驱动已经安装，请重启 Windows 后再录制来源设备。"),
+                Tr("Interception 驱动"), "Info", ownerGui)
+            return false
+        }
+        if status.Get("code", "") != "driver_unavailable" {
+            ShowDarkMsgBox(status.Get("message", "Interception 驱动状态无法确认。"),
+                Tr("Interception 驱动"), "Error", ownerGui)
+            return false
+        }
+        return this.OfferInterceptionDriverInstallation(ownerGui, true)
+    }
+
+    CheckInterceptionDriverAtStartup() {
+        if this.ShuttingDown || !IsObject(this.Interception)
+            return false
+        status := this.Interception.GetStatus()
+        if status.Get("available", false) {
+            this.TraceEvent("system", "interception_driver_check", {
+                Outcome: "ready",
+                Detail: status.Get("message", "")})
+            return true
+        }
+        code := status.Get("code", "")
+        if code != "driver_unavailable" {
+            ; A missing/broken DLL is an application packaging problem, not
+            ; proof that the kernel driver is absent. Surface the diagnostic
+            ; without invoking the installer blindly.
+            detail := status.Get("message", "Interception 状态未知。")
+            this.TraceEvent("system", "interception_driver_check", {
+                Outcome: "warning", Detail: detail})
+            this.Window.SetStatus(detail, true)
+            return false
+        }
+        this.TraceEvent("system", "interception_driver_check", {
+            Outcome: "missing", Detail: status.Get("message", "")})
+        dependentMappings := this.GetEnabledInterceptionMappings()
+        if !dependentMappings.Length {
+            this.Window.SetStatus(Tr("Interception 驱动未安装。可在设置的 Interception 选项卡检测或安装。"))
+            return false
+        }
+        return this.HandleMissingInterceptionDriver(dependentMappings,
+            this.Window.Gui)
+    }
+
+    GetEnabledInterceptionMappings() {
+        mappings := this.Repository.Load()
+        dependent := []
+        for mapping in mappings {
+            if !mapping.Enabled
+                continue
+            if mapping.Mode == "managed" {
+                from := mapping.Spec.Get("from", Map())
+                if from.Has("device")
+                    && from["device"].Get("backend", "") == "interception"
+                    dependent.Push(mapping)
+            } else if mapping.Mode == "script"
+                    && this.ScriptRequiresInterception(mapping.Spec.Get(
+                        "code", ""))
+                dependent.Push(mapping)
+        }
+        return dependent
+    }
+
+    ScriptRequiresInterception(code) {
+        normalizedCode := StrLower(RegExReplace(String(code), "[^a-z]", ""))
+        return InStr(normalizedCode, "interception")
+            && InStr(normalizedCode, "createcontext")
+    }
+
+    OnScriptRuleWorkerError(ruleId, detail) {
+        if this.ShuttingDown
+            return false
+        summary := StrSplit(String(detail), "`n")[1]
+        dependent := ""
+        for mapping in this.GetEnabledInterceptionMappings() {
+            if mapping.Id == ruleId {
+                dependent := mapping
+                break
+            }
+        }
+        if !IsObject(dependent) {
+            this.Window.SetStatus(Tr("脚本规则 {1} 运行失败：{2}",
+                ruleId, summary), true)
+            return false
+        }
+        status := this.Interception.GetStatus()
+        code := status.Get("code", "")
+        if code == "driver_unavailable"
+            return this.HandleMissingInterceptionDriver([dependent],
+                this.Window.Gui)
+        if code == "restart_required" {
+            this.Window.SetStatus(Tr("Interception 驱动已安装；请重启 Windows 后再运行规则 {1}。",
+                ruleId), true)
+            return false
+        }
+        if !status.Get("available", false) {
+            this.Window.SetStatus(Tr("规则 {1} 未运行：{2}", ruleId,
+                status.Get("message", summary)), true)
+            return false
+        }
+        this.Window.SetStatus(Tr("规则 {1} 无法使用 Interception：{2}",
+            ruleId, summary), true)
+        return false
+    }
+
+    OnInterceptionRuntimeUnavailable(*) {
+        if this.ShuttingDown
+            return false
+        status := this.Interception.GetStatus()
+        if status.Get("code", "") == "driver_unavailable" {
+            mappings := this.GetEnabledInterceptionMappings()
+            ruleIds := this.GetInterceptionIssueRuleIds()
+            if ruleIds.Length {
+                affected := Map()
+                for ruleId in ruleIds
+                    affected[String(ruleId)] := true
+                selected := []
+                for mapping in mappings
+                    if affected.Has(mapping.Id)
+                        selected.Push(mapping)
+                mappings := selected
+            }
+            if !mappings.Length
+                return false
+            return this.HandleMissingInterceptionDriver(
+                mappings, this.Window.Gui)
+        }
+        if status.Get("available", false)
+            return false
+        detail := status.Get("message", "Interception 状态无法确认。")
+        this.Window.SetStatus(detail, true)
+        return false
+    }
+
+    GetInterceptionIssueRuleIds() {
+        ids := []
+        if !IsObject(this.Runtime) || !this.Runtime.HasOwnProp("Interception")
+                || !IsObject(this.Runtime.Interception)
+                || !this.Runtime.Interception.HasMethod(
+                    "GetUnavailableInterceptionRuleIds")
+            return ids
+        return this.Runtime.Interception.GetUnavailableInterceptionRuleIds()
+    }
+
+    PauseInterceptionRulesById(ruleIds, ownerGui := "") {
+        mappings := this.GetEnabledInterceptionMappings()
+        requested := Map()
+        for ruleId in ruleIds
+            requested[String(ruleId)] := true
+        selected := []
+        for mapping in mappings
+            if requested.Has(mapping.Id)
+                selected.Push(mapping)
+        if !selected.Length
+            return false
+        return this.PauseInterceptionMappings(selected)
+    }
+
+    HandleMissingInterceptionDriver(mappings, ownerGui := "") {
+        names := []
+        for mapping in mappings
+            names.Push(mapping.Id)
+        message := Tr("以下启用规则需要 Interception 驱动，但当前不可用：{1}`n`n选择“安装驱动”尝试提权安装；选择“暂停规则”则停用这些规则。安装成功后需要重启 Windows。",
+            ScriptRuleSpec.Join(names, "、"))
+        if ShowDarkConfirmBox(message, Tr("Interception 驱动缺失"),
+                Tr("安装驱动"), Tr("暂停规则"), ownerGui) {
+            if this.InstallInterceptionDriver(ownerGui)
+                return true
+            this.Window.SetStatus(Tr(
+                "Interception 规则未运行；请在设置中安装驱动，或暂停这些规则。"),
+                true)
+            return false
+        }
+        return this.PauseInterceptionMappings(mappings)
+    }
+
+    PauseInterceptionMappings(mappings) {
+        mappingIds := []
+        for mapping in mappings
+            mappingIds.Push(mapping.Id)
+        if !mappingIds.Length
+            return true
+        try {
+            paused := this.RunMappingMutation(ObjBindMethod(
+                this.Repository, "SetEnabledMany", mappingIds, false),
+                {Kind: "toggle-many", Id: mappingIds[1], Ids: mappingIds})
+            this.RefreshMappingRows(mappingIds[1])
+            this.Window.SetStatus(Tr("已暂停 {1} 条需要 Interception 驱动的规则。",
+                paused.Length))
+            return true
+        } catch as pauseError {
+            this.Window.SetStatus(Tr("暂停 Interception 规则失败：{1}",
+                pauseError.Message), true)
+            return false
+        }
+    }
+
+    InstallInterceptionDriver(ownerGui := "") {
+        try result := this.Interception.InstallDriver()
+        catch as installError {
+            ShowDarkMsgBox(Tr("Interception 驱动安装失败：{1}",
+                TrDiagnostic(installError.Message)),
+                Tr("Interception 驱动"), "Error", ownerGui)
+            return false
+        }
+        ShowDarkMsgBox(Tr("Interception 驱动安装程序已成功返回。请重启 Windows 后再启用相关规则。"),
+            Tr("Interception 驱动"), "Info", ownerGui)
+        return true
+    }
+
+    OfferInterceptionDriverInstallation(ownerGui := "",
+            forDeviceCapture := false) {
+        if !this.Interception.CanInstallDriver() {
+            ShowDarkMsgBox(Tr("Interception 不可用，且发行包中未找到驱动安装器：{1}",
+                "third_party\interception\command-line-installer\install-interception.exe"),
+                Tr("Interception 驱动"), "Error", ownerGui)
+            return false
+        }
+        message := forDeviceCapture
+            ? Tr("区分来源设备需要安装 Interception 内核驱动。小助手可以立即请求管理员权限并自动安装；安装后必须重启 Windows。是否继续？")
+            : Tr("Interception 设备专属规则需要内核驱动。小助手可以请求管理员权限并运行随包官方安装器；安装后必须重启 Windows。是否继续？")
+        if !ShowDarkConfirmBox(message, Tr("安装 Interception 驱动"),
+                Tr("安装驱动"), Tr("取消"), ownerGui)
+            return false
+        if this.InstallInterceptionDriver(ownerGui)
+            return true
+        return false
+    }
+
     OpenEventViewer(*) {
         return this.OpenAuxiliaryWindow("EventViewer",
             () => EventViewerWindow(this.Window), Tr("事件查看"))
@@ -1157,7 +1443,10 @@ class KeyMouseRemapperAssistantApp {
         this.Window.ApplyAppearance()
         UiScaleService.RefreshGuiFonts(this.Window.Gui)
         for propertyName in ["SettingsWindow", "PackageImportPreview",
-                "EventViewer", "SupportInfo", "Help", "Donation", "About"] {
+                "EventViewer", "SupportInfo", "Help",
+                "Donation", "About"] {
+            if !this.HasOwnProp(propertyName)
+                continue
             window := this.%propertyName%
             if IsObject(window) && !window.Disposed {
                 window.ApplyAppearance()
@@ -1706,14 +1995,20 @@ class KeyMouseRemapperAssistantApp {
         try this.UnregisterSessionNotifications()
         try this.UnregisterCallbacks()
         try SetTimer(this.StartupUpdateTimer, 0)
+        try SetTimer(this.InterceptionDriverStartupTimer, 0)
         try SetTimer(this.ExternalTakeoverTimer, 0)
         try this.UpdateService.Shutdown()
         try this.AIService.Shutdown()
         try this.Capture.Stop(false, false, false)
         try this.RawInput.Shutdown()
         try this.Runtime.Shutdown()
+        if this.HasOwnProp("Interception")
+            try this.Interception.Shutdown()
         for windowName in ["PackageImportPreview", "SettingsWindow",
-                "EventViewer", "SupportInfo", "Help", "Donation", "About"] {
+                "EventViewer", "SupportInfo", "Help",
+                "Donation", "About"] {
+            if !this.HasOwnProp(windowName)
+                continue
             window := this.%windowName%
             if IsObject(window)
                 try window.Dispose(false)

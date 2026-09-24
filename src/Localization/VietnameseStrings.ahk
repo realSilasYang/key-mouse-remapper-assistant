@@ -9,9 +9,7 @@ class VietnameseStrings {
         catalog.Set(
             "键鼠重映射小助手",
                 "Trợ lý ánh xạ lại bàn phím và chuột")
-        catalog.Set(
-            "新增",
-                "Thêm")
+        catalog.Set("新建", "Tạo mới")
         catalog.Set(
             "删除",
                 "Xóa")
@@ -38,8 +36,8 @@ class VietnameseStrings {
             "名称",
                 "Tên")
         catalog.Set(
-            "新建映射",
-                "Ánh xạ mới")
+            "新建简易规则",
+                "Quy tắc đơn giản mới")
         catalog.Set(
             "映射为",
                 "Bản đồ tới")
@@ -287,9 +285,6 @@ class VietnameseStrings {
             "请先完成或取消当前按键录制。",
                 "Trước tiên hãy hoàn tất hoặc hủy bản ghi hiện tại.")
         catalog.Set(
-            "请先录制来源按键和目标按键。",
-                "Ghi lại cả khóa nguồn và khóa đích trước.")
-        catalog.Set(
             "已清空新建区域。",
                 "Đã xóa khu vực ánh xạ mới.")
         catalog.Set(
@@ -472,7 +467,7 @@ class VietnameseStrings {
         catalog.Set("无法打开反馈页面：{1}", "Không thể mở trang phản hồi: {1}")
         catalog.Set("键鼠重映射小助手用于录制、审阅和维护键盘与鼠标映射。关闭主窗口只会隐藏到系统托盘，已经启用的映射仍会继续生效。", "Trợ lý ánh xạ lại bàn phím và chuột dùng để ghi, xem lại và quản lý các ánh xạ bàn phím, chuột. Đóng cửa sổ chính chỉ ẩn ứng dụng vào khay hệ thống; các ánh xạ đã bật vẫn tiếp tục hoạt động.")
         catalog.Set("一、快速上手", "1. Bắt đầu nhanh")
-        catalog.Set("• 点击顶部“新增”，会打开已经填好元数据字段的 @mapping 编辑器；也可以在下方分别录制来源按键和目标按键，填写名称后保存。", "• Chọn Thêm trên thanh phía trên để mở trình soạn thảo @mapping với các trường siêu dữ liệu đã được chuẩn bị. Bạn cũng có thể ghi riêng phím nguồn và phím đích bên dưới, nhập tên rồi lưu.")
+        catalog.Set("• 点击顶部“新建”，会打开已经填好元数据字段的 @mapping 编辑器；也可以在下方分别录制来源按键和目标按键，填写名称后保存。", "• Chọn Tạo mới trên thanh phía trên để mở trình soạn thảo @mapping với các trường siêu dữ liệu đã được chuẩn bị. Bạn cũng có thể ghi riêng phím nguồn và phím đích bên dưới, nhập tên rồi lưu.")
         catalog.Set("• 录制会实时显示原始规范名称、阅读友好名称、虚拟键码和扫描码，并区分左右 Ctrl、Shift、Alt、Win 以及键盘、鼠标和滚轮输入。", "• Khi ghi, tên chuẩn, tên dễ đọc, mã phím ảo và mã quét được hiển thị theo thời gian thực. Ứng dụng phân biệt Ctrl, Shift, Alt, Win bên trái và bên phải, cũng như đầu vào bàn phím, chuột và con lăn.")
         catalog.Set("二、主界面与代码编辑", "2. Cửa sổ chính và chỉnh sửa mã")
         catalog.Set("• 单击选择映射；双击条目、选中后按 F2 或使用右键菜单，可编辑完整 @mapping 代码块。", "• Bấm một lần để chọn ánh xạ. Bấm đúp một hàng, nhấn F2 sau khi chọn hoặc dùng menu chuột phải để sửa toàn bộ khối @mapping.")
@@ -545,7 +540,38 @@ class VietnameseStrings {
         catalog.Set("自定义 AHK 代码可读取文件、启动程序、控制窗口并请求管理员权限。确认运行当前代码吗？", "Mã AHK tùy chỉnh có thể đọc và ghi tệp, khởi chạy chương trình, điều khiển cửa sổ và yêu cầu quyền quản trị. Chạy mã này?")
         catalog.Set("规则未应用：{1}", "Không áp dụng được quy tắc: {1}")
         catalog.Set("• 映射区域以注释形式保存规则块和受托管脚本。规则块在主进程热应用；受托管脚本的自定义 AHK v2 源码在独立受管进程运行，保存、暂停、恢复、删除和退出均由小助手统一管理。", "• Vùng ánh xạ lưu khối quy tắc thông thường và tập lệnh được quản lý dưới dạng chú thích. Khối thông thường được áp dụng trong tiến trình chính. Mã AutoHotkey v2 tùy chỉnh chạy trong tiến trình được quản lý riêng do trợ lý kiểm soát.")
-        catalog.Set("区分左右修饰键", "Phân biệt phím bổ trợ trái/phải")
+        catalog.Set("区分左/右侧修饰键", "Phân biệt phím bổ trợ trái/phải")
+        catalog.Set("区分来源设备", "Phân biệt thiết bị nguồn")
+        catalog.Set("目标按键可留空，表示屏蔽来源按键。", "Để trống phím đích để chặn phím nguồn.")
+        catalog.Set("请先录制来源按键。", "Hãy ghi lại phím nguồn trước.")
+        catalog.Set("安装 Interception 驱动", "Cài trình điều khiển Interception")
+        catalog.Set("安装驱动", "Cài trình điều khiển")
+        catalog.Set("来源设备：Interception {1} {2}{3}", "Thiết bị nguồn: Interception {1} {2}{3}")
+        catalog.Set("已启用来源设备区分，请重新录制来源按键。", "Đã bật phân biệt thiết bị nguồn. Hãy ghi lại phím nguồn.")
+        catalog.Set("Interception 驱动", "Trình điều khiển Interception")
+        catalog.Set("驱动状态：", "Trạng thái trình điều khiển:")
+        catalog.Set("重新检测", "Kiểm tra lại")
+        catalog.Set("已就绪", "Sẵn sàng")
+        catalog.Set("{1}`r`n状态：{2}`r`n{3}", "{1}`r`nTrạng thái: {2}`r`n{3}")
+        catalog.Set("启动时自动检测并提醒", "Kiểm tra và nhắc khi khởi động")
+        catalog.Set("Interception 驱动未安装。可在设置的 Interception 选项卡检测或安装。", "Trình điều khiển Interception chưa được cài đặt. Hãy kiểm tra hoặc cài đặt trong thẻ Interception của phần Cài đặt.")
+        catalog.Set("Interception 规则未运行；请在设置中安装驱动，或暂停这些规则。", "Các quy tắc Interception chưa chạy. Hãy cài trình điều khiển trong Cài đặt hoặc tạm dừng các quy tắc này.")
+        catalog.Set("以下启用规则需要 Interception 驱动，但当前不可用：{1}`n`n选择“安装驱动”尝试提权安装；选择“暂停规则”则停用这些规则。安装成功后需要重启 Windows。", "Các quy tắc đang bật sau cần trình điều khiển Interception nhưng hiện không khả dụng: {1}`n`nChọn Cài trình điều khiển để chạy bộ cài với quyền quản trị hoặc Tạm dừng quy tắc để vô hiệu hóa chúng. Hãy khởi động lại Windows sau khi cài đặt.")
+        catalog.Set("Interception 驱动缺失", "Trình điều khiển Interception không khả dụng")
+        catalog.Set("暂停规则", "Tạm dừng quy tắc")
+        catalog.Set("已暂停 {1} 条需要 Interception 驱动的规则。", "Đã tạm dừng {1} quy tắc cần trình điều khiển Interception.")
+        catalog.Set("暂停 Interception 规则失败：{1}", "Không thể tạm dừng quy tắc Interception: {1}")
+        catalog.Set("Interception 设备专属规则需要内核驱动。小助手可以请求管理员权限并运行随包官方安装器；安装后必须重启 Windows。是否继续？", "Quy tắc Interception riêng cho thiết bị cần trình điều khiển nhân. Trợ lý có thể yêu cầu quyền quản trị và chạy bộ cài chính thức đi kèm. Sau khi cài đặt cần khởi động lại Windows. Tiếp tục?")
+        catalog.Set("Interception 驱动安装程序已成功返回。请重启 Windows 后再启用相关规则。", "Bộ cài Interception đã hoàn tất thành công. Hãy khởi động lại Windows trước khi bật các quy tắc liên quan.")
+        catalog.Set("Interception 驱动已经安装，请重启 Windows 后再录制来源设备。", "Trình điều khiển Interception đã được cài đặt. Hãy khởi động lại Windows trước khi ghi thiết bị nguồn.")
+        catalog.Set("Interception 不可用，且发行包中未找到驱动安装器：{1}", "Interception không khả dụng và gói phát hành không có bộ cài trình điều khiển: {1}")
+        catalog.Set("区分来源设备需要安装 Interception 内核驱动。小助手可以立即请求管理员权限并自动安装；安装后必须重启 Windows。是否继续？", "Phân biệt thiết bị nguồn cần trình điều khiển nhân Interception. Trợ lý có thể yêu cầu quyền quản trị và tự động cài đặt ngay. Sau đó phải khởi động lại Windows. Tiếp tục?")
+        catalog.Set("Interception 驱动安装失败：{1}", "Không thể cài trình điều khiển Interception: {1}")
+        catalog.Set("设备过滤驱动", "Trình điều khiển lọc thiết bị")
+        catalog.Set("脚本规则 {1} 运行失败：{2}", "Không chạy được quy tắc tập lệnh {1}: {2}")
+        catalog.Set("Interception 驱动已安装；请重启 Windows 后再运行规则 {1}。", "Đã cài đặt trình điều khiển Interception. Hãy khởi động lại Windows trước khi chạy quy tắc {1}.")
+        catalog.Set("规则 {1} 未运行：{2}", "Quy tắc {1} không chạy: {2}")
+        catalog.Set("规则 {1} 无法使用 Interception：{2}", "Quy tắc {1} không thể dùng Interception: {2}")
         catalog.Set("帮助", "Trợ giúp")
         catalog.Set("打赏", "Ủng hộ")
         catalog.Set("打开帮助`n可选择查看使用说明、运行日志或提交反馈", "Mở Trợ giúp`nChọn hướng dẫn sử dụng, nhật ký chạy hoặc gửi phản hồi")

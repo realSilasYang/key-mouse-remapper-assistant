@@ -13,7 +13,7 @@
 
 L’Assistente di rimappatura tastiera e mouse è uno strumento AutoHotkey v2 per Windows 10 e 11 x64. Riunisce acquisizione degli input, gestione delle regole, modifica del codice, generazione e ottimizzazione IA, convalida locale e stato di esecuzione. Ogni versione include le regole modificabili presenti nel relativo commit di rilascio; il numero di blocchi e script gestiti può variare.
 
-Le regole sono salvate nell’area commentata `@mapping`, leggibile e copiabile. Non vengono installati driver o servizi Windows; le mappature funzionano solo mentre l’assistente è in esecuzione. I pacchetti ufficiali non includono mai indirizzo IA, chiave API, modello, prompt personalizzati o altre impostazioni personali del computer di compilazione.
+Le regole sono salvate nell’area commentata `@mapping`, leggibile e copiabile. Le regole Interception per dispositivo possono usare un driver facoltativo installato con conferma dell’amministratore e successivo riavvio di Windows; le mappature funzionano solo mentre l’assistente è in esecuzione. I pacchetti ufficiali non includono mai indirizzo IA, chiave API, modello, prompt personalizzati o altre impostazioni personali del computer di compilazione.
 
 # Panoramica dell’interfaccia
 
@@ -39,7 +39,7 @@ La barra superiore aggiunge, sospende／riprende in gruppo ed elimina le regole.
 ## Ambito
 
 - Solo Windows 10／11 x64.
-- Senza driver kernel, desktop sicuro, `Ctrl+Alt+Delete` e programmi che bloccano gli hook utente restano fuori portata.
+- Le regole normali funzionano senza il driver Interception facoltativo. Il desktop sicuro e `Ctrl+Alt+Delete` restano fuori portata anche con il driver.
 - La modalità amministratore predefinita eleva blocchi e script figli per agire sulle applicazioni elevate.
 - I risultati IA vanno verificati anche dopo il controllo locale, soprattutto per operazioni su file, rete, processi o sistema.
 

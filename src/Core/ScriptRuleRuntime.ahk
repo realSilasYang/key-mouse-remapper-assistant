@@ -6,6 +6,7 @@ class ScriptRuleRuntime {
     static PauseTimeoutMilliseconds := 3000
     static CapturePauseConfirmationMilliseconds := 250
     static MaximumDiagnosticBytes := 1024 * 1024
+    static MonitorIntervalMilliseconds := 200
 
     __New(app, runtimeDirectory := "") {
         this.App := app
@@ -19,6 +20,7 @@ class ScriptRuleRuntime {
         this.Mappings := []
         this.Suspended := false
         this.ShuttingDown := false
+        this.MonitorTimer := ObjBindMethod(this, "CheckWorkers")
         this.EnsureRuntimeDirectory()
         this.CleanupRuntimeDirectory()
     }
@@ -45,6 +47,7 @@ class ScriptRuleRuntime {
                 this.ValidateSpec(spec)
         }
 
+        SetTimer(this.MonitorTimer, 0)
         previousMappings := this.Mappings
         previousWorkers := this.Workers
         nextWorkers := Map()
@@ -97,6 +100,9 @@ class ScriptRuleRuntime {
             }
             this.Workers := restoredWorkers
             this.Mappings := previousMappings
+            if restoredWorkers.Count
+                SetTimer(this.MonitorTimer,
+                    ScriptRuleRuntime.MonitorIntervalMilliseconds)
             if restoreMessages.Length
                 throw Error(applyError.Message "；恢复原脚本规则失败："
                     ScriptRuleSpec.Join(restoreMessages, "；"), -1,
@@ -105,6 +111,9 @@ class ScriptRuleRuntime {
         }
         this.Workers := nextWorkers
         this.Mappings := normalizedMappings
+        if nextWorkers.Count
+            SetTimer(this.MonitorTimer,
+                ScriptRuleRuntime.MonitorIntervalMilliseconds)
         this.Trace("script_rules_applied", {Outcome: "ok", Data: Map(
             "rules", normalizedMappings.Length,
             "workers", nextWorkers.Count)})
@@ -254,6 +263,7 @@ class ScriptRuleRuntime {
         jobName := "Local\KMRA-" token "-job"
         path := this.RuntimeDirectory "\worker-" token ".ahk"
         worker := {Id: spec["id"], Digest: digest, Path: path,
+            DiagnosticPath: path ".diagnostic",
             StopHandle: 0, PauseHandle: 0, PauseAppliedHandle: 0,
             ReadyHandle: 0, JobHandle: 0, ProcessHandle: 0,
             ProcessId: 0, Token: token}
@@ -303,6 +313,8 @@ class ScriptRuleRuntime {
             this.CloseWorkerHandles(worker)
             if FileExist(path)
                 try FileDelete(path)
+            if FileExist(worker.DiagnosticPath)
+                try FileDelete(worker.DiagnosticPath)
             throw startError
         }
     }
@@ -360,6 +372,9 @@ class ScriptRuleRuntime {
         this.CloseWorkerHandles(worker)
         if FileExist(worker.Path)
             try FileDelete(worker.Path)
+        if worker.HasOwnProp("DiagnosticPath")
+                && FileExist(worker.DiagnosticPath)
+            try FileDelete(worker.DiagnosticPath)
         this.Trace("script_rule_stopped", {RuleId: worker.Id,
             Outcome: forced ? "forced" : "ok"})
         return true
@@ -544,6 +559,7 @@ class ScriptRuleRuntime {
         if this.ShuttingDown
             return true
         this.ShuttingDown := true
+        SetTimer(this.MonitorTimer, 0)
         workers := this.Workers
         remaining := Map()
         failures := []
@@ -557,12 +573,51 @@ class ScriptRuleRuntime {
         this.Workers := remaining
         if failures.Length {
             this.ShuttingDown := false
+            SetTimer(this.MonitorTimer,
+                ScriptRuleRuntime.MonitorIntervalMilliseconds)
             throw Error("一个或多个脚本规则无法停止："
                 . ScriptRuleSpec.Join(failures, "；"))
         }
         this.Mappings := []
         this.CleanupRuntimeDirectory()
         return true
+    }
+
+    CheckWorkers(*) {
+        if this.ShuttingDown
+            return
+        ended := []
+        for ruleId, worker in this.Workers {
+            if worker.ProcessHandle
+                    && DllCall("kernel32\WaitForSingleObject", "Ptr",
+                        worker.ProcessHandle, "UInt", 0, "UInt") == 0
+                ended.Push({Id: ruleId, Worker: worker})
+        }
+        for item in ended {
+            if !this.Workers.Has(item.Id)
+                continue
+            worker := item.Worker
+            exitCode := 1
+            DllCall("kernel32\GetExitCodeProcess", "Ptr",
+                worker.ProcessHandle, "UInt*", &exitCode, "Int")
+            diagnostic := this.ReadDiagnostic(worker.DiagnosticPath,
+                "UTF-8")
+            this.Workers.Delete(item.Id)
+            try this.StopWorker(worker)
+            catch as stopError
+                this.Trace("script_rule_cleanup_failed", {RuleId: item.Id,
+                    Outcome: "error", Detail: stopError.Message})
+            if exitCode == 0 && diagnostic == ""
+                continue
+            detail := diagnostic != "" ? diagnostic
+                : "脚本进程已退出（代码 " exitCode "）。"
+            this.Trace("script_rule_failed", {RuleId: item.Id,
+                Outcome: "error", Detail: detail})
+            if this.App.HasMethod("OnScriptRuleWorkerError")
+                try this.App.OnScriptRuleWorkerError(item.Id, detail)
+        }
+        if !this.Workers.Count
+            SetTimer(this.MonitorTimer, 0)
     }
 
     BuildWorkerSource(spec, token, stopName, pauseName, readyName,
@@ -583,6 +638,10 @@ class ScriptRuleRuntime {
             : "        DllCall(" Chr(34) "kernel32\ResetEvent" Chr(34)
                 . ", " Chr(34) "Ptr" Chr(34) ", __kmra_" identifier
                 . "_pause_applied_signal)`r`n"
+        diagnosticPath := this.RuntimeDirectory "\worker-" token
+            . ".ahk.diagnostic"
+        escapedDiagnosticPath := StrReplace(diagnosticPath,
+            Chr(34), Chr(34) Chr(34))
         prefix := "#Requires AutoHotkey v2.0 64-bit`r`n"
             . "#NoTrayIcon`r`n"
             . "global __kmra_" identifier "_stop := 0`r`n"
@@ -657,6 +716,13 @@ class ScriptRuleRuntime {
             . "DllCall(" Chr(34) "kernel32\CloseHandle" Chr(34) ", "
             . Chr(34) "Ptr" Chr(34) ", __kmra_" identifier "_ready)`r`n"
             . "SetTimer(__kmra_" identifier "_check, " poll ")`r`n`r`n"
+            . "__kmra_" identifier "_error(error, mode) {`r`n"
+            . "    try FileAppend(error.Message Chr(10) error.Stack, "
+                . Chr(34) escapedDiagnosticPath Chr(34)
+                . ", " Chr(34) "UTF-8-RAW" Chr(34) ")`r`n"
+            . "    ExitApp(96)`r`n"
+            . "    return true`r`n}`r`n"
+            . "OnError(__kmra_" identifier "_error)`r`n`r`n"
         return prefix . StrReplace(spec["code"], "`n", "`r`n")
             . "`r`n#Warn All, StdOut`r`n"
     }
@@ -804,6 +870,8 @@ class ScriptRuleRuntime {
             return true
         Loop Files this.RuntimeDirectory "\*.ahk", "F"
             try FileDelete(A_LoopFileFullPath)
+        Loop Files this.RuntimeDirectory "\worker-*.ahk.diagnostic", "F"
+            try FileDelete(A_LoopFileFullPath)
         return true
     }
 
@@ -816,10 +884,11 @@ class ScriptRuleRuntime {
         return true
     }
 
-    ReadDiagnostic(path) {
+    ReadDiagnostic(path, encoding := "") {
         if !FileExist(path) || DirExist(path)
             return ""
-        input := FileOpen(path, "r")
+        input := encoding == "" ? FileOpen(path, "r")
+            : FileOpen(path, "r", encoding)
         if !IsObject(input)
             return ""
         try {

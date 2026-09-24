@@ -420,28 +420,81 @@ RunMappingWindowVisualTests() {
     MappingWindowVisualAssert(window.SupportButton.Text == Tr("帮助")
             && window.AboutButton.Text == Tr("关于")
             && sourceCaptureState.TooltipText == Tr("演奏你的和弦！")
-            && targetCaptureState.TooltipText == Tr("演奏你的和弦！"),
+            && targetCaptureState.TooltipText
+                == window.GetTargetButtonTooltip()
+            && window.TargetDetail.Text == "",
         "The main toolbar labels or capture tooltips are incorrect.")
 
     window.DistinguishModifierSidesCheck.GetPos(&modifierCheckX,
         &modifierCheckY, &modifierCheckWidth, &modifierCheckHeight)
+    window.DistinguishSourceDeviceCheck.GetPos(&deviceCheckX,
+        &deviceCheckY, &deviceCheckWidth, &deviceCheckHeight)
+    window.SourceLabel.GetPos(&sourceLabelX, &sourceLabelY,
+        &sourceLabelWidth, &sourceLabelHeight)
+    window.SourceButton.GetPos(&sourceButtonX, , &sourceButtonWidth)
+    window.SectionTitle.GetPos(&sectionTitleX, &sectionTitleY,
+        &sectionTitleWidth, &sectionTitleHeight)
     window.SectionTopDivider.GetPos(, &sectionDividerY, &sectionDividerWidth,
         &sectionDividerHeight)
+    MappingWindowVisualAssert(window.SourceLabel.Text == "将",
+        "The source label was not shortened to the requested connector.")
+    MappingWindowVisualAssert(window.SectionTitle.Text == Tr("新建简易规则"),
+        "The simple-rule section title text is incorrect.")
+    titleState := window.Interactions.Controls[window.SectionTitle.Hwnd]
+    MappingWindowVisualAssert(titleState.Kind == "icon"
+            && titleState.Current == "3F6B5B"
+            && titleState.TextColor == "FFFFFF"
+            && MappingWindow.SimpleRuleTitleBackground == "3F6B5B"
+            && MappingWindow.SimpleRuleTitleText == "FFFFFF",
+        "The simple-rule heading is not a green rounded label with white text.")
+    AssertMappingWindowButtonPixel(window.Interactions,
+        window.SectionTitle, "3F6B5B",
+        "The simple-rule heading did not render its green background.")
+    MappingWindowVisualAssert(WinGetStyle("ahk_id " window.SourceLabel.Hwnd)
+            & 0x0200,
+        "The source label is not vertically centered.")
+    MappingWindowVisualAssert(window.DistinguishModifierSidesCheck.Text
+            == "区分左/右侧修饰键",
+        "The modifier-side option label was not updated.")
     MappingWindowVisualAssert(window.DistinguishModifierSidesCheck.Value == 0,
         "Modifier-side distinction must default to disabled.")
+    MappingWindowVisualAssert(sectionTitleX == 10 && sectionTitleHeight == 24
+            && sectionTitleWidth == Min(window.MeasureControlTextWidth(
+                window.SectionTitle, window.SectionTitle.Text) + 24,
+                Max(1, modifierCheckX - 10 - 12))
+            && sectionTitleX + sectionTitleWidth + 11 <= modifierCheckX,
+        "The simple-rule heading does not fit its left-aligned label.")
+    MappingWindowVisualAssert(window.DistinguishSourceDeviceCheck.Value == 0
+            && deviceCheckX >= sourceLabelX + sourceLabelWidth + 11
+            && deviceCheckY == sourceLabelY
+            && deviceCheckHeight == 24,
+        "The source-device option is not placed to the right of the source label.")
+    MappingWindowVisualAssert(Abs(deviceCheckX + deviceCheckWidth
+            - (sourceButtonX + sourceButtonWidth)) <= 1,
+        "The source-device option is not right-aligned with the source button.")
+    MappingWindowVisualAssert(sourceLabelX >= 10
+            && sourceLabelWidth > 0 && sourceLabelHeight == 24,
+        "The source label is clipped or outside the editor row.")
     MappingWindowVisualAssert(modifierCheckX >= 10
             && modifierCheckX + modifierCheckWidth
                 <= NumGet(clientRect, 8, "Int") - 10
             && modifierCheckHeight == 24,
-        "The modifier-side option is clipped or outside the new-mapping row.")
+        "The modifier-side option is clipped or outside the right-aligned group.")
     window.Gui.GetClientPos(, , &logicalClientWidth)
+    MappingWindowVisualAssert(Abs(modifierCheckX + modifierCheckWidth
+            - (logicalClientWidth - 10)) <= 1,
+        "The modifier-side option is not right-aligned with the window content.")
+    expectedSourceDeviceWidth := window.MeasureControlTextWidth(
+        window.DistinguishSourceDeviceCheck,
+        window.DistinguishSourceDeviceCheck.Text) + 22
     expectedModifierWidth := window.MeasureControlTextWidth(
         window.DistinguishModifierSidesCheck,
         window.DistinguishModifierSidesCheck.Text) + 22
-    MappingWindowVisualAssert(Abs(modifierCheckX + modifierCheckWidth
-            - (logicalClientWidth - 10)) <= 1
+    MappingWindowVisualAssert(Abs(deviceCheckWidth - expectedSourceDeviceWidth) <= 1
             && Abs(modifierCheckWidth - expectedModifierWidth) <= 1,
-        "The modifier-side component is not content-sized and right-aligned.")
+        "The options are not content-sized.")
+    MappingWindowVisualAssert(modifierCheckY < sourceLabelY,
+        "The modifier-side option was moved out of the heading row.")
     MappingWindowVisualAssert(modifierCheckY - sectionDividerY
             - sectionDividerHeight >= 8,
         "The new-mapping heading does not retain its upper spacing.")
@@ -651,16 +704,24 @@ RunMappingWindowVisualTests() {
     ValidateSelectionRefreshIsolation(window)
 
     window.DistinguishModifierSidesCheck.Value := 1
-    window.SourceCapture := {Display: "LCtrl + A", RawDisplay: "LCtrl + A"}
-    window.TargetCapture := {Display: "F12", RawDisplay: "F12"}
+    window.DistinguishSourceDeviceCheck.Value := 1
+    window.SourceCapture := {Display: "LCtrl + A", RawDisplay: "LCtrl + A",
+        InterceptionDeviceNumber: 2,
+        InterceptionDeviceType: "keyboard",
+        InterceptionHardwareId: "HID\\VID_TEST"}
+    window.TargetCapture := ""
     window.NameEdit.Value := "modifier-side propagation"
     window.SaveMapping()
     MappingWindowVisualAssert(app.AddMappingCount == 1
             && app.LastMappingName == "modifier-side propagation"
-            && app.LastDistinguishModifierSides,
-        "Saving did not pass the modifier-side option to the application.")
+            && app.LastDistinguishModifierSides
+            && app.LastDistinguishSourceDevice
+            && !IsObject(app.LastTargetCapture),
+        "Saving did not pass the modifier-side/source-device options or empty target to the application.")
     MappingWindowVisualAssert(window.DistinguishModifierSidesCheck.Value == 0,
         "Clearing the editor did not restore the modifier-side default.")
+    MappingWindowVisualAssert(window.DistinguishSourceDeviceCheck.Value == 0,
+        "Clearing the editor did not restore the source-device default.")
 
     ClickMappingWindowListRow(window.List, 1)
     Sleep(30)
@@ -724,7 +785,7 @@ RunMappingWindowVisualTests() {
             && pauseState.Normal == MappingWindow.Colors.Pause
             && deleteState.Normal == MappingWindow.Colors.Delete,
         "Command preflight did not recover a stale disabled state.")
-    MappingWindowVisualAssert(InStr(window.AddButton.Text, "➕ ") == 1
+    MappingWindowVisualAssert(window.AddButton.Text == "➕ " Tr("新建")
             && InStr(window.PauseResumeButton.Text, "⏸️ ") == 1
             && InStr(window.DeleteButton.Text, "🗑️ ") == 1
             && addState.LeadingTextSlotDip == 20
@@ -1654,6 +1715,8 @@ ValidateMainWindowResponsiveLayout(window) {
     baseColumns := ReadMappingWindowColumnWidths(window)
     MappingWindowVisualAssert(baseColumns.Source == baseColumns.Target,
         "The source and target list columns do not start with equal widths.")
+    MappingWindowVisualAssert(baseColumns.Scope >= MappingWindow.ScopeColumnWidth,
+        "The scope column is narrower than its configured minimum.")
 
     ; Only sample shrink frames that remain above the current dynamic minimum.
     availableVerticalDelta := Max(0,
@@ -1827,7 +1890,7 @@ ValidateMainWindowResponsiveLayout(window) {
                 && wideNameWidth > previousNameWidth
                 && wideColumns.Source > previousColumns.Source
                 && wideColumns.Target > previousColumns.Target
-                && wideColumns.Scope == previousColumns.Scope
+                && wideColumns.Scope > previousColumns.Scope
                 && wideColumns.Name > previousColumns.Name,
             Format("A continuous horizontal resize step failed to grow every content column. Width={1}; editor {2}/{3}/{4} -> {5}/{6}/{7}; list {8}/{9}/{10}/{11} -> {12}/{13}/{14}/{15}.",
                 wideWidth,
@@ -1857,7 +1920,7 @@ ValidateMainWindowResponsiveLayout(window) {
             && wideNameWidth > baseNameWidth
             && wideColumns.Source > baseColumns.Source
             && wideColumns.Target > baseColumns.Target
-            && wideColumns.Scope == baseColumns.Scope
+            && wideColumns.Scope > baseColumns.Scope
             && wideColumns.Name > baseColumns.Name,
         "Horizontal resizing did not proportionally grow every content column.")
     expectedColumnWidth := window.GetListContentWidth(wideListWidth)
@@ -4074,16 +4137,44 @@ AssertMappingEditorInitialCaret(editor, context, expectTabStop := true) {
             !!(style & 0x00010000), !!expectTabStop))
 }
 
+AssertListCellTooltipWithinWorkArea(cellTooltip, context) {
+    if !IsObject(cellTooltip.Gui) || !cellTooltip.Gui.Hwnd
+        return
+    if !cellTooltip.VisibleCell
+        return
+    windowRect := Buffer(16, 0)
+    MappingWindowVisualAssert(DllCall("user32\GetWindowRect", "Ptr",
+        cellTooltip.Gui.Hwnd, "Ptr", windowRect, "Int"),
+        context " could not be measured.")
+    left := NumGet(windowRect, 0, "Int")
+    top := NumGet(windowRect, 4, "Int")
+    right := NumGet(windowRect, 8, "Int")
+    bottom := NumGet(windowRect, 12, "Int")
+    workArea := cellTooltip.GetWorkArea(
+        Floor((left + right) / 2), Floor((top + bottom) / 2))
+    MappingWindowVisualAssert(left >= workArea.Left
+            && top >= workArea.Top
+            && right <= workArea.Right
+            && bottom <= workArea.Bottom,
+        Format("{1} exceeded its monitor work area: rect={2},{3}-{4},{5}; area={6},{7}-{8},{9}.",
+            context, left, top, right, bottom, workArea.Left, workArea.Top,
+            workArea.Right, workArea.Bottom))
+}
+
 AssertListCellTooltipUsesContentWidth(window) {
     cellTooltip := window.CellTooltip
     try {
         cellTooltip.PendingCell := "width-test-short"
         cellTooltip.PendingText := "PowerPoint"
         cellTooltip.ShowPending()
+        AssertListCellTooltipWithinWorkArea(cellTooltip,
+            "the short list-cell tooltip")
         cellTooltip.TextControl.GetPos(, , &shortWidth)
         cellTooltip.PendingCell := "width-test-long"
         cellTooltip.PendingText := "Word / Excel / PowerPoint"
         cellTooltip.ShowPending()
+        AssertListCellTooltipWithinWorkArea(cellTooltip,
+            "the long list-cell tooltip")
         cellTooltip.TextControl.GetPos(, , &longWidth)
         MappingWindowVisualAssert(shortWidth > 0 && longWidth > shortWidth
                 && longWidth < 420,
@@ -4175,6 +4266,8 @@ AssertListCellTooltipUsesContentWidth(window) {
                     && cellTooltip.PendingText == clippedProbe,
                 "A visibly clipped mapping name was not queued for its full-content hover tip.")
             cellTooltip.ShowPending()
+            AssertListCellTooltipWithinWorkArea(cellTooltip,
+                "the clipped mapping-name tooltip")
             offscreen := EnvGet("KEY_MOUSE_REMAPPER_GUI_TEST_OFFSCREEN") == "1"
             if offscreen && cellTooltip.VisibleCell == "" {
                 MappingWindowVisualAssert(cellTooltip.PendingCell == ""
@@ -4661,7 +4754,9 @@ class MappingWindowVisualTestApp {
         this.DeleteCount := 0
         this.AddMappingCount := 0
         this.LastMappingName := ""
+        this.LastTargetCapture := ""
         this.LastDistinguishModifierSides := false
+        this.LastDistinguishSourceDevice := false
         this.LayoutSaveCount := 0
         this.SavedLayout := ""
         this.LastSavedEditorText := ""
@@ -4747,12 +4842,17 @@ class MappingWindowVisualTestApp {
     }
 
     AddMapping(sourceCapture, targetCapture, name,
-            distinguishModifierSides := true) {
+            distinguishModifierSides := true,
+            distinguishSourceDevice := false) {
         this.AddMappingCount++
+        this.LastTargetCapture := targetCapture
         this.LastMappingName := String(name)
         this.LastDistinguishModifierSides := !!distinguishModifierSides
+        this.LastDistinguishSourceDevice := !!distinguishSourceDevice
         return true
     }
+
+    PrepareInterceptionDeviceCapture(*) => true
 
     ToggleMappingsEnabled(mappingIds) {
         this.ToggleCount++
@@ -4863,12 +4963,13 @@ class MappingWindowVisualCapture {
         this.CancelCount := 0
     }
 
-    Start(role) {
+    Start(role, distinguishSourceDevice := false) {
         if this.Active
             return false
         this.Active := true
         this.Role := role
         this.StartCount++
+        this.DistinguishSourceDevice := !!distinguishSourceDevice
         return true
     }
 

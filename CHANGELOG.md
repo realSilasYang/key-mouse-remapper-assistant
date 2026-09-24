@@ -7,6 +7,36 @@
 
 ## 🚧 [未发布]
 
+## 🎉 版本 [1.1.0] - 2026-09-24
+
+### 📦 发布物说明
+
+- **`fonts.zip`（可选字体包）**：提供 Noto 回退界面字体，需先安装到 Windows；它不是程序运行必需。
+- **`key-mouse-remapper-assistant-1.1.0-source.zip`（完整源码版）**：包含可运行 AHK 源码、应用模块、除字体外的资源、13 语 README、双语更新日志、测试和构建工具，适合审阅、开发或从源码运行；本机需要 AutoHotkey v2 x64。
+- **`key-mouse-remapper-assistant-1.1.0-windows-x64.zip`（完整便携版，推荐）**：包含编译 EXE、可编辑映射源码、13 语 README、双语更新日志、许可证、应用模块、除字体外的界面资源、固定 AutoHotkey v2.0.26 x64 运行时及对应源码归档；无需另行安装 AutoHotkey，适合完整解压后长期使用。
+
+---
+
+### ✨ 新增
+
+- **Interception 设备规则**：集成 x64 DLL、驱动状态检测与安装、来源设备录制和集中式设备规则运行时。勾选“区分来源设备”后，规则可按物理键盘或鼠标匹配；未匹配输入原样回送。
+- **空目标屏蔽**：新建简易规则时目标按键可留空，保存后使用 `block=true` 屏蔽来源按键。
+
+---
+
+### 🚀 优化
+
+- **组合键替代**：单键目标随来源键成对按下和释放，可参与后续 Ctrl、Shift、Alt、Win 组合。关闭“区分左/右侧修饰键”时，来源同时匹配左右侧修饰键，目标修饰键统一使用左侧。
+- **创建区与设置布局**：调整新建简易规则、设备区分和修饰键控件的名称、对齐与视觉状态；优化主列表生效范围列、窗口缩放后的控件显示，以及屏幕边缘的悬停提示。
+- **AI 设备规则支持**：生成、优化、修复和复核链路加入 Interception 设备编号及驱动前置条件说明。
+
+---
+
+### 🐛 修复
+
+- **输入生命周期**：修复按键录制停止与输入清理边界；来源键按住期间保持同一规则，动作级单次重复不因修饰键变化重新触发。
+- **设备规则与列表状态**：完善驱动缺失时的提示、设备规则批量暂停与恢复，以及窗口大小变化后的绘制稳定性。
+
 ## 🎉 版本 [1.0.2] - 2026-08-19
 
 ### 📦 发布物说明
@@ -163,7 +193,8 @@
 - **产品与数据目录**：统一中英文产品标识和 `%APPDATA%\KeyMouseRemapperAssistant` 数据位置。
 - **发行与兼容性**：锁定 AutoHotkey 和构建工具，统一 UTF-8 输出与 Windows PowerShell 5.1／PowerShell 7 行为。
 
-[未发布]: https://github.com/realSilasYang/key-mouse-remapper-assistant/compare/v1.0.2...HEAD
+[未发布]: https://github.com/realSilasYang/key-mouse-remapper-assistant/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/realSilasYang/key-mouse-remapper-assistant/releases/tag/v1.1.0
 [1.0.2]: https://github.com/realSilasYang/key-mouse-remapper-assistant/releases/tag/v1.0.2
 [1.0.1]: https://github.com/realSilasYang/key-mouse-remapper-assistant/releases/tag/v1.0.1
 [1.0.0]: https://github.com/realSilasYang/key-mouse-remapper-assistant/releases/tag/v1.0.0

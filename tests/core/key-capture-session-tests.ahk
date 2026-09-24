@@ -86,6 +86,27 @@ try {
     CaptureAssertTrue(timeoutApp.StopFailureCount == 1,
         "A failed forced recording stop did not request application restart.")
 
+    deviceLifecycle := []
+    deviceApp := CaptureTestApp(deviceLifecycle)
+    deviceGuard := CaptureTestInputGuard(deviceLifecycle)
+    deviceSession := KeyCaptureSession(deviceApp, deviceGuard)
+    CaptureAssertTrue(deviceSession.Start("source", true)
+            && deviceApp.Interception.StartCount == 1
+            && deviceGuard.StartCount == 0,
+        "Device-aware capture did not use Interception instead of the hook guard.")
+    deviceSession.HandleInterceptionStroke(Map("device", 2,
+        "type", "keyboard", "code", 0x5D, "state", 0x02,
+        "hardware_id", "HID\\VID_TEST&PID_0002"))
+    deviceSession.HandleInterceptionStroke(Map("device", 2,
+        "type", "keyboard", "code", 0x5D, "state", 0x03,
+        "hardware_id", "HID\\VID_TEST&PID_0002"))
+    deviceSession.FinalizeInputDrain()
+    CaptureAssertTrue(deviceApp.CompletedCount == 1
+            && deviceApp.CompletedCapture.InterceptionDeviceNumber == 2
+            && deviceApp.CompletedCapture.InterceptionDeviceType == "keyboard"
+            && deviceApp.Interception.StopCount == 1,
+        "An Interception stroke did not produce device-aware capture metadata.")
+
     lifecycleLog := []
     app := CaptureTestApp(lifecycleLog)
     inputGuard := CaptureTestInputGuard(lifecycleLog)
@@ -138,11 +159,33 @@ try {
     CaptureAssertTrue(sourceChordSpec["from"].Has("simultaneous")
             && sourceChordSpec["from"]["simultaneous"].Length == 3,
         "A recorded multi-key source did not enter RuleSpec.simultaneous.")
-    CaptureAssertEqual("<^sc030", RuleCompiler.Compile(sourceChordSpec).Hotkey,
+    CaptureAssertEqual("*<^sc030", RuleCompiler.Compile(sourceChordSpec).Hotkey,
         "The last ordinary chord key was not compiled as its trigger.")
+    deviceKeyInfo := session.CreateKeyInfo("keyboard", "AppsKey", 0x5D,
+        0x15D, "sc15D")
+    deviceKeyInfo.InterceptionDeviceNumber := 2
+    deviceKeyInfo.InterceptionDeviceType := "keyboard"
+    deviceKeyInfo.InterceptionHardwareId := "HID\\VID_TEST&PID_0002"
+    deviceCapture := session.BuildCaptureFromInfos([deviceKeyInfo])
+    deviceSpec := RuleSpec.CreateFromCaptures("device-source",
+        deviceCapture, CaptureTarget("LWin"), true, true)
+    CaptureAssertTrue(deviceCapture.InterceptionDeviceNumber == 2
+            && deviceSpec["from"]["device"]["number"] == 2
+            && deviceSpec["from"]["device"]["type"] == "keyboard"
+            && deviceSpec["from"]["device"]["hardware_id"]
+                == "HID\\VID_TEST&PID_0002",
+        "Interception capture metadata did not reach RuleSpec.from.device.")
+    invalidDeviceRejected := false
+    invalidDeviceSpec := RuleSpec.Clone(deviceSpec)
+    invalidDeviceSpec["from"]["device"]["number"] := 12
+    try RuleSpec.Normalize(invalidDeviceSpec)
+    catch
+        invalidDeviceRejected := true
+    CaptureAssertTrue(invalidDeviceRejected,
+        "A mouse-range Interception number was accepted for a keyboard.")
     genericChordSpec := RuleSpec.CreateFromCaptures("generic-multi-source",
         sourceChord, CaptureTarget("F12"), false)
-    CaptureAssertEqual("^sc030", RuleCompiler.Compile(genericChordSpec).Hotkey,
+    CaptureAssertEqual("*^sc030", RuleCompiler.Compile(genericChordSpec).Hotkey,
         "A multi-key source did not honor generic modifier capture.")
     manyKeyInfos := []
     for recordedKeyLabel in StrSplit(
@@ -503,9 +546,9 @@ try {
     consumerSearchSpec := RuleSpec.CreateFromCaptures(
         "consumer-browser-search", forwardedApp.CompletedCapture,
         CaptureTarget("F12"))
-    CaptureAssertEqual("vkAA", RuleCompiler.Compile(
+    CaptureAssertEqual("*vkAA", RuleCompiler.Compile(
         consumerSearchSpec).Hotkey,
-        "A HID Browser_Search source was compiled to a scan code it never emits.")
+        "A HID Browser_Search source must accept extra modifiers for a single-key target.")
 
     CaptureAssertTrue(forwardedSession.Start("target"),
         "The Consumer Control browser-home capture test did not start.")
@@ -658,6 +701,7 @@ class CaptureTestApp {
         this.LastPreview := ""
         this.CompletedCapture := ""
         this.CompletedRole := ""
+        this.Interception := CaptureInterceptionProbe()
     }
 
     SuspendRemappingForCapture() {
@@ -690,6 +734,22 @@ class CaptureTestApp {
     FinalizeCapturePointerCancellation(*) => this.PointerFinalizedCount++
     PrepareCaptureEscapeCancellation(*) => this.SuppressEscapeCount++
     TraceEvent(*) => true
+}
+
+class CaptureInterceptionProbe {
+    __New() {
+        this.StartCount := 0
+        this.StopCount := 0
+    }
+    StartCapture() {
+        this.StartCount++
+        return true
+    }
+    StopCapture() {
+        this.StopCount++
+        return true
+    }
+    PollCapture(*) => ""
 }
 
 class CaptureTestInputGuard {

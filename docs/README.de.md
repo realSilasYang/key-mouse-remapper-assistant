@@ -13,7 +13,7 @@
 
 Der Tastatur- und Maus-Neuzuordnungsassistent ist ein AutoHotkey-v2-Werkzeug für Windows 10 und 11 x64. Eingabeaufnahme, Regelverwaltung, Codebearbeitung, KI-Erzeugung und -Optimierung, lokale Prüfung und Laufzeitstatus befinden sich in einer Oberfläche. Version 1.0.2 enthält die im jeweiligen Release-Commit vorhandenen bearbeitbaren Regeln; die Anzahl der Regelblöcke und verwalteten Skripte kann variieren.
 
-Regeln liegen im les- und sicherbaren `@mapping`-Kommentarbereich. Es werden weder Treiber noch Windows-Dienste installiert; Zuordnungen wirken nur, solange der Assistent läuft. Offizielle Pakete enthalten niemals KI-Adresse, API-Schlüssel, Modell, eigene Prompts oder andere persönliche Einstellungen des Build-Rechners.
+Regeln liegen im les- und sicherbaren `@mapping`-Kommentarbereich. Für gerätespezifische Interception-Regeln kann optional ein Treiber mit Administratorbestätigung und anschließendem Windows-Neustart installiert werden; Zuordnungen wirken nur, solange der Assistent läuft. Offizielle Pakete enthalten niemals KI-Adresse, API-Schlüssel, Modell, eigene Prompts oder andere persönliche Einstellungen des Build-Rechners.
 
 # Oberflächenübersicht
 
@@ -39,7 +39,7 @@ Die obere Leiste fügt Regeln hinzu, pausiert／setzt mehrere fort und löscht s
 ## Geltungsbereich
 
 - Nur Windows 10／11 x64.
-- Ohne Kerneltreiber bleiben sicherer Desktop, `Ctrl+Alt+Delete` und Programme, die User-Mode-Hooks sperren, außer Reichweite.
+- Normale Regeln funktionieren ohne den optionalen Interception-Treiber. Der sichere Desktop und `Ctrl+Alt+Delete` bleiben auch mit Treiber außer Reichweite.
 - Der voreingestellte Administratormodus erhöht Regelblöcke und untergeordnete Skripte für erhöhte Anwendungen.
 - KI-Ergebnisse sind auch nach lokaler Prüfung zu kontrollieren, besonders bei Datei-, Netzwerk-, Prozess- oder Systemaktionen.
 

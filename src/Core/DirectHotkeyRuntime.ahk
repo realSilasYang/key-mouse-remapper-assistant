@@ -45,40 +45,44 @@ class DirectHotkeyRuntime {
                     Code: "unsupported-rule", Message: ruleError.Message})
                 continue
             }
-            sourceGroup := ""
-            if registration.DownHotkey != "" {
-                sourceKey := this.GetHotkeyVariantSignature(
-                    registration.DownHotkey)
-                if !sourceGroups.Has(sourceKey) {
-                    sourceGroups[sourceKey] := {Key: sourceKey,
-                        Hotkey: registration.DownHotkey, RuleIds: [],
-                        TracksRelease: registration.UpHotkey != "",
-                        Held: false, Pending: "", RepeatIgnoreRules: Map(),
-                        ReleaseGroup: ""}
-                }
-                sourceGroup := sourceGroups[sourceKey]
-                if registration.UpHotkey != ""
-                    sourceGroup.TracksRelease := true
-            }
-            releaseSignature := registration.UpHotkey == "" ? ""
-                : this.GetReleaseVariantSignature(registration.UpHotkey)
             rules[descriptor.Id] := descriptor
-            if IsObject(sourceGroup)
-                sourceGroup.RuleIds.Push(descriptor.Id)
-            if registration.UpHotkey != "" {
-                if !releaseGroups.Has(releaseSignature)
-                    releaseGroups[releaseSignature] := {Hotkey:
-                        registration.UpHotkey, RuleIds: [], SourceGroups: Map(),
-                        Pending: "", Held: false, OwnerSourceGroup: "",
-                        SuppressUntilRelease: false}
-                releaseGroup := releaseGroups[releaseSignature]
-                if this.HasWildcard(registration.UpHotkey)
-                        && !this.HasWildcard(releaseGroup.Hotkey)
-                    releaseGroup.Hotkey := registration.UpHotkey
-                releaseGroup.RuleIds.Push(descriptor.Id)
-                if IsObject(sourceGroup) {
-                    releaseGroup.SourceGroups[sourceGroup.Key] := sourceGroup
-                    sourceGroup.ReleaseGroup := releaseGroup
+            for variantRegistration in this.ExpandRegistrationVariants(
+                    registration) {
+                sourceGroup := ""
+                if variantRegistration.DownHotkey != "" {
+                    sourceKey := this.GetHotkeyVariantSignature(
+                        variantRegistration.DownHotkey)
+                    if !sourceGroups.Has(sourceKey)
+                        sourceGroups[sourceKey] := {Key: sourceKey,
+                            Hotkey: variantRegistration.DownHotkey,
+                            RuleIds: [], TracksRelease:
+                                variantRegistration.UpHotkey != "",
+                            Held: false, Pending: "",
+                            RepeatIgnoreRules: Map(), ReleaseGroup: ""}
+                    sourceGroup := sourceGroups[sourceKey]
+                    if variantRegistration.UpHotkey != ""
+                        sourceGroup.TracksRelease := true
+                }
+                releaseSignature := variantRegistration.UpHotkey == "" ? ""
+                    : this.GetReleaseVariantSignature(
+                        variantRegistration.UpHotkey)
+                if IsObject(sourceGroup)
+                    sourceGroup.RuleIds.Push(descriptor.Id)
+                if variantRegistration.UpHotkey != "" {
+                    if !releaseGroups.Has(releaseSignature)
+                        releaseGroups[releaseSignature] := {Hotkey:
+                            variantRegistration.UpHotkey, RuleIds: [],
+                            SourceGroups: Map(), Pending: "", Held: false,
+                            OwnerSourceGroup: "", SuppressUntilRelease: false}
+                    releaseGroup := releaseGroups[releaseSignature]
+                    if this.HasWildcard(variantRegistration.UpHotkey)
+                            && !this.HasWildcard(releaseGroup.Hotkey)
+                        releaseGroup.Hotkey := variantRegistration.UpHotkey
+                    releaseGroup.RuleIds.Push(descriptor.Id)
+                    if IsObject(sourceGroup) {
+                        releaseGroup.SourceGroups[sourceGroup.Key] := sourceGroup
+                        sourceGroup.ReleaseGroup := releaseGroup
+                    }
                 }
             }
         }
@@ -162,24 +166,56 @@ class DirectHotkeyRuntime {
         preserveOriginal := this.PreservesOriginalInput(descriptor)
         immediatePassthrough := preserveOriginal
             && !this.DefersOriginalInput(descriptor)
-        hotkeyName := this.BuildHotkeyName(from, immediatePassthrough)
-        if hotkeyName == ""
+        hotkeyNames := this.BuildHotkeyVariants(from, immediatePassthrough)
+        if !hotkeyNames.Length || hotkeyNames[1] == ""
             throw Error("The rule has no usable source hotkey.")
-        if from.Get("event", "down") == "up"
+        if from.Get("event", "down") == "up" {
+            alternativeUpHotkeys := []
+            for alternative in this.TailHotkeys(hotkeyNames)
+                alternativeUpHotkeys.Push(alternative " Up")
             return {Descriptor: descriptor, DownHotkey: "",
-                UpHotkey: hotkeyName " Up", DownCallback: "",
+                UpHotkey: hotkeyNames[1] " Up",
+                AlternativeDownHotkeys: [],
+                AlternativeUpHotkeys: alternativeUpHotkeys,
+                DownCallback: "",
                 UpCallback: ObjBindMethod(this, "OnUpOnly", descriptor.Id),
                 DownCriterion: "", UpCriterion: ObjBindMethod(this,
                     "ShouldInterceptUpOnly", descriptor.Id)}
+        }
+        ; Every releasable source needs a physical cycle boundary so modifier
+        ; changes and action-level repeat=once cannot re-arm it mid-press.
         needsRelease := this.IsReleasable(descriptor)
-        return {Descriptor: descriptor, DownHotkey: hotkeyName,
+        releaseHotkeyNames := needsRelease
+            ? this.BuildReleaseHotkeyVariants(from, immediatePassthrough) : []
+        return {Descriptor: descriptor, DownHotkey: hotkeyNames[1],
+            AlternativeDownHotkeys: this.TailHotkeys(hotkeyNames),
             UpHotkey: needsRelease
-                ? this.BuildReleaseHotkeyName(from, immediatePassthrough) : "",
+                ? releaseHotkeyNames[1] : "",
+            AlternativeUpHotkeys: needsRelease
+                ? this.TailHotkeys(releaseHotkeyNames) : [],
             DownCallback: ObjBindMethod(this, "OnDown", descriptor.Id),
             UpCallback: needsRelease
                 ? ObjBindMethod(this, "OnUp", descriptor.Id) : "",
             DownCriterion: ObjBindMethod(this, "ShouldInterceptDown",
                 descriptor.Id), UpCriterion: ""}
+    }
+
+    ExpandRegistrationVariants(registration) {
+        downs := this.GetRegistrationHotkeys(registration, "Down")
+        ups := this.GetRegistrationHotkeys(registration, "Up")
+        count := Max(downs.Length, ups.Length)
+        result := []
+        Loop count {
+            index := A_Index
+            result.Push({Descriptor: registration.Descriptor,
+                DownHotkey: downs.Length >= index ? downs[index] : "",
+                UpHotkey: ups.Length >= index ? ups[index] : "",
+                DownCallback: registration.DownCallback,
+                UpCallback: registration.UpCallback,
+                DownCriterion: registration.DownCriterion,
+                UpCriterion: registration.UpCriterion})
+        }
+        return result
     }
 
     BuildHotkeyName(from, preserveOriginal := false) {
@@ -195,6 +231,89 @@ class DirectHotkeyRuntime {
         hotkeyName := RegExReplace(hotkeyName, "^[~*$]+")
         return hotkeyName == "" ? "" : "$" (preserveOriginal ? "~" : "")
             . (allowExtraModifiers ? "*" : "") hotkeyName
+    }
+
+    BuildHotkeyVariants(from, preserveOriginal := false) {
+        variants := []
+        primaryName := this.GetGenericPrimaryModifierName(from)
+        if primaryName == "" {
+            hotkeyName := this.BuildHotkeyName(from, preserveOriginal)
+            if hotkeyName != ""
+                variants.Push(hotkeyName)
+            return variants
+        }
+        for sideName in this.GetModifierSideNames(primaryName) {
+            variant := RuleSpec.Clone(from)
+            key := RuleSpec.Clone(from["key"])
+            key["name"] := sideName
+            ; Neutral primary modifiers intentionally do not carry a side
+            ; specific VK/SC identity.  Remove stale codes from hand-edited
+            ; rules before building the physical hotkey variant.
+            if key.Has("vk")
+                key.Delete("vk")
+            if key.Has("sc")
+                key.Delete("sc")
+            if key.Has("extended")
+                key.Delete("extended")
+            variant["key"] := key
+            if variant.Has("hotkey")
+                variant.Delete("hotkey")
+            variants.Push(this.BuildHotkeyName(variant, preserveOriginal))
+        }
+        return variants
+    }
+
+    BuildReleaseHotkeyVariants(from, preserveOriginal := false) {
+        variants := []
+        primaryName := this.GetGenericPrimaryModifierName(from)
+        if primaryName == ""
+            return [this.BuildReleaseHotkeyName(from, preserveOriginal)]
+        for sideName in this.GetModifierSideNames(primaryName) {
+            variant := RuleSpec.Clone(from)
+            key := RuleSpec.Clone(from["key"])
+            key["name"] := sideName
+            if key.Has("vk")
+                key.Delete("vk")
+            if key.Has("sc")
+                key.Delete("sc")
+            if key.Has("extended")
+                key.Delete("extended")
+            variant["key"] := key
+            variants.Push(this.BuildReleaseHotkeyName(variant,
+                preserveOriginal))
+        }
+        return variants
+    }
+
+    GetGenericPrimaryModifierName(from) {
+        if !from.Has("key") || Type(from["key"]) != "Map"
+                || from["key"].Has("vk") || from["key"].Has("sc")
+            return ""
+        name := String(from["key"].Get("name", ""))
+        switch StrLower(name) {
+            case "ctrl", "control": return "Ctrl"
+            case "shift": return "Shift"
+            case "alt", "menu": return "Alt"
+            case "win": return "Win"
+        }
+        return ""
+    }
+
+    GetModifierSideNames(familyName) {
+        switch familyName {
+            case "Ctrl": return ["LCtrl", "RCtrl"]
+            case "Shift": return ["LShift", "RShift"]
+            case "Alt": return ["LAlt", "RAlt"]
+            case "Win": return ["LWin", "RWin"]
+        }
+        return []
+    }
+
+    TailHotkeys(values) {
+        result := []
+        Loop values.Length - 1
+            result.Push(values[A_Index + 1])
+        return result
     }
 
     BuildReleaseHotkeyName(from, preserveOriginal := false) {
@@ -218,19 +337,51 @@ class DirectHotkeyRuntime {
     }
 
     EnableRegistration(registration) {
-        this.SetRegistrationHotkeyState(registration.DownHotkey,
-            registration.DownCallback, registration.DownCriterion, true)
-        this.SetRegistrationHotkeyState(registration.UpHotkey,
-            registration.UpCallback, registration.UpCriterion, true)
+        for hotkeyName in this.GetRegistrationHotkeys(registration,
+                "Down")
+            this.SetRegistrationHotkeyState(hotkeyName,
+                registration.DownCallback, registration.DownCriterion, true)
+        for hotkeyName in this.GetRegistrationHotkeys(registration,
+                "Up")
+            this.SetRegistrationHotkeyState(hotkeyName,
+                registration.UpCallback, registration.UpCriterion, true)
         return true
     }
 
     DisableRegistration(registration) {
-        this.SetRegistrationHotkeyState(registration.DownHotkey, "",
-            registration.DownCriterion, false)
-        this.SetRegistrationHotkeyState(registration.UpHotkey, "",
-            registration.UpCriterion, false)
+        for hotkeyName in this.GetRegistrationHotkeys(registration,
+                "Down")
+            this.SetRegistrationHotkeyState(hotkeyName, "",
+                registration.DownCriterion, false)
+        for hotkeyName in this.GetRegistrationHotkeys(registration,
+                "Up")
+            this.SetRegistrationHotkeyState(hotkeyName, "",
+                registration.UpCriterion, false)
         return true
+    }
+
+    GetRegistrationHotkeys(registration, phase) {
+        primary := phase == "Down" ? registration.DownHotkey
+            : registration.UpHotkey
+        alternatives := phase == "Down"
+            ? (registration.HasOwnProp("AlternativeDownHotkeys")
+                ? registration.AlternativeDownHotkeys : [])
+            : (registration.HasOwnProp("AlternativeUpHotkeys")
+                ? registration.AlternativeUpHotkeys : [])
+        result := []
+        if primary != ""
+            result.Push(primary)
+        for hotkeyName in alternatives
+            if hotkeyName != ""
+                result.Push(hotkeyName)
+        return result
+    }
+
+    ContainsHotkey(values, expected) {
+        for value in values
+            if value == expected
+                return true
+        return false
     }
 
     SetRegistrationHotkeyState(hotkeyName, callback, criterion, enabled) {
@@ -349,7 +500,9 @@ class DirectHotkeyRuntime {
         if eligibilityConfirmed
             this.TraceRuleMatched(descriptor)
         needsRelease := this.IsReleasable(descriptor)
-            && (this.NeedsRelease(descriptor) || repeatPolicy != "allow")
+            && (this.NeedsRelease(descriptor)
+                || this.IsBlocking(descriptor)
+                || repeatPolicy != "allow")
         if !isRepeat && repeatPolicy == "only" {
             return false
         }
@@ -911,6 +1064,10 @@ class DirectHotkeyRuntime {
         return false
     }
 
+    IsBlocking(descriptor) {
+        return descriptor.Spec.Get("block", JsonBoolean(false)).Value
+    }
+
     IsReleasable(descriptor) {
         from := descriptor.Spec["from"]
         key := from.Has("key") ? from["key"] : Map()
@@ -1166,7 +1323,7 @@ class DirectHotkeyRuntime {
     }
 
     SendKeyEvent(keyName, phase) {
-        return this.SendKeySequence("{" String(keyName) " " phase "}")
+        return this.SendKeySequence("{Blind}{" String(keyName) " " phase "}")
     }
 
     SendKeySequence(sequence) {

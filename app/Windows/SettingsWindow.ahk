@@ -2,6 +2,10 @@ class SettingsWindow {
     static CompactWidth := 520
     static ExpandedWidth := 680
     static ClientHeight := 420
+    static TabIconSize := 14
+    static TabIconGap := 6
+    static TabHorizontalPadding := 8
+    static TabTextSlack := 4
     static SparseMenuTopOffset := 24
     static AIConnectionStatusGap := 24
     static AIConnectionStatusRightMargin := 12
@@ -11,7 +15,7 @@ class SettingsWindow {
         this.OwnerWindow := ownerWindow
         this.App := ownerWindow.App
         initialTab := Integer(initialTab)
-        if initialTab < 1 || initialTab > 4
+        if initialTab < 1 || initialTab > 5
             throw ValueError("设置窗口初始选项卡无效。")
         this.InitialTab := initialTab
         this.Gui := ""
@@ -73,23 +77,26 @@ class SettingsWindow {
         this.Interactions := MappingUiInteractions(this.Gui, colors.Window,
             this.OwnerWindow.App.SvgRenderer)
 
-        Loop 4 {
+        Loop 5 {
             this.TabControls.Push([])
             this.TabBuilt.Push(false)
         }
         this.Gui.SetFont("norm s10 c"
             UiThemeService.Color("TabText"), fontName)
         tabLabels := [Tr("显示"), Tr("启动"), Tr("AI 设置"),
-            Tr("规则与事件")]
+            Tr("设备过滤驱动"), Tr("规则与事件")]
         tabIcons := ["monitor.svg", "power.svg",
-            "pencil-sparkles.svg", "file-output.svg"]
+            "pencil-sparkles.svg", "keyboard.svg", "file-output.svg"]
         tabGap := 8
-        tabWidths := this.GetTabButtonWidths(tabLabels,
-            this.WindowWidth - 30, isCompact, tabGap)
+        this.Gui.SetFont("s10 bold",
+            LocalizationService.GetLanguageSystemUiFontName())
+        this.TabMeasureFontSpec := this.CreateTabMeasureFontSpec()
+        tabWidths := this.GetTabButtonWidths(tabLabels)
         tabGroupWidth := tabGap * (tabLabels.Length - 1)
         for tabWidth in tabWidths
             tabGroupWidth += tabWidth
-        tabX := 15 + Floor(((this.WindowWidth - 30) - tabGroupWidth) / 2)
+        this.WindowWidth := Max(this.WindowWidth, tabGroupWidth + 30)
+        tabX := Floor((this.WindowWidth - tabGroupWidth) / 2)
         for tabIndex, tabLabel in tabLabels {
             this.CreateTabButton(tabIndex, tabX, tabWidths[tabIndex],
                 tabLabel, tabIcons[tabIndex], this.GetTabIconColor(tabIndex))
@@ -119,6 +126,93 @@ class SettingsWindow {
         this.Gui.OnEvent("Close", ObjBindMethod(this, "RequestClose"))
         this.Gui.OnEvent("Escape", ObjBindMethod(this, "RequestClose"))
         this.SwitchTab(this.InitialTab)
+    }
+
+    BuildInterceptionTab() {
+        pageIndex := 4
+        layout := this.Layout
+        colors := UiThemeService.GetPalette()
+        this.Gui.SetFont("norm s10 c" colors.Text, layout.FontName)
+        panelWidth := Min(layout.IsCompact ? 320 : 420,
+            layout.ContentWidth)
+        panelX := Floor((layout.WindowWidth - panelWidth) / 2)
+        this.InterceptionStatusLabel := this.AddTabControl(pageIndex,
+            this.AddSelectableMenuText(pageIndex, panelX, 70,
+                Tr("驱动状态："), panelWidth, 22))
+        this.InterceptionStatus := this.AddTabControl(pageIndex,
+            this.Gui.Add("Edit", "x" panelX " y100 w" panelWidth
+                " h66 ReadOnly Multi Wrap -TabStop -VScroll -HScroll"
+                " -Border -E0x200 Background" colors.Window " c"
+                colors.Text, ""))
+        ApplyDarkControl(this.InterceptionStatus.Hwnd)
+        if !this.Interactions.RegisterTextInput(this.InterceptionStatus)
+            throw Error("无法注册 Interception 状态文本交互。")
+        buttonGap := 10
+        buttonTextPadding := 40
+        detectButtonWidth := this.MeasureControlTextWidth(
+            this.InterceptionStatusLabel, Tr("重新检测"))
+            + buttonTextPadding
+        installButtonWidth := this.MeasureControlTextWidth(
+            this.InterceptionStatusLabel, Tr("安装驱动"))
+            + buttonTextPadding
+        maximumButtonWidth := Floor((panelWidth - buttonGap) / 2)
+        detectButtonWidth := Min(maximumButtonWidth, detectButtonWidth)
+        installButtonWidth := Min(maximumButtonWidth, installButtonWidth)
+        buttonGroupWidth := detectButtonWidth + installButtonWidth + buttonGap
+        buttonX := Floor((layout.WindowWidth - buttonGroupWidth) / 2)
+        this.InterceptionDetectButton := this.AddTabControl(pageIndex,
+            this.AddActionButton(buttonX, 182, Tr("重新检测"), colors.Toolbar,
+                colors.ToolbarText, ObjBindMethod(this, "RefreshInterceptionStatus"),
+                detectButtonWidth, 30))
+        this.InterceptionInstallButton := this.AddTabControl(pageIndex,
+            this.AddActionButton(buttonX + detectButtonWidth + buttonGap, 182,
+                Tr("安装驱动"), colors.Primary,
+                colors.ButtonText, ObjBindMethod(this, "InstallInterceptionDriver"),
+                installButtonWidth, 30))
+        reminderWidth := this.MeasureControlTextWidth(
+            this.InterceptionStatusLabel, Tr("启动时自动检测并提醒")) + 28
+        reminderX := Floor((layout.WindowWidth - reminderWidth) / 2) - 10
+        this.InterceptionReminderCheck := this.AddTabControl(pageIndex,
+            this.Gui.Add("CheckBox", "x" reminderX " y230 w"
+                reminderWidth " h26 c"
+                colors.Text,
+                Tr("启动时自动检测并提醒")))
+        this.InterceptionReminderCheck.Value :=
+            (this.Original.HasOwnProp("CheckInterceptionOnStartup")
+                ? this.Original.CheckInterceptionOnStartup : true) ? 1 : 0
+        ApplyDarkControl(this.InterceptionReminderCheck.Hwnd)
+        this.Interactions.RegisterHandCursor(this.InterceptionReminderCheck)
+        this.TabBuilt[pageIndex] := true
+        this.RefreshInterceptionStatus()
+    }
+
+    RefreshInterceptionStatus(*) {
+        if this.Disposed
+            return false
+        if !this.App.HasOwnProp("Interception")
+                || !IsObject(this.App.Interception) {
+            this.InterceptionStatus.Value := Tr("不可用")
+            this.InterceptionInstallButton.Enabled := false
+            return false
+        }
+        status := this.App.Interception.GetStatus()
+        code := status.Get("code", "unknown")
+        available := status.Get("available", false)
+        this.InterceptionStatus.Value := Tr("{1}`r`n状态：{2}`r`n{3}",
+            available ? Tr("已就绪") : Tr("不可用"), code,
+            status.Get("message", ""))
+        this.InterceptionInstallButton.Enabled := !available
+            && code != "restart_required"
+            && this.App.Interception.CanInstallDriver()
+        return status
+    }
+
+    InstallInterceptionDriver(*) {
+        if this.Disposed
+            return false
+        result := this.App.OfferInterceptionDriverInstallation(this.Gui)
+        this.RefreshInterceptionStatus()
+        return result
     }
 
     BuildStartupTab() {
@@ -310,12 +404,12 @@ class SettingsWindow {
         this.Gui.SetFont("norm s10 c" colors.Text, layout.FontName)
         buttonWidth := layout.IsCompact ? 150 : 190
         groupX := Floor((layout.WindowWidth - buttonWidth) / 2)
-        this.ImportRulePackageButton := this.AddTabControl(4,
+        this.ImportRulePackageButton := this.AddTabControl(5,
             this.AddActionButton(groupX, 68, Tr("导入规则包"),
                 colors.Primary, colors.ButtonText,
                 ObjBindMethod(this, "ChooseImportRulePackage"),
                 buttonWidth, 34))
-        this.ExportRulePackageButton := this.AddTabControl(4,
+        this.ExportRulePackageButton := this.AddTabControl(5,
             this.AddActionButton(groupX, 108, Tr("导出规则包"),
                 colors.Toolbar, colors.ToolbarText,
                 ObjBindMethod(this, "ChooseExportRulePackage"),
@@ -325,20 +419,20 @@ class SettingsWindow {
             UiThemeService.ButtonIconColor(colors.ButtonText))
         this.Interactions.SetButtonLucideIcon(this.ExportRulePackageButton,
             "file-output.svg", 15, 6, colors.RulesEventIcon)
-        this.RuleEventDivider := this.AddTabControl(4,
+        this.RuleEventDivider := this.AddTabControl(5,
             this.Gui.Add("Text", "x" layout.ContentX " y162 w"
                 layout.ContentWidth " h1 Background" colors.Divider))
         inputWidth := 96
-        this.EventCapacityLabel := this.AddMenuLabel(4, 182,
+        this.EventCapacityLabel := this.AddMenuLabel(5, 182,
             Tr("事件缓冲区容量（条）："))
-        this.EventCapacityInput := this.AddSettingsEdit(4, 0, 206, inputWidth,
+        this.EventCapacityInput := this.AddSettingsEdit(5, 0, 206, inputWidth,
             this.Original.EventBufferCapacity, "Number")
-        this.EscapeCancelCheck := this.AddTabControl(4,
+        this.EscapeCancelCheck := this.AddTabControl(5,
             this.Gui.Add("CheckBox", "x0 y242 h26 c" colors.Text,
                 Tr("Esc 取消录制")))
         this.EscapeCancelCheck.Value :=
             this.Original.EscapeCancelsRecording ? 1 : 0
-        this.EventAutoScrollCheck := this.AddTabControl(4,
+        this.EventAutoScrollCheck := this.AddTabControl(5,
             this.Gui.Add("CheckBox", "x0 y274 h26 c" colors.Text,
                 Tr("事件查看自动跟随最新事件")))
         this.EventAutoScrollCheck.Value :=
@@ -353,8 +447,8 @@ class SettingsWindow {
         if !this.Interactions.RegisterTextInput(this.EventCapacityInput.Edit,
                 this.EventCapacityInput.Background)
             throw Error("无法注册事件设置输入框交互。")
-        this.ApplySparseMenuTopSpacing(4)
-        this.TabBuilt[4] := true
+        this.ApplySparseMenuTopSpacing(5)
+        this.TabBuilt[5] := true
     }
 
     BuildAITab() {
@@ -721,38 +815,93 @@ class SettingsWindow {
         return true
     }
 
-    GetTabButtonWidths(tabLabels, availableWidth, isCompact, tabGap) {
+    GetTabButtonWidths(tabLabels) {
         tabWidths := []
-        desiredTotal := 0
-        for tabLabel in tabLabels {
-            labelLength := StrLen(tabLabel)
-            tabWidth := isCompact
-                ? Min(132, Max(70, 42 + labelLength * 14))
-                : Min(210, Max(78, 42 + labelLength * 7))
-            tabWidths.Push(tabWidth)
-            desiredTotal += tabWidth
-        }
-        contentWidth := availableWidth - tabGap * (tabLabels.Length - 1)
-        if desiredTotal <= contentWidth
-            return tabWidths
-        minWidth := isCompact ? 64 : 72
-        adjustedTotal := 0
-        scale := contentWidth / desiredTotal
-        for tabIndex, tabWidth in tabWidths {
-            tabWidths[tabIndex] := Max(minWidth, Floor(tabWidth * scale))
-            adjustedTotal += tabWidths[tabIndex]
-        }
-        while adjustedTotal > contentWidth {
-            for tabIndex, tabWidth in tabWidths {
-                if adjustedTotal <= contentWidth
-                    break
-                if tabWidth > minWidth {
-                    tabWidths[tabIndex] := tabWidth - 1
-                    adjustedTotal--
-                }
-            }
-        }
+        for tabLabel in tabLabels
+            tabWidths.Push(this.MeasureTabLabelWidth(tabLabel)
+                + SettingsWindow.TabIconSize
+                + SettingsWindow.TabIconGap
+                + SettingsWindow.TabHorizontalPadding * 2
+                + SettingsWindow.TabTextSlack)
         return tabWidths
+    }
+
+    CreateTabMeasureFontSpec() {
+        referenceFont := SendMessage(0x0031, 0, 0, , this.Gui.Hwnd)
+        fontSpec := Buffer(92, 0)
+        ; The parent GUI has no WM_GETFONT handle until a child inherits it.
+        if referenceFont
+            DllCall("gdi32\GetObjectW", "Ptr", referenceFont,
+                "Int", fontSpec.Size, "Ptr", fontSpec.Ptr, "Int")
+        pointSize := 10
+        dpi := UiScaleService.GetEffectiveDpi(this.Gui.Hwnd)
+        NumPut("Int", -Max(1, Round(pointSize * dpi / 72)), fontSpec, 0)
+        NumPut("Int", 700, fontSpec, 16)
+        StrPut(LocalizationService.GetLanguageSystemUiFontName(),
+            fontSpec.Ptr + 28, 32, "UTF-16")
+        return fontSpec
+    }
+
+    MeasureTabLabelWidth(text) {
+        deviceContext := DllCall("user32\GetDC", "Ptr", this.Gui.Hwnd,
+            "Ptr")
+        if !deviceContext
+            return StrLen(String(text)) * 12
+        fontHandle := DllCall("gdi32\CreateFontIndirectW", "Ptr",
+            this.TabMeasureFontSpec.Ptr, "Ptr")
+        previousFont := fontHandle ? DllCall("gdi32\SelectObject", "Ptr",
+            deviceContext, "Ptr", fontHandle, "Ptr") : 0
+        extent := Buffer(8, 0)
+        try {
+            text := String(text)
+            if !DllCall("gdi32\GetTextExtentPoint32W", "Ptr",
+                    deviceContext, "Str", text, "Int", StrLen(text),
+                    "Ptr", extent, "Int")
+                return StrLen(text) * 12
+            return Ceil(NumGet(extent, 0, "Int") * 96
+                / UiScaleService.GetEffectiveDpi(this.Gui.Hwnd))
+        } finally {
+            if previousFont
+                DllCall("gdi32\SelectObject", "Ptr", deviceContext,
+                    "Ptr", previousFont, "Ptr")
+            if fontHandle
+                DllCall("gdi32\DeleteObject", "Ptr", fontHandle)
+            DllCall("user32\ReleaseDC", "Ptr", this.Gui.Hwnd,
+                "Ptr", deviceContext)
+        }
+    }
+
+    MeasureTextWidth(text) {
+        deviceContext := DllCall("user32\GetDC", "Ptr", this.Gui.Hwnd,
+            "Ptr")
+        if !deviceContext
+            return StrLen(String(text)) * 12
+        fontHandle := DllCall("gdi32\CreateFontW", "Int", -13,
+            "Int", 0, "Int", 0, "Int", 0, "Int", 700,
+            "UInt", 0, "UInt", 0, "UInt", 0, "UInt", 1,
+            "UInt", 0, "UInt", 0, "UInt", 0, "UInt", 0,
+            "Str", LocalizationService.GetLanguageSystemUiFontName(),
+            "Ptr")
+        previousFont := fontHandle ? DllCall("gdi32\SelectObject", "Ptr",
+            deviceContext, "Ptr", fontHandle, "Ptr") : 0
+        extent := Buffer(8, 0)
+        try {
+            text := String(text)
+            if !DllCall("gdi32\GetTextExtentPoint32W", "Ptr",
+                    deviceContext, "Str", text, "Int", StrLen(text),
+                    "Ptr", extent, "Int")
+                return StrLen(text) * 12
+            dpi := UiScaleService.GetEffectiveDpi(this.Gui.Hwnd)
+            return Ceil(NumGet(extent, 0, "Int") * 96 / dpi)
+        } finally {
+            if previousFont
+                DllCall("gdi32\SelectObject", "Ptr", deviceContext,
+                    "Ptr", previousFont, "Ptr")
+            if fontHandle
+                DllCall("gdi32\DeleteObject", "Ptr", fontHandle)
+            DllCall("user32\ReleaseDC", "Ptr", this.Gui.Hwnd,
+                "Ptr", deviceContext)
+        }
     }
 
     CreateTabButton(index, x, width, text, iconName, iconColor := "none") {
@@ -764,8 +913,10 @@ class SettingsWindow {
         this.Interactions.RegisterButton(button, UiThemeService.Color("Tab"),
             ObjBindMethod(this, "SwitchTab", index), "", "", false,
             UiThemeService.Color("TabText"))
-        this.Interactions.SetButtonLucideIcon(button, iconName, 14, 6,
-            iconColor)
+        this.Interactions.SetButtonTextLayout(button, "center",
+            SettingsWindow.TabHorizontalPadding)
+        this.Interactions.SetButtonLucideIcon(button, iconName,
+            SettingsWindow.TabIconSize, SettingsWindow.TabIconGap, iconColor)
         return button
     }
 
@@ -774,7 +925,8 @@ class SettingsWindow {
             case 1: return "monitor.svg"
             case 2: return "power.svg"
             case 3: return "pencil-sparkles.svg"
-            case 4: return "file-output.svg"
+            case 4: return "keyboard.svg"
+            case 5: return "file-output.svg"
         }
         return ""
     }
@@ -786,7 +938,8 @@ class SettingsWindow {
             case 1: return UiThemeService.Color("DisplayIcon")
             case 2: return UiThemeService.Color("StartupIcon")
             case 3: return UiThemeService.Color("AI")
-            case 4: return UiThemeService.Color("RulesEventIcon")
+            case 4: return UiThemeService.Color("CodeType")
+            case 5: return UiThemeService.Color("RulesEventIcon")
         }
         return UiThemeService.Color("TabText")
     }
@@ -799,7 +952,8 @@ class SettingsWindow {
             true)
         iconName := this.GetTabIconName(pageIndex)
         if iconName != ""
-            this.Interactions.SetButtonLucideIcon(button, iconName, 14, 6,
+            this.Interactions.SetButtonLucideIcon(button, iconName,
+                SettingsWindow.TabIconSize, SettingsWindow.TabIconGap,
                 this.GetTabIconColor(pageIndex, active))
         return true
     }
@@ -957,7 +1111,8 @@ class SettingsWindow {
             case 1: this.BuildAppearanceTab()
             case 2: this.BuildStartupTab()
             case 3: this.BuildAITab()
-            case 4: this.BuildRulesAndEventTab()
+            case 4: this.BuildInterceptionTab()
+            case 5: this.BuildRulesAndEventTab()
             default: return false
         }
         if UiScaleService.IsPrepared(this.Gui)
@@ -1027,8 +1182,10 @@ class SettingsWindow {
                 this.AlignAppearanceTabControls()
             else if index == 3
                 this.AlignAITabControls()
-            else if index == 4
+            else if index == 5
                 this.AlignEventTabControls()
+            else if index == 4
+                this.RefreshInterceptionStatus()
             if index == 2
                 this.RefreshStartupTaskStatus()
             showActions := true
@@ -1052,7 +1209,8 @@ class SettingsWindow {
         this.CenterOverOwner()
         this.AlignAppearanceTabControls()
         this.AlignAITabControls()
-        this.AlignEventTabControls()
+        if this.TabBuilt[5]
+            this.AlignEventTabControls()
         return true
     }
 
@@ -1204,14 +1362,13 @@ class SettingsWindow {
             if this.HasOwnProp("AIConnectionStatus")
                     && this.AIConnectionStatus
                 this.LayoutAIConnectionStatus(this.AIConnectionStatus.Text)
-
             for dropDownName in ["LanguageDropDown", "FontDropDown",
                     "ThemeDropDown", "ScaleDropDown"] {
                 if this.HasOwnProp(dropDownName) && this.%dropDownName%
                     this.%dropDownName%.Opt("Background" colors.Input
                         " c" colors.Text)
             }
-            if this.TabBuilt[4] && IsObject(this.EventCapacityInput) {
+            if this.TabBuilt[5] && IsObject(this.EventCapacityInput) {
                 this.EventCapacityInput.Background.Opt(
                     "Background" colors.Input)
                 this.EventCapacityInput.Edit.Opt("Background" colors.Input
@@ -1224,6 +1381,12 @@ class SettingsWindow {
                     this.%inputName%.Edit.Opt("Background" colors.Input
                         " c" colors.Text)
                 }
+            }
+
+            if this.TabBuilt[4] && IsObject(this.InterceptionStatus) {
+                this.InterceptionStatus.Opt("Background" colors.Window
+                    " c" colors.Text)
+                ApplyDarkControl(this.InterceptionStatus.Hwnd)
             }
 
             for buttonIndex, button in this.TabButtons {
@@ -1246,6 +1409,12 @@ class SettingsWindow {
                 {Name: "AITestConnectionButton", Color: colors.Toolbar,
                     TextColor: colors.ToolbarText,
                     Interactive: !this.AIConnectionTestBusy},
+                {Name: "InterceptionDetectButton", Color: colors.Toolbar,
+                    TextColor: colors.ToolbarText, Interactive: true},
+                {Name: "InterceptionInstallButton", Color: colors.Primary,
+                    TextColor: colors.ButtonText,
+                    Interactive: this.HasOwnProp("InterceptionInstallButton")
+                        && this.InterceptionInstallButton.Enabled},
                 {Name: "SaveButton", Color: colors.Save,
                     TextColor: colors.ButtonText, Interactive: true},
                 {Name: "CancelButton", Color: colors.Toolbar,
@@ -1276,7 +1445,10 @@ class SettingsWindow {
             UiScaleService.RefreshGuiFonts(this.Gui)
             this.AlignAppearanceTabControls()
             this.AlignAITabControls()
-            this.AlignEventTabControls()
+            if this.TabBuilt[5]
+                this.AlignEventTabControls()
+            if this.TabBuilt[4]
+                this.RefreshInterceptionStatus()
             this.ApplyNativeThemes()
             this.Gui.BackColor := colors.Window
         } finally EndStableWindowUpdate(this.Gui.Hwnd, true)
@@ -1395,8 +1567,14 @@ class SettingsWindow {
             checkUpdatesOnStartup :=
                 this.CheckUpdatesOnStartupCheck.Value != 0
         }
-        eventCapacity := this.Original.EventBufferCapacity
+        checkInterceptionOnStartup := this.Original.HasOwnProp(
+            "CheckInterceptionOnStartup")
+                ? this.Original.CheckInterceptionOnStartup : true
         if this.TabBuilt[4]
+            checkInterceptionOnStartup :=
+                this.InterceptionReminderCheck.Value != 0
+        eventCapacity := this.Original.EventBufferCapacity
+        if this.TabBuilt[5]
             eventCapacity := this.ParseRangedInteger(
                 this.EventCapacityInput.Edit.Value, Tr("事件缓冲区容量"),
                 AppSettingsService.MinimumEventBufferCapacity,
@@ -1418,11 +1596,12 @@ class SettingsWindow {
             ShowAtStartup: showAtStartup,
             RunAsAdministrator: runAsAdministrator,
             CheckUpdatesOnStartup: checkUpdatesOnStartup,
-            EscapeCancelsRecording: this.TabBuilt[4]
+            CheckInterceptionOnStartup: checkInterceptionOnStartup,
+            EscapeCancelsRecording: this.TabBuilt[5]
                 ? this.EscapeCancelCheck.Value != 0
                 : this.Original.EscapeCancelsRecording,
             EventBufferCapacity: eventCapacity,
-            EventViewerAutoScroll: this.TabBuilt[4]
+            EventViewerAutoScroll: this.TabBuilt[5]
                 ? this.EventAutoScrollCheck.Value != 0
                 : this.Original.EventViewerAutoScroll,
             AIAddress: aiAddress, AIKey: aiKey, AIModel: aiModel,

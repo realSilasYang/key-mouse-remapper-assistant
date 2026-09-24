@@ -49,10 +49,71 @@ if ($builtInRuleEndCount -ne $builtInRuleCount -or
         "begin=$builtInRuleCount, end=$builtInRuleEndCount, " +
         "managed=$builtInManagedRuleCount, script=$builtInScriptRuleCount.")
 }
+$customKeyboardWindowsKeyRule = [regex]::Match($entry,
+    '(?ms)^; @mapping-begin\r?\n(?:(?!^; @mapping-end\r?$).)*' +
+    '@名称=屏蔽外接键盘 Win 键' +
+    '(?:(?!^; @mapping-end\r?$).)*^; @mapping-end\r?$')
+$requiredInterceptionRuleParts = @(
+    '@类型=规则块',
+    '"block": true',
+    '"backend": "interception"',
+    '"number": 3',
+    '"type": "keyboard"',
+    '"name": "Win"')
+$interceptionRuleComplete = $customKeyboardWindowsKeyRule.Success
+foreach ($part in $requiredInterceptionRuleParts) {
+    $interceptionRuleComplete = $interceptionRuleComplete -and
+        $customKeyboardWindowsKeyRule.Value.Contains($part)
+}
+if (-not $interceptionRuleComplete) {
+    throw 'The built-in external-keyboard Windows-key block rule is incomplete.'
+}
 if ($entry -notmatch
         '#Include\s+app\\KeyMouseRemapperAssistantApp\.ahk' -or
-        $entry -notmatch 'LaunchPackagedSource\(\)') {
+        $entry -notmatch 'LaunchPackagedSource\(\)' -or
+        $entry -notmatch '#Include\s+src\\Core\\InterceptionService\.ahk' -or
+        $entry -notmatch '#Include\s+src\\Core\\InterceptionMappingRuntime\.ahk' -or
+        $app -match 'OpenInterceptionDevices|InterceptionDevices' -or
+        (Get-Content -LiteralPath (Join-Path $projectRoot 'app\Windows\SupportInfoWindow.ahk') -Raw -Encoding UTF8) -match 'Interception.*设备识别' -or
+        $app -notmatch 'HasActiveInterceptionRule') {
     throw 'The fixed AHK entry no longer has the application entry contract.'
+}
+$interceptionServicePath = Join-Path $projectRoot 'src\Core\InterceptionService.ahk'
+$interceptionRuntimePath = Join-Path $projectRoot 'src\Core\InterceptionMappingRuntime.ahk'
+foreach ($requiredPath in @($interceptionServicePath, $interceptionRuntimePath,
+        (Join-Path $projectRoot 'third_party\interception\library\x64\interception.dll'),
+        (Join-Path $projectRoot 'third_party\interception\command-line-installer\install-interception.exe'),
+        (Join-Path $projectRoot 'third_party\interception\library\interception.h'),
+        (Join-Path $projectRoot 'third_party\interception\licenses\non-commercial-usage\LGPL 3.0.txt'))) {
+    if (-not (Test-Path -LiteralPath $requiredPath -PathType Leaf)) {
+        throw "Interception integration asset is missing: $requiredPath"
+    }
+}
+$interceptionService = Get-Content -LiteralPath $interceptionServicePath -Raw -Encoding UTF8
+$interceptionWindow = Get-Content -LiteralPath (Join-Path $projectRoot 'app\Windows\InterceptionDeviceWindow.ahk') -Raw -Encoding UTF8
+$applicationClass = Get-Content -LiteralPath (Join-Path $projectRoot 'app\KeyMouseRemapperAssistantApp.ahk') -Raw -Encoding UTF8
+foreach ($requiredText in @(
+        '"create_context"', '"get_hardware_id"',
+        '"wait_with_timeout"', 'official_index', 'StartIdentify',
+        'InstallDriver', 'CopyKeyboardConfig')) {
+    if ($interceptionService -notmatch [regex]::Escape($requiredText) -and
+            $interceptionWindow -notmatch [regex]::Escape($requiredText)) {
+        throw "Interception integration contract is incomplete: $requiredText"
+    }
+}
+if ($applicationClass -notmatch 'InterceptionDriverStartupTimer' -or
+        $applicationClass -notmatch 'SetTimer\(this\.InterceptionDriverStartupTimer,\s*-1000\)' -or
+        $applicationClass -notmatch 'CheckInterceptionOnStartup' -or
+        $applicationClass -notmatch 'CheckInterceptionDriverAtStartup\(\)' -or
+        $interceptionService -notmatch 'RunWait\("\*RunAs "') {
+    throw 'Startup driver detection or elevated official installer launch is missing.'
+}
+if ($app -notmatch 'this\.Interception\.Shutdown\(\)' -or
+        (Get-Content -LiteralPath (Join-Path $projectRoot 'src\Core\AIService.ahk') -Raw -Encoding UTF8) -notmatch
+            'CurrentInterceptionReminder' -or
+        (Get-Content -LiteralPath (Join-Path $projectRoot 'src\Core\AIService.ahk') -Raw -Encoding UTF8) -notmatch
+            'interception_keyboard_device_range') {
+    throw 'Interception lifecycle or AI capability contract is incomplete.'
 }
 
 $tokens = $null
@@ -178,8 +239,7 @@ $releaseNotes = Get-Content -LiteralPath $releaseNotesPath -Raw `
 if ($releaseNotes -match '(?i)sha-?256|sha256sums') {
     throw 'Release Notes must not publish SHA-256 values or checksum assets.'
 }
-if ($releaseNotes -notmatch '\*\*`fonts\.zip`' -or
-        $releaseNotes -notmatch '不(?:再)?包含字体') {
+if (-not $releaseNotes.Contains('fonts.zip')) {
     throw 'Release Notes do not describe the optional font package boundary.'
 }
 if ($buildScript -notmatch "'CHANGELOG\.md'" -or

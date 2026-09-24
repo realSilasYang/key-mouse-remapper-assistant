@@ -9,9 +9,7 @@ class SpanishStrings {
         catalog.Set(
             "键鼠重映射小助手",
                 "Asistente de reasignación de teclado y mouse")
-        catalog.Set(
-            "新增",
-                "Añadir")
+        catalog.Set("新建", "Nuevo")
         catalog.Set(
             "删除",
                 "Eliminar")
@@ -38,8 +36,8 @@ class SpanishStrings {
             "名称",
                 "Nombre")
         catalog.Set(
-            "新建映射",
-                "Nuevo mapeo")
+            "新建简易规则",
+                "Nueva regla simple")
         catalog.Set(
             "映射为",
                 "Mapa a")
@@ -287,9 +285,6 @@ class SpanishStrings {
             "请先完成或取消当前按键录制。",
                 "Termine o cancele la grabación actual primero.")
         catalog.Set(
-            "请先录制来源按键和目标按键。",
-                "Registre primero las claves de origen y de destino.")
-        catalog.Set(
             "已清空新建区域。",
                 "Se despejó la nueva área de mapeo.")
         catalog.Set(
@@ -472,7 +467,7 @@ class SpanishStrings {
         catalog.Set("无法打开反馈页面：{1}", "No se pudo abrir la página de comentarios: {1}")
         catalog.Set("键鼠重映射小助手用于录制、审阅和维护键盘与鼠标映射。关闭主窗口只会隐藏到系统托盘，已经启用的映射仍会继续生效。", "El asistente de reasignación de teclado y ratón permite grabar, revisar y mantener asignaciones de teclado y ratón. Al cerrar la ventana principal solo se oculta en la bandeja del sistema; las asignaciones activadas siguen funcionando.")
         catalog.Set("一、快速上手", "1. Inicio rápido")
-        catalog.Set("• 点击顶部“新增”，会打开已经填好元数据字段的 @mapping 编辑器；也可以在下方分别录制来源按键和目标按键，填写名称后保存。", "• Seleccione Añadir en la barra superior para abrir un editor @mapping con los campos de metadatos ya preparados. También puede grabar abajo la entrada de origen y la de destino, indicar un nombre y guardar.")
+        catalog.Set("• 点击顶部“新建”，会打开已经填好元数据字段的 @mapping 编辑器；也可以在下方分别录制来源按键和目标按键，填写名称后保存。", "• Seleccione Nuevo en la barra superior para abrir un editor @mapping con los campos de metadatos ya preparados. También puede grabar abajo la entrada de origen y la de destino, indicar un nombre y guardar.")
         catalog.Set("• 录制会实时显示原始规范名称、阅读友好名称、虚拟键码和扫描码，并区分左右 Ctrl、Shift、Alt、Win 以及键盘、鼠标和滚轮输入。", "• La grabación muestra en tiempo real el nombre canónico, el nombre legible, el código de tecla virtual y el código de exploración. Distingue Ctrl, Shift, Alt y Win izquierdos y derechos, además del teclado, el ratón y la rueda.")
         catalog.Set("二、主界面与代码编辑", "2. Ventana principal y edición de código")
         catalog.Set("• 单击选择映射；双击条目、选中后按 F2 或使用右键菜单，可编辑完整 @mapping 代码块。", "• Seleccione una asignación con un clic. Haga doble clic en una fila, pulse F2 con la fila seleccionada o use el menú contextual para editar el bloque @mapping completo.")
@@ -545,7 +540,38 @@ class SpanishStrings {
         catalog.Set("自定义 AHK 代码可读取文件、启动程序、控制窗口并请求管理员权限。确认运行当前代码吗？", "El código AHK personalizado puede leer y escribir archivos, iniciar programas, controlar ventanas y solicitar privilegios de administrador. ¿Ejecutar este código?")
         catalog.Set("规则未应用：{1}", "No se aplicaron las reglas: {1}")
         catalog.Set("• 映射区域以注释形式保存规则块和受托管脚本。规则块在主进程热应用；受托管脚本的自定义 AHK v2 源码在独立受管进程运行，保存、暂停、恢复、删除和退出均由小助手统一管理。", "• La región de asignaciones guarda bloques de regla normales y scripts administrados como comentarios. Los bloques normales se aplican en el proceso principal. El código AutoHotkey v2 personalizado se ejecuta en un proceso administrado independiente controlado por el asistente.")
-        catalog.Set("区分左右修饰键", "Distinguir modificadores izquierdos/derechos")
+        catalog.Set("区分左/右侧修饰键", "Distinguir modificadores izquierdos/derechos")
+        catalog.Set("区分来源设备", "Distinguir dispositivo de origen")
+        catalog.Set("目标按键可留空，表示屏蔽来源按键。", "Deje vacía la tecla de destino para bloquear la tecla de origen.")
+        catalog.Set("请先录制来源按键。", "Grabe primero una tecla de origen.")
+        catalog.Set("安装 Interception 驱动", "Instalar controlador Interception")
+        catalog.Set("安装驱动", "Instalar controlador")
+        catalog.Set("来源设备：Interception {1} {2}{3}", "Dispositivo de origen: Interception {1} {2}{3}")
+        catalog.Set("已启用来源设备区分，请重新录制来源按键。", "La distinción del dispositivo de origen está activa. Vuelva a grabar las teclas de origen.")
+        catalog.Set("Interception 驱动", "Controlador Interception")
+        catalog.Set("驱动状态：", "Estado del controlador:")
+        catalog.Set("重新检测", "Volver a comprobar")
+        catalog.Set("已就绪", "Listo")
+        catalog.Set("{1}`r`n状态：{2}`r`n{3}", "{1}`r`nEstado: {2}`r`n{3}")
+        catalog.Set("启动时自动检测并提醒", "Comprobar y avisar al iniciar")
+        catalog.Set("Interception 驱动未安装。可在设置的 Interception 选项卡检测或安装。", "El controlador Interception no está instalado. Compruébelo o instálelo en la pestaña Interception de Configuración.")
+        catalog.Set("Interception 规则未运行；请在设置中安装驱动，或暂停这些规则。", "Las reglas Interception no están en ejecución. Instale el controlador en Configuración o pause estas reglas.")
+        catalog.Set("以下启用规则需要 Interception 驱动，但当前不可用：{1}`n`n选择“安装驱动”尝试提权安装；选择“暂停规则”则停用这些规则。安装成功后需要重启 Windows。", "Estas reglas habilitadas necesitan el controlador Interception, que no está disponible: {1}`n`nElija Instalar controlador para ejecutar el instalador con permisos de administrador o Pausar reglas para desactivarlas. Reinicie Windows después de la instalación.")
+        catalog.Set("Interception 驱动缺失", "Controlador Interception no disponible")
+        catalog.Set("暂停规则", "Pausar reglas")
+        catalog.Set("已暂停 {1} 条需要 Interception 驱动的规则。", "Se pausaron {1} reglas que necesitan el controlador Interception.")
+        catalog.Set("暂停 Interception 规则失败：{1}", "No se pudieron pausar las reglas Interception: {1}")
+        catalog.Set("Interception 设备专属规则需要内核驱动。小助手可以请求管理员权限并运行随包官方安装器；安装后必须重启 Windows。是否继续？", "Las reglas Interception específicas del dispositivo necesitan un controlador de kernel. El asistente puede solicitar permisos de administrador y ejecutar el instalador oficial incluido. Después deberá reiniciar Windows. ¿Continuar?")
+        catalog.Set("Interception 驱动安装程序已成功返回。请重启 Windows 后再启用相关规则。", "El instalador de Interception finalizó correctamente. Reinicie Windows antes de activar las reglas afectadas.")
+        catalog.Set("Interception 驱动已经安装，请重启 Windows 后再录制来源设备。", "El controlador Interception está instalado. Reinicie Windows antes de grabar el dispositivo de origen.")
+        catalog.Set("Interception 不可用，且发行包中未找到驱动安装器：{1}", "Interception no está disponible y el instalador del controlador no está en el paquete: {1}")
+        catalog.Set("区分来源设备需要安装 Interception 内核驱动。小助手可以立即请求管理员权限并自动安装；安装后必须重启 Windows。是否继续？", "Distinguir dispositivos de origen requiere el controlador de núcleo Interception. El asistente puede solicitar permisos de administrador e instalarlo ahora. Después deberá reiniciar Windows. ¿Continuar?")
+        catalog.Set("Interception 驱动安装失败：{1}", "No se pudo instalar el controlador Interception: {1}")
+        catalog.Set("设备过滤驱动", "Controlador de filtro de dispositivos")
+        catalog.Set("脚本规则 {1} 运行失败：{2}", "No se pudo ejecutar la regla de script {1}: {2}")
+        catalog.Set("Interception 驱动已安装；请重启 Windows 后再运行规则 {1}。", "El controlador Interception está instalado. Reinicie Windows antes de ejecutar la regla {1}.")
+        catalog.Set("规则 {1} 未运行：{2}", "La regla {1} no se ejecutó: {2}")
+        catalog.Set("规则 {1} 无法使用 Interception：{2}", "La regla {1} no puede usar Interception: {2}")
         catalog.Set("帮助", "Ayuda")
         catalog.Set("打赏", "Donar")
         catalog.Set("打开帮助`n可选择查看使用说明、运行日志或提交反馈", "Abrir Ayuda`nElige la guía de uso, el registro de ejecución o el envío de comentarios")

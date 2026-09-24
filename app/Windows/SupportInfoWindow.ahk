@@ -24,8 +24,8 @@ class SupportInfoWindow {
     Build() {
         colors := UiThemeService.GetPalette()
         compactLayout := LocalizationService.UsesCompactLayout()
-        this.WindowWidth := compactLayout ? 220 : 300
-        this.ButtonWidth := compactLayout ? 150 : 220
+        this.WindowWidth := compactLayout ? 260 : 300
+        this.ButtonWidth := compactLayout ? 220 : 220
         buttonX := (this.WindowWidth - this.ButtonWidth) // 2
 
         this.Gui := Gui("+Owner" this.OwnerWindow.Gui.Hwnd

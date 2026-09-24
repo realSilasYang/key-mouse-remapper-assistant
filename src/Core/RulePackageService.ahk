@@ -10,7 +10,7 @@ class RulePackageService {
     static MaximumPackageBytes := 20 * 1024 * 1024 + 4
     static MaximumRules := 1000
     static ManifestCapabilities := ["conditions", "managed_rules",
-        "script_rules"]
+        "script_rules", "interception_device_filtering"]
     static ManifestPermissions := ["generated_input", "system_control",
         "window_control", "arbitrary_code"]
     static PreviousManifestCapabilities := ["conditions", "managed_rules"]
@@ -352,6 +352,10 @@ class RulePackageService {
             spec := rule["spec"]
             if spec.Get("conditions", []).Length
                 capabilities["conditions"] := true
+            if spec["from"].Has("device")
+                    && spec["from"]["device"].Get("backend", "")
+                        == "interception"
+                capabilities["interception_device_filtering"] := true
             for fieldName in RuleSpec.ActionFields {
                 for action in spec.Get(fieldName, []) {
                     actionType := action["type"]

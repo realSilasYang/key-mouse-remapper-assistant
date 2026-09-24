@@ -35,31 +35,44 @@ try {
         "A built-in mapping has an unknown mode.")
     branchDirect := CompositeBranchDirectProbe()
     branchScripts := CompositeBranchScriptProbe()
+    branchInterception := CompositeBranchDirectProbe()
     branchRuntime := CompositeRemappingRuntime({}, branchDirect,
-        branchScripts)
+        branchScripts, branchInterception)
     branchManaged := repository.CloneMapping(managedMappings[1])
     branchManaged.Spec["enabled"] := JsonBoolean(false)
     branchManaged.Descriptor := RuleCompiler.Compile(branchManaged.Spec)
     branchScript := repository.CloneMapping(scriptMappings[1])
     branchScript.Spec["enabled"] := JsonBoolean(false)
-    branchRuntime.ApplyMappings([branchManaged, branchScript])
-    branchRuntime.ApplyMappings([branchManaged, branchScript])
+    branchDevice := repository.CloneMapping(branchManaged)
+    branchDevice.Spec["id"] := "branch-device"
+    branchDevice.Spec["from"]["device"] := Map(
+        "backend", "interception", "number", 2, "type", "keyboard")
+    branchDevice.Spec := RuleSpec.Normalize(branchDevice.Spec)
+    branchDevice.Id := branchDevice.Spec["id"]
+    branchDevice.Descriptor := RuleCompiler.Compile(branchDevice.Spec)
+    branchRuntime.ApplyMappings([branchManaged, branchDevice, branchScript])
+    branchRuntime.ApplyMappings([branchManaged, branchDevice, branchScript])
     AssertTrue(branchDirect.ApplyCount == 1
+            && branchInterception.ApplyCount == 1
+            && branchInterception.LastMappings.Length == 1
             && branchScripts.ApplyCount == 1,
         "An unchanged composite runtime branch was applied twice.")
     changedBranchManaged := repository.CloneMapping(branchManaged)
     changedBranchManaged.Spec["description"] := "branch changed"
     changedBranchManaged.Descriptor := RuleCompiler.Compile(
         changedBranchManaged.Spec)
-    branchRuntime.ApplyMappings([changedBranchManaged, branchScript])
+    branchRuntime.ApplyMappings([changedBranchManaged, branchDevice,
+        branchScript])
     AssertTrue(branchDirect.ApplyCount == 2
+            && branchInterception.ApplyCount == 1
             && branchScripts.ApplyCount == 1,
         "Editing a managed rule unnecessarily reapplied script workers.")
     changedBranchScript := repository.CloneMapping(branchScript)
     changedBranchScript.Spec["code"] .= "`n; branch changed"
     branchRuntime.ApplyMappings([changedBranchManaged,
-        changedBranchScript])
+        branchDevice, changedBranchScript])
     AssertTrue(branchDirect.ApplyCount == 2
+            && branchInterception.ApplyCount == 1
             && branchScripts.ApplyCount == 2,
         "Editing a script unnecessarily reregistered managed hotkeys.")
     if EnvGet("COMPOSITE_BRANCH_ONLY") == "1" {
@@ -164,6 +177,11 @@ try {
         AssertEqual(DirectHotkeyRuntime.OutputPressDurationMs,
             dispatch.Duration,
             "Complex shortcut press duration was not applied.")
+        AssertTrue(outputDispatchRuntime.SendKeyEvent("LWin", "down"),
+            "A stateful target key-down was not dispatched.")
+        AssertEqual("{Blind}{LWin down}",
+            outputDispatchRuntime.Dispatches[2].Sequence,
+            "A stateful target event did not preserve physical modifiers.")
         AssertTrue(!A_IsCritical && A_KeyDelay == 23 && A_KeyDuration == 31,
             "Successful output dispatch did not restore thread settings.")
         outputDispatchRuntime.FailDispatch := true
@@ -227,24 +245,62 @@ try {
         "Same-key mappings must retain the captured source.")
     AssertEqual("F24", sameKeySpec["display"]["target"],
         "Same-key mappings must retain the captured target.")
+    AssertEqual("any", sameKeySpec["from"]["optional_modifiers"][1],
+        "A single-key target must allow extra modifiers on the source.")
+    AssertEqual("ignore", sameKeySpec["from"]["repeat"],
+        "A held single-key replacement must ignore source auto-repeat.")
+    AssertTrue(sameKeySpec["to"][1]["type"] == "key_down"
+            && sameKeySpec["to"][1]["value"] == "F24",
+        "A single-key target must remain pressed with its source.")
+    AssertTrue(sameKeySpec["to_after_key_up"][1]["type"] == "key_up"
+            && sameKeySpec["to_after_key_up"][1]["value"] == "F24",
+        "A single-key target must be released with its source.")
     sameKeyDescriptor := RuleCompiler.Compile(sameKeySpec)
-    AssertEqual("$F24", runtime.BuildRegistration(sameKeyDescriptor).DownHotkey,
-        "Same-key mappings must remain valid runtime rules.")
+    sameKeyRegistration := runtime.BuildRegistration(sameKeyDescriptor)
+    AssertEqual("$*F24", sameKeyRegistration.DownHotkey,
+        "A single-key target must match source presses with modifiers.")
+    AssertEqual("$*F24 Up", sameKeyRegistration.UpHotkey,
+        "A single-key target must keep release tracking wildcarded.")
+
+    singleTargetSource := {Display: "CapsLock", KeyName: "CapsLock",
+        Kind: "keyboard", SourceSpec: "CapsLock", VKHex: "14", SCHex: "03A"}
+    singleTargetKey := {KeyName: "A", KeySpec: "sc01E", Kind: "keyboard",
+        VKHex: "41", SCHex: "01E"}
+    singleTarget := {Display: "A", RawDisplay: "A", KeyName: "A",
+        KeySpec: "sc01E", Kind: "keyboard", VKHex: "41", SCHex: "01E",
+        Modifiers: [], Keys: [singleTargetKey], IsSimultaneous: false,
+        TargetSend: "{sc01E}"}
+    singleTargetSpec := RuleSpec.CreateFromCaptures("single-target-rule",
+        singleTargetSource, singleTarget)
+    singleTargetDescriptor := RuleCompiler.Compile(singleTargetSpec)
+    singleTargetRegistration := runtime.BuildRegistration(
+        singleTargetDescriptor)
+    AssertEqual("$*sc03A", singleTargetRegistration.DownHotkey,
+        "CapsLock-to-A must accept Ctrl/Shift/Alt/Win combinations.")
+    AssertTrue(singleTargetSpec["to"][1]["type"] == "key_down"
+            && singleTargetSpec["to"][1]["value"] == "sc01E",
+        "CapsLock-to-A must press the recorded target scan code.")
+    AssertTrue(singleTargetSpec["to_after_key_up"][1]["type"] == "key_up"
+            && singleTargetSpec["to_after_key_up"][1]["value"] == "sc01E",
+        "CapsLock-to-A must release the recorded target scan code.")
 
     leftCtrlInfo := {KeyName: "LCtrl"}
     rightCtrlInfo := {KeyName: "RCtrl"}
-    sidedSourceCapture := {Display: "LCtrl + A", RawDisplay: "LCtrl + A",
-        KeyName: "A", SourceSpec: "<^sc01E", VKHex: "41", SCHex: "01E",
-        Modifiers: [leftCtrlInfo], IsSimultaneous: false}
-    sidedTargetCapture := {Display: "LCtrl + F12",
-        RawDisplay: "LCtrl + F12",
-        TargetSend: "{LCtrl down}{F12}{LCtrl up}"}
+    sidedSourceCapture := {Display: "RCtrl + A", RawDisplay: "RCtrl + A",
+        KeyName: "A", SourceSpec: ">^sc01E", VKHex: "41", SCHex: "01E",
+        Modifiers: [rightCtrlInfo], IsSimultaneous: false}
+    targetF12Info := {KeyName: "F12", KeySpec: "F12", Kind: "keyboard"}
+    sidedTargetCapture := {Display: "RCtrl + F12",
+        RawDisplay: "RCtrl + F12", KeyName: "F12", KeySpec: "F12",
+        Kind: "keyboard", Modifiers: [rightCtrlInfo],
+        Keys: [rightCtrlInfo, targetF12Info], IsSimultaneous: false,
+        TargetSend: "{RCtrl down}{F12}{RCtrl up}"}
     sidedModifierSpec := RuleSpec.CreateFromCaptures("sided-modifier-rule",
         sidedSourceCapture, sidedTargetCapture, true)
     genericModifierSpec := RuleSpec.CreateFromCaptures(
         "generic-modifier-rule", sidedSourceCapture, sidedTargetCapture,
         false)
-    AssertEqual("LCtrl", sidedModifierSpec["from"]["modifiers"][1],
+    AssertEqual("RCtrl", sidedModifierSpec["from"]["modifiers"][1],
         "The enabled side distinction discarded the recorded modifier side.")
     AssertEqual("Ctrl", genericModifierSpec["from"]["modifiers"][1],
         "The disabled side distinction retained a sided modifier.")
@@ -252,9 +308,75 @@ try {
         "The generic source display did not match its trigger semantics.")
     AssertEqual("^sc01E", RuleCompiler.Compile(genericModifierSpec).Hotkey,
         "A generic captured modifier did not compile for either side.")
+    AssertEqual("RCtrl + F12", sidedModifierSpec["display"]["target"],
+        "The enabled side distinction discarded the target modifier side.")
+    AssertEqual("Ctrl + F12", genericModifierSpec["display"]["target"],
+        "The disabled side distinction retained a sided target label.")
+    AssertEqual("{RCtrl down}{F12}{RCtrl up}",
+        sidedModifierSpec["to"][1]["value"],
+        "The enabled side distinction changed the recorded target output.")
     AssertEqual("{LCtrl down}{F12}{LCtrl up}",
         genericModifierSpec["to"][1]["value"],
-        "Source-side normalization changed the recorded target output.")
+        "The disabled side distinction did not normalize target output.")
+    AssertTrue(!genericModifierSpec["from"].Has("optional_modifiers"),
+        "A chord target must not gain single-key replacement modifiers.")
+
+    blockSourceCapture := {Display: "Insert", RawDisplay: "Insert",
+        KeyName: "Insert", Kind: "keyboard", SourceSpec: "sc152",
+        VKHex: "2D", SCHex: "152", Modifiers: [], IsSimultaneous: false}
+    blockSpec := RuleSpec.CreateFromCaptures("block-insert",
+        blockSourceCapture, "", true)
+    AssertTrue(blockSpec["block"].Value
+            && !blockSpec.Has("to")
+            && blockSpec["display"]["target"] == "屏蔽",
+        "An empty target capture did not create an explicit block rule.")
+    blockDescriptor := RuleCompiler.Compile(blockSpec)
+    blockRuntime := OwnershipDirectHotkeyRuntime(app)
+    blockRegistration := blockRuntime.BuildRegistration(blockDescriptor)
+    AssertEqual("$sc152", blockRegistration.DownHotkey,
+        "A block rule did not register its source down event.")
+    AssertEqual("$*sc152 Up", blockRegistration.UpHotkey,
+        "A block rule did not register its source release event.")
+    blockRuntime.Rules[blockDescriptor.Id] := blockDescriptor
+    AssertTrue(blockRuntime.OnDown(blockDescriptor.Id)
+            && blockRuntime.OnUp(blockDescriptor.Id)
+            && blockRuntime.Events.Length == 0,
+        "A block rule emitted output instead of suppressing its source.")
+
+    appsKeySource := {Display: "AppsKey", RawDisplay: "AppsKey",
+        KeyName: "AppsKey", Kind: "keyboard", SourceSpec: "sc15D",
+        VKHex: "5D", SCHex: "15D", Modifiers: [],
+        IsSimultaneous: false}
+    rightWinInfo := {KeyName: "RWin", KeySpec: "sc15C",
+        Kind: "keyboard", VKHex: "5C", SCHex: "15C"}
+    rightWinTarget := {Display: "RWin", RawDisplay: "RWin",
+        KeyName: "RWin", KeySpec: "sc15C", Kind: "keyboard",
+        VKHex: "5C", SCHex: "15C", Modifiers: [], Keys: [rightWinInfo],
+        IsSimultaneous: false, TargetSend: "{sc15C}"}
+    sidedWinSpec := RuleSpec.CreateFromCaptures("apps-to-sided-win",
+        appsKeySource, rightWinTarget, true)
+    genericWinSpec := RuleSpec.CreateFromCaptures("apps-to-generic-win",
+        appsKeySource, rightWinTarget, false)
+    AssertTrue(sidedWinSpec["display"]["target"] == "RWin"
+            && sidedWinSpec["to"][1]["value"] == "RWin"
+            && sidedWinSpec["to_after_key_up"][1]["value"] == "RWin",
+        "The enabled side distinction did not preserve a right-side target key.")
+    AssertTrue(genericWinSpec["display"]["target"] == "Win"
+            && genericWinSpec["to"][1]["value"] == "LWin"
+            && genericWinSpec["to_after_key_up"][1]["value"] == "LWin",
+        "The disabled side distinction did not normalize a target Win key.")
+    winReplacementRuntime := OwnershipDirectHotkeyRuntime(app)
+    genericWinDescriptor := RuleCompiler.Compile(genericWinSpec)
+    winReplacementRuntime.Rules[genericWinDescriptor.Id] :=
+        genericWinDescriptor
+    AssertTrue(winReplacementRuntime.OnDown(genericWinDescriptor.Id)
+            && winReplacementRuntime.Events.Length == 1
+            && winReplacementRuntime.Events[1] == "LWin down",
+        "AppsKey did not hold Win down for use in a following combination.")
+    AssertTrue(winReplacementRuntime.OnUp(genericWinDescriptor.Id)
+            && winReplacementRuntime.Events.Length == 2
+            && winReplacementRuntime.Events[2] == "LWin up",
+        "Releasing AppsKey did not release its replacement Win key.")
 
     bothCtrlSourceCapture := {Display: "LCtrl + RCtrl + A",
         RawDisplay: "LCtrl + RCtrl + A", KeyName: "A",
@@ -282,11 +404,87 @@ try {
     AssertEqual("Ctrl", RuleCompiler.Compile(genericCtrlPrimarySpec).Hotkey,
         "A generic primary modifier did not compile as a generic key.")
     genericPrimaryRuntime := DirectHotkeyRuntime(app)
+    genericCtrlPrimaryRegistration := genericPrimaryRuntime.BuildRegistration(
+        RuleCompiler.Compile(genericCtrlPrimarySpec))
+    AssertEqual("$LCtrl", genericCtrlPrimaryRegistration.DownHotkey,
+        "A neutral Ctrl source did not register its left-side hotkey.")
+    AssertEqual("$RCtrl",
+        genericCtrlPrimaryRegistration.AlternativeDownHotkeys[1],
+        "A neutral Ctrl source did not register its right-side hotkey.")
     genericPrimaryReport := genericPrimaryRuntime.ApplyMappings([
         {Descriptor: RuleCompiler.Compile(genericCtrlPrimarySpec)}])
     AssertEqual(1, genericPrimaryReport.Applied,
         "A generic primary modifier could not be registered by AutoHotkey.")
     genericPrimaryRuntime.Shutdown()
+
+    leftWinSourceCapture := {Display: "LWin", RawDisplay: "LWin",
+        KeyName: "LWin", SourceSpec: "sc15B", VKHex: "5B", SCHex: "15B",
+        Modifiers: [], IsSimultaneous: false}
+    plainF12Target := {Display: "F12", RawDisplay: "F12", KeyName: "F12",
+        KeySpec: "F12", Kind: "keyboard", Modifiers: [],
+        Keys: [{KeyName: "F12", KeySpec: "F12", Kind: "keyboard"}],
+        IsSimultaneous: false, TargetSend: "{F12}"}
+    genericWinPrimarySpec := RuleSpec.CreateFromCaptures(
+        "generic-win-primary-rule", leftWinSourceCapture,
+        plainF12Target, false)
+    AssertEqual("Win", genericWinPrimarySpec["from"]["key"]["name"],
+        "A side-neutral Win source was not retained as a family matcher.")
+    genericWinPrimaryDescriptor := RuleCompiler.Compile(
+        genericWinPrimarySpec)
+    AssertEqual("", RuleCompiler.GetManagedScriptRequirement(
+        genericWinPrimaryDescriptor),
+        "A neutral Win source was still rejected after side expansion.")
+    genericWinPrimaryRegistration := runtime.BuildRegistration(
+        genericWinPrimaryDescriptor)
+    AssertEqual("$*LWin", genericWinPrimaryRegistration.DownHotkey,
+        "A neutral Win source did not register its left-side hotkey.")
+    AssertEqual("$*RWin",
+        genericWinPrimaryRegistration.AlternativeDownHotkeys[1],
+        "A neutral Win source did not register its right-side hotkey.")
+    AssertEqual("$*LWin Up", genericWinPrimaryRegistration.UpHotkey,
+        "A neutral Win source did not track the left-side release.")
+    AssertEqual("$*RWin Up",
+        genericWinPrimaryRegistration.AlternativeUpHotkeys[1],
+        "A neutral Win source did not track the right-side release.")
+    genericWinPrimaryRuntime := DirectHotkeyRuntime(app)
+    genericWinPrimaryReport := genericWinPrimaryRuntime.ApplyMappings([
+        {Descriptor: genericWinPrimaryDescriptor}])
+    AssertEqual(1, genericWinPrimaryReport.Applied,
+        "A neutral Win source could not be registered for both sides.")
+    genericWinPrimaryRegistrationCount := 0
+    for activeRegistration in genericWinPrimaryRuntime.Registrations
+        for hotkeyName in genericWinPrimaryRuntime.GetRegistrationHotkeys(
+                activeRegistration, "Down")
+            if hotkeyName == "$*RWin"
+                genericWinPrimaryRegistrationCount++
+    AssertEqual(1, genericWinPrimaryRegistrationCount,
+        "The applied neutral Win rule did not enable its right-side hotkey.")
+    genericWinPrimaryRuntime.Shutdown()
+    genericWinBlockSpec := RuleSpec.CreateFromCaptures(
+        "generic-win-block-rule", leftWinSourceCapture, "", false)
+    AssertTrue(genericWinBlockSpec["block"].Value
+            && genericWinBlockSpec["from"]["key"]["name"] == "Win",
+        "A side-neutral Win block rule did not retain family matching.")
+    genericWinBlockRegistration := runtime.BuildRegistration(
+        RuleCompiler.Compile(genericWinBlockSpec))
+    AssertEqual("$LWin", genericWinBlockRegistration.DownHotkey,
+        "A neutral Win block did not register its left-side hotkey.")
+    AssertEqual("$RWin",
+        genericWinBlockRegistration.AlternativeDownHotkeys[1],
+        "A neutral Win block did not register its right-side hotkey.")
+    genericWinUpSpec := RuleSpec.Normalize(Map(
+        "id", "generic-win-up-rule",
+        "display", Map("source", "Win", "target", "F12"),
+        "from", Map("hotkey", "Win", "key", Map("name", "Win"),
+            "event", "up"),
+        "to", [Map("type", "send", "value", "{F12}")] ))
+    genericWinUpRegistration := runtime.BuildRegistration(
+        RuleCompiler.Compile(genericWinUpSpec))
+    AssertEqual("$LWin Up", genericWinUpRegistration.UpHotkey,
+        "A neutral Win key-up rule did not register the left-side release.")
+    AssertEqual("$RWin Up",
+        genericWinUpRegistration.AlternativeUpHotkeys[1],
+        "A neutral Win key-up rule did not register the right-side release.")
     neutralAltTapHold := RuleSpec.Normalize(Map(
         "id", "neutral-alt-tap-hold",
         "display", Map("source", "Alt", "target", "tap suppressed"),
@@ -1344,10 +1542,12 @@ class DirectRuntimeTestApp {
 class CompositeBranchDirectProbe {
     __New() {
         this.ApplyCount := 0
+        this.LastMappings := []
     }
 
     ApplyMappings(mappings) {
         this.ApplyCount++
+        this.LastMappings := mappings.Clone()
         return {Applied: mappings.Length, Registrations: mappings.Length,
             Issues: []}
     }

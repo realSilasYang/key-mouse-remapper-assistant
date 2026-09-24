@@ -13,7 +13,7 @@
 
 Trợ lý ánh xạ lại bàn phím và chuột là công cụ AutoHotkey v2 dành cho Windows 10／11 x64. Ứng dụng tập hợp ghi đầu vào, quản lý quy tắc, chỉnh sửa mã, tạo và tối ưu bằng AI, kiểm tra cục bộ và trạng thái chạy trong một giao diện. Mỗi bản phát hành chứa các quy tắc dựng sẵn có thể sửa có trong commit phát hành; số khối quy tắc và tập lệnh được quản lý có thể thay đổi.
 
-Quy tắc nằm trong vùng chú thích `@mapping`, có thể đọc và sao lưu. Ứng dụng không cài trình điều khiển hay dịch vụ Windows; ánh xạ chỉ hoạt động khi trợ lý đang chạy. Gói chính thức không chứa địa chỉ AI, khóa API, mô hình, lời nhắc tùy chỉnh hoặc thiết lập cá nhân của máy dựng.
+Quy tắc nằm trong vùng chú thích `@mapping`, có thể đọc và sao lưu. Quy tắc Interception theo thiết bị có thể dùng trình điều khiển tùy chọn, được cài sau khi quản trị viên xác nhận và khởi động lại Windows; ánh xạ chỉ hoạt động khi trợ lý đang chạy. Gói chính thức không chứa địa chỉ AI, khóa API, mô hình, lời nhắc tùy chỉnh hoặc thiết lập cá nhân của máy dựng.
 
 # Tổng quan giao diện
 
@@ -38,7 +38,7 @@ Thanh lệnh phía trên thêm, tạm dừng／tiếp tục hàng loạt và xó
 ## Phạm vi và giới hạn
 
 - Chỉ hỗ trợ Windows 10／11 x64.
-- Không có trình điều khiển nhân nên không xử lý màn hình bảo mật, `Ctrl+Alt+Delete` hoặc phần mềm chặn móc chế độ người dùng.
+- Quy tắc thông thường hoạt động khi không cài trình điều khiển Interception tùy chọn. Màn hình bảo mật và `Ctrl+Alt+Delete` vẫn nằm ngoài phạm vi hỗ trợ ngay cả khi đã cài trình điều khiển.
 - Chế độ quản trị mặc định nâng cả khối quy tắc và tập lệnh con để làm việc với ứng dụng đã nâng quyền.
 - Vẫn cần xem lại kết quả AI sau khi kiểm tra cục bộ, đặc biệt với tập lệnh thao tác tệp, mạng, tiến trình hoặc hệ thống.
 

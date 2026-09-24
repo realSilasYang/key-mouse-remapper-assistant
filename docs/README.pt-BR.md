@@ -13,7 +13,7 @@
 
 O Assistente de remapeamento de teclado e mouse é uma ferramenta AutoHotkey v2 para Windows 10 e 11 x64. Ele reúne captura de entrada, gerenciamento de regras, edição de código, geração e otimização por IA, validação local e estado de execução. Cada versão inclui as regras editáveis presentes em seu commit de lançamento; a quantidade de blocos e scripts gerenciados pode variar.
 
-As regras ficam na região comentada `@mapping`, que pode ser lida e copiada. Nenhum driver ou serviço do Windows é instalado; os mapeamentos só funcionam enquanto o assistente está em execução. Os pacotes oficiais nunca incluem endereço de IA, chave de API, modelo, prompts personalizados ou outras configurações pessoais da máquina de compilação.
+As regras ficam na região comentada `@mapping`, que pode ser lida e copiada. Regras de dispositivo do Interception podem usar um driver opcional instalado com aprovação do administrador e reinicialização do Windows; os mapeamentos só funcionam enquanto o assistente está em execução. Os pacotes oficiais nunca incluem endereço de IA, chave de API, modelo, prompts personalizados ou outras configurações pessoais da máquina de compilação.
 
 # Visão geral da interface
 
@@ -39,7 +39,7 @@ A barra superior adiciona, pausa／retoma em lote e exclui regras. A lista exibe
 ## Escopo
 
 - Somente Windows 10／11 x64.
-- Sem driver de kernel, a área de trabalho segura, `Ctrl+Alt+Delete` e programas que bloqueiam hooks em modo usuário ficam fora do alcance.
+- Regras comuns funcionam sem o driver opcional do Interception. A área de trabalho segura e `Ctrl+Alt+Delete` continuam fora do alcance mesmo com o driver.
 - O modo administrador padrão eleva os blocos e scripts filhos para atuar em aplicativos elevados.
 - Revise resultados de IA mesmo após a validação local, principalmente scripts com operações de arquivo, rede, processo ou sistema.
 

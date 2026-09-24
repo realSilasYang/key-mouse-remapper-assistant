@@ -7,6 +7,36 @@ categories based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## 🚧 [Unreleased]
 
+## 🎉 Version [1.1.0] - 2026-09-24
+
+### 📦 Release Assets
+
+- **`fonts.zip` (optional font package):** Provides Noto fallback UI fonts for installation into Windows; it is not required to run the application.
+- **`key-mouse-remapper-assistant-1.1.0-source.zip` (complete source package):** Includes runnable AHK source, application modules, assets other than fonts, all thirteen README languages, bilingual changelogs, tests, and build tools; requires AutoHotkey v2 x64.
+- **`key-mouse-remapper-assistant-1.1.0-windows-x64.zip` (complete portable package, recommended):** Includes the compiled EXE, editable mapping source, all thirteen README languages, bilingual changelogs, licenses, application modules, UI assets other than fonts, fixed AutoHotkey v2.0.26 x64 runtime, and matching source archive; requires no separate AutoHotkey installation after full extraction.
+
+---
+
+### ✨ Added
+
+- **Interception device rules:** Integrated the x64 DLL, driver status checks and installation, device-aware source capture, and a centralized device-rule runtime. Rules can match a physical keyboard or mouse when source-device distinction is enabled; unmatched input is passed through.
+- **Empty target blocking:** A simple rule can leave its target key empty and use `block=true` to suppress the source key.
+
+---
+
+### 🚀 Improvements
+
+- **Shortcut substitution:** A single target key is pressed and released with the source key so it can participate in subsequent Ctrl, Shift, Alt, and Win chords. When left/right modifier distinction is disabled, either source side matches and target modifiers consistently use the left side.
+- **Creation and settings layout:** Refined labels, alignment, and visual states for simple rules and device and modifier controls; improved scope-column sizing, control visibility after resizing, and tooltips near screen edges.
+- **AI device-rule guidance:** Generation, optimization, repair, and review now include Interception device numbering and driver prerequisites.
+
+---
+
+### 🐛 Fixed
+
+- **Input lifecycle:** Tightened capture stopping and input cleanup. A held source key stays bound to one rule, and a once-only action does not retrigger when modifier state changes.
+- **Device and list state:** Improved missing-driver feedback, batch pause and resume for device rules, and drawing after window size changes.
+
 ## 🎉 Version [1.0.2] - 2026-08-19
 
 ### 📦 Release Assets
@@ -163,7 +193,8 @@ categories based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Product and data location:** Standardized product identifiers and `%APPDATA%\KeyMouseRemapperAssistant`.
 - **Release compatibility:** Locked AutoHotkey and build tools and aligned UTF-8 behavior across Windows PowerShell 5.1 and PowerShell 7.
 
-[Unreleased]: https://github.com/realSilasYang/key-mouse-remapper-assistant/compare/v1.0.2...HEAD
+[Unreleased]: https://github.com/realSilasYang/key-mouse-remapper-assistant/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/realSilasYang/key-mouse-remapper-assistant/releases/tag/v1.1.0
 [1.0.2]: https://github.com/realSilasYang/key-mouse-remapper-assistant/releases/tag/v1.0.2
 [1.0.1]: https://github.com/realSilasYang/key-mouse-remapper-assistant/releases/tag/v1.0.1
 [1.0.0]: https://github.com/realSilasYang/key-mouse-remapper-assistant/releases/tag/v1.0.0

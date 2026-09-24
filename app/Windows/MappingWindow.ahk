@@ -25,8 +25,8 @@ class MappingWindow {
     static ListStatusIconSlotDip := 20
     static ListStatusIconGapDip := 4
     static SequenceDotDiameterDip := 8
-    ; Keep the scope column compact enough for the common four-character
-    ; values; the freed space is assigned to the mapping name column.
+    ; Keep the scope column compact at minimum width while allowing it to
+    ; grow with the list so longer application scopes remain readable.
     static ScopeColumnWidth := 72
     static MinNameColumnWidth := 210
     static StatusColumnWidth := 92
@@ -57,6 +57,9 @@ class MappingWindow {
     static CommandButtonGap := 8
     static CommandRightMargin := 14
     static DefaultDistinguishModifierSides := false
+    static DefaultDistinguishSourceDevice := false
+    static SimpleRuleTitleBackground := "3F6B5B"
+    static SimpleRuleTitleText := "FFFFFF"
     ; Keep the primary ListView item as the mapping name, matching the
     ; reference application's stable identity layout. Status is a subitem
     ; displayed on the right, with its icon-text group drawn independently.
@@ -329,13 +332,17 @@ class MappingWindow {
                 MappingWindow.DividerDashHeight)
             throw Error("Unable to register the mapping-section divider.")
         this.SectionTitle := this.Gui.Add("Text",
-            "x10 y400 w960 h24 Center 0x200 Background" colors.Window
-                " c" colors.Text,
-            Tr("新建映射"))
+            "x10 y400 w960 h24 0x200 Background" colors.Window
+                " c" MappingWindow.SimpleRuleTitleText,
+            Tr("新建简易规则"))
         this.SectionTitle.SetFont("s11 bold", this.SystemFontName)
+        if !this.Interactions.RegisterIconSurface(this.SectionTitle,
+                MappingWindow.SimpleRuleTitleBackground,
+                MappingWindow.SimpleRuleTitleText)
+            throw Error("Unable to register the simple-rule heading surface.")
         this.DistinguishModifierSidesCheck := this.Gui.Add("CheckBox",
             "x0 y400 h24 c" colors.Text,
-            Tr("区分左右修饰键"))
+            Tr("区分左/右侧修饰键"))
         this.DistinguishModifierSidesCheck.SetFont("s10", this.FontName)
         this.RefreshModifierSidesPreferredWidth()
         this.DistinguishModifierSidesCheck.Value :=
@@ -345,9 +352,21 @@ class MappingWindow {
         ApplyDarkControl(this.DistinguishModifierSidesCheck.Hwnd)
         this.Interactions.RegisterHandCursor(
             this.DistinguishModifierSidesCheck)
+        this.DistinguishSourceDeviceCheck := this.Gui.Add("CheckBox",
+            "x0 y400 h24 c" colors.Text,
+            Tr("区分来源设备"))
+        this.DistinguishSourceDeviceCheck.SetFont("s10", this.FontName)
+        this.RefreshSourceDevicePreferredWidth()
+        this.DistinguishSourceDeviceCheck.Value :=
+            MappingWindow.DefaultDistinguishSourceDevice ? 1 : 0
+        this.DistinguishSourceDeviceCheck.OnEvent("Click",
+            ObjBindMethod(this, "OnSourceDeviceChanged"))
+        ApplyDarkControl(this.DistinguishSourceDeviceCheck.Hwnd)
+        this.Interactions.RegisterHandCursor(
+            this.DistinguishSourceDeviceCheck)
 
-        this.SourceLabel := this.Gui.Add("Text", "x10 y434 w80 h20 Background" colors.Window " c" colors.Muted,
-            Tr("来源按键"))
+        this.SourceLabel := this.Gui.Add("Text", "x10 y434 w80 h20 0x200 Background" colors.Window " c" colors.Muted,
+            "将")
         this.TargetLabel := this.Gui.Add("Text", "x334 y434 w80 h20 Background" colors.Window " c" colors.Muted,
             Tr("映射为"))
         this.NameLabel := this.Gui.Add("Text", "x654 y434 w80 h20 Background" colors.Window " c" colors.Muted,
@@ -387,7 +406,7 @@ class MappingWindow {
                 ObjBindMethod(this, "OnCaptureButtonPointerDown"))
         this.CaptureButtonHwnds[this.TargetButton.Hwnd] := "target"
         this.Interactions.SetButtonTooltip(this.TargetButton,
-            Tr("演奏你的和弦！"))
+            this.GetTargetButtonTooltip())
         this.RefreshCaptureButtonIcons()
         this.NameInput := AddPaddedMultilineEdit(this.Gui,
             654, 458, 312, this.NameInputHeight,
@@ -412,7 +431,7 @@ class MappingWindow {
             this.GetCaptureDetail(""))
         this.TargetDetail := this.Gui.Add("Text",
             "x334 y514 w280 h72 +Wrap Background" colors.Window " c" colors.Hint,
-            this.GetCaptureDetail(""))
+            this.GetTargetCaptureDetail(""))
         this.SourceDetail.SetFont("s10", this.FontName)
         this.TargetDetail.SetFont("s10", this.FontName)
 
@@ -492,7 +511,7 @@ class MappingWindow {
             Tr("查看版本、运行环境和项目入口"))
     }
 
-    GetAddButtonText() => "➕ " Tr("新增")
+    GetAddButtonText() => "➕ " Tr("新建")
 
     GetPauseButtonText(mode := "pause") {
         if mode == true || mode == "resume"
@@ -1491,6 +1510,7 @@ class MappingWindow {
             ApplyDarkControl(this.NameEdit.Hwnd)
             this.ApplyNameInputViewport()
             ApplyDarkControl(this.DistinguishModifierSidesCheck.Hwnd)
+            ApplyDarkControl(this.DistinguishSourceDeviceCheck.Hwnd)
         } finally {
             if stabilize
                 this.RedrawStable()
@@ -1551,7 +1571,7 @@ class MappingWindow {
             this.Interactions.SetButtonTooltip(this.SourceButton,
                 Tr("演奏你的和弦！"))
             this.Interactions.SetButtonTooltip(this.TargetButton,
-                Tr("演奏你的和弦！"))
+                this.GetTargetButtonTooltip())
             this.RefreshCaptureButtonIcons()
             this.Interactions.SetIconSurfaceAppearance(this.ArrowText,
                 colors.Window, colors.Hint)
@@ -1567,20 +1587,29 @@ class MappingWindow {
             this.List.Opt("Background" colors.Surface " c" colors.Text)
             this.List.SetFont("s12 c" colors.Text, this.FontName)
 
-            this.SectionTitle.Text := Tr("新建映射")
+            this.SectionTitle.Text := Tr("新建简易规则")
             this.SectionTitle.Opt("Background" colors.Window)
-            this.SectionTitle.SetFont("s11 bold c" colors.Text,
+            this.SectionTitle.SetFont("s11 bold c"
+                MappingWindow.SimpleRuleTitleText,
                 this.SystemFontName)
+            this.Interactions.SetIconSurfaceAppearance(this.SectionTitle,
+                MappingWindow.SimpleRuleTitleBackground,
+                MappingWindow.SimpleRuleTitleText)
             this.DistinguishModifierSidesCheck.Text := Tr(
-                "区分左右修饰键")
+                "区分左/右侧修饰键")
             this.DistinguishModifierSidesCheck.Opt("c" colors.Text)
             this.DistinguishModifierSidesCheck.SetFont("s10 c" colors.Text,
                 this.FontName)
             this.RefreshModifierSidesPreferredWidth()
+            this.DistinguishSourceDeviceCheck.Text := Tr("区分来源设备")
+            this.DistinguishSourceDeviceCheck.Opt("c" colors.Text)
+            this.DistinguishSourceDeviceCheck.SetFont("s10 c" colors.Text,
+                this.FontName)
+            this.RefreshSourceDevicePreferredWidth()
             this.Interactions.SetDashedDividerAppearance(
                 this.SectionTopDivider, colors.Window,
                 colors.DividerAccent)
-            this.SourceLabel.Text := Tr("来源按键")
+            this.SourceLabel.Text := "将"
             this.TargetLabel.Text := Tr("映射为")
             this.NameLabel.Text := Tr("名称")
             for label in [this.SourceLabel, this.TargetLabel,
@@ -1774,7 +1803,14 @@ class MappingWindow {
             return
         }
         this.RefreshCaptureButtonIcons(role)
-        if !this.App.Capture.Start(role) {
+        distinguishSourceDevice := role == "source"
+            && !!this.DistinguishSourceDeviceCheck.Value
+        if distinguishSourceDevice
+                && !this.App.PrepareInterceptionDeviceCapture(this.Gui) {
+            this.RefreshCaptureButtonIcons()
+            return
+        }
+        if !this.App.Capture.Start(role, distinguishSourceDevice) {
             this.RefreshCaptureButtonIcons()
             startError := this.App.Capture.HasOwnProp("LastStartError")
                 ? Trim(String(this.App.Capture.LastStartError)) : ""
@@ -1797,7 +1833,9 @@ class MappingWindow {
         else
             idleButton.Text := this.GetCaptureButtonText(this.SourceCapture,
                 Tr("点击录制来源按键"))
-        idleDetail.Text := this.GetCaptureDetail(idleCapture)
+        idleDetail.Text := role == "source"
+            ? this.GetTargetCaptureDetail(idleCapture)
+            : this.GetCaptureDetail(idleCapture)
         this.UpdateStatus(role == "source" ? Tr("正在录制来源按键…")
             : Tr("正在录制目标按键…"))
         this.RefreshCaptureLayout()
@@ -1834,7 +1872,7 @@ class MappingWindow {
         } else {
             this.TargetCapture := capture
             this.TargetButton.Text := this.GetCaptureDisplay(capture)
-            this.TargetDetail.Text := this.GetCaptureDetail(capture)
+        this.TargetDetail.Text := this.GetTargetCaptureDetail(capture)
         }
         this.RefreshCaptureButtonIcons()
         this.UpdateStatus(Tr("已录制{1}按键：{2}",
@@ -1848,7 +1886,8 @@ class MappingWindow {
         this.TargetButton.Text := this.GetCaptureButtonText(this.TargetCapture,
             Tr("点击录制目标按键"))
         this.SourceDetail.Text := this.GetCaptureDetail(this.SourceCapture)
-        this.TargetDetail.Text := this.GetCaptureDetail(this.TargetCapture)
+        this.TargetDetail.Text := this.GetTargetCaptureDetail(
+            this.TargetCapture)
         this.RefreshCaptureButtonIcons()
         this.UpdateStatus(Tr("已取消按键录制。"))
         this.RefreshCaptureLayout()
@@ -1864,13 +1903,14 @@ class MappingWindow {
             this.SetStatus(Tr("请先完成或取消当前按键录制。"), true)
             return
         }
-        if !IsObject(this.SourceCapture) || !IsObject(this.TargetCapture) {
-            this.SetStatus(Tr("请先录制来源按键和目标按键。"), true)
+        if !IsObject(this.SourceCapture) {
+            this.SetStatus(Tr("请先录制来源按键。"), true)
             return
         }
         if this.App.AddMapping(this.SourceCapture, this.TargetCapture,
             this.NameEdit.Value,
-            !!this.DistinguishModifierSidesCheck.Value) {
+            !!this.DistinguishModifierSidesCheck.Value,
+            !!this.DistinguishSourceDeviceCheck.Value) {
             this.ClearEditor(false)
         }
     }
@@ -1912,10 +1952,12 @@ class MappingWindow {
         this.NameEdit.Value := ""
         this.DistinguishModifierSidesCheck.Value :=
             MappingWindow.DefaultDistinguishModifierSides ? 1 : 0
+        this.DistinguishSourceDeviceCheck.Value :=
+            MappingWindow.DefaultDistinguishSourceDevice ? 1 : 0
         this.SourceButton.Text := Tr("点击录制来源按键")
         this.TargetButton.Text := Tr("点击录制目标按键")
         this.SourceDetail.Text := this.GetCaptureDetail("")
-        this.TargetDetail.Text := this.GetCaptureDetail("")
+        this.TargetDetail.Text := this.GetTargetCaptureDetail("")
         this.RefreshCaptureButtonIcons()
         if showStatus
             this.UpdateStatus(Tr("已清空新建区域。"))
@@ -2388,15 +2430,34 @@ class MappingWindow {
         if !IsObject(capture) || !capture.HasOwnProp("DetailLines")
             return ""
         detail := capture.DetailLines
-        if this.DistinguishModifierSidesCheck.Value
-            return detail
         exactDisplay := capture.HasOwnProp("Display")
             ? capture.Display : (capture.HasOwnProp("RawDisplay")
                 ? capture.RawDisplay : "")
         genericDisplay := this.GetCaptureDisplay(capture)
-        return exactDisplay != "" && exactDisplay != genericDisplay
-            ? StrReplace(detail, exactDisplay, genericDisplay, , , 1)
-            : detail
+        if !this.DistinguishModifierSidesCheck.Value
+                && exactDisplay != "" && exactDisplay != genericDisplay
+            detail := StrReplace(detail, exactDisplay, genericDisplay, , , 1)
+        if capture.HasOwnProp("InterceptionDeviceNumber") {
+            hardwareId := capture.HasOwnProp("InterceptionHardwareId")
+                ? capture.InterceptionHardwareId : ""
+            detail .= "`n" Tr("来源设备：Interception {1} {2}{3}",
+                capture.InterceptionDeviceType == "keyboard"
+                    ? Tr("键盘") : Tr("鼠标"),
+                capture.InterceptionDeviceNumber,
+                hardwareId == "" ? "" : " · " hardwareId)
+        }
+        return detail
+    }
+
+    GetTargetCaptureDetail(capture) {
+        if IsObject(capture)
+            return this.GetCaptureDetail(capture)
+        return ""
+    }
+
+    GetTargetButtonTooltip() {
+        return Tr("演奏你的和弦！") "`n"
+            . Tr("目标按键可留空，表示屏蔽来源按键。")
     }
 
     GetCaptureDisplay(capture) {
@@ -2442,13 +2503,29 @@ class MappingWindow {
                     this.TargetCapture, Tr("点击录制目标按键")))
                 || displayChanged
             displayChanged := this.Interactions.SetTextNoErase(
-                this.TargetDetail, this.GetCaptureDetail(this.TargetCapture))
+                this.TargetDetail, this.GetTargetCaptureDetail(
+                    this.TargetCapture))
                 || displayChanged
         }
         if activeRole != ""
             this.App.Capture.PreviewHeldModifiers()
         else if displayChanged
             this.RefreshCaptureLayout()
+        return true
+    }
+
+    OnSourceDeviceChanged(*) {
+        try DllCall("user32\SetFocus", "Ptr", this.SectionTitle.Hwnd, "Ptr")
+        if this.DistinguishSourceDeviceCheck.Value
+                && IsObject(this.SourceCapture)
+                && !this.SourceCapture.HasOwnProp(
+                    "InterceptionDeviceNumber") {
+            this.SourceCapture := ""
+            this.SourceButton.Text := Tr("点击录制来源按键")
+            this.SourceDetail.Text := ""
+            this.SetStatus(Tr("已启用来源设备区分，请重新录制来源按键。"))
+        }
+        this.RefreshCaptureLayout()
         return true
     }
 
@@ -3639,7 +3716,18 @@ class MappingWindow {
         headingY := sectionY + MappingWindow.EditorHeadingTopPadding
         modifierSidesWidth := Min(Max(1,
             this.ModifierSidesPreferredWidth),
-            Floor(contentWidth * 0.46))
+            Floor(contentWidth * 0.30))
+        sourceDeviceWidth := Min(Max(1,
+            this.SourceDevicePreferredWidth), Floor(contentWidth * 0.30))
+        sourceLabelTextWidth := this.MeasureControlTextWidth(
+            this.SourceLabel, this.SourceLabel.Text)
+        sourceLabelWidth := Max(1, sourceLabelTextWidth + 2)
+        sourceDeviceX := 10 + editor.SourceWidth - sourceDeviceWidth
+        modifierSidesX := width - 10 - modifierSidesWidth
+        sectionTitleWidth := Min(
+            this.MeasureControlTextWidth(this.SectionTitle,
+                this.SectionTitle.Text) + 24,
+            Max(1, modifierSidesX - 10 - 12))
         labelY := headingY + 32
         controlY := sectionY + MappingWindow.EditorHeadingBandMinHeight
         detailY := controlY + captureHeights.Button
@@ -3678,12 +3766,15 @@ class MappingWindow {
             {Control: this.List, X: 10, Y: MappingWindow.ListTop,
                 Width: contentWidth, Height: listHeight},
             {Control: this.SectionTitle, X: 10, Y: headingY,
-                Width: contentWidth, Height: 24},
+                Width: sectionTitleWidth, Height: 24},
             {Control: this.DistinguishModifierSidesCheck,
-                X: width - 10 - modifierSidesWidth, Y: headingY,
+                X: modifierSidesX, Y: headingY,
                 Width: modifierSidesWidth, Height: 24},
+            {Control: this.DistinguishSourceDeviceCheck,
+                X: sourceDeviceX, Y: labelY,
+                Width: sourceDeviceWidth, Height: 24},
             {Control: this.SourceLabel, X: 10, Y: labelY,
-                Width: editor.SourceWidth, Height: 24},
+                Width: sourceLabelWidth, Height: 24},
             {Control: this.SourceButton, X: 10, Y: controlY,
                 Width: editor.SourceWidth, Height: captureHeights.Button},
             {Control: this.ArrowText, X: 10 + editor.SourceWidth + 6,
@@ -3835,6 +3926,13 @@ class MappingWindow {
         return this.ModifierSidesPreferredWidth
     }
 
+    RefreshSourceDevicePreferredWidth() {
+        this.SourceDevicePreferredWidth :=
+            this.MeasureControlTextWidth(this.DistinguishSourceDeviceCheck,
+                this.DistinguishSourceDeviceCheck.Text) + 22
+        return this.SourceDevicePreferredWidth
+    }
+
     ApplyListColumnOrder() {
         if !IsObject(this.List) || !this.List.Hwnd
             return false
@@ -3923,10 +4021,8 @@ class MappingWindow {
         extra := Max(0, Floor(availableWidth) - minimumTotal)
         sourceExtra := Floor(extra * 25 / 100)
         targetExtra := sourceExtra
-        ; Scope stays at the compact four-character width. Allocate the
-        ; released responsive space to the name column.
-        scopeExtra := 0
-        nameExtra := extra - sourceExtra - targetExtra
+        scopeExtra := Floor(extra * 8 / 100)
+        nameExtra := extra - sourceExtra - targetExtra - scopeExtra
         return {
             Name: nameMinimum + nameExtra,
             Sequence: sequenceWidth,

@@ -254,6 +254,9 @@ RunMappingHistoryIntegrationTests() {
         updateCountBeforeRename := app.Window.UpdateCount
         renameResult := app.UpdateMappingEditorText(editableMapping.Id,
             renamedEditorText, editableMapping.Mode)
+        MappingHistoryIntegrationAssert(renameResult.Ok,
+            "Renaming an edited rule failed: "
+                . (renameResult.HasOwnProp("Message") ? renameResult.Message : "unknown error"))
         reopenedMapping := app.Repository.GetById(renamedMappingId)
         MappingHistoryIntegrationAssert(renameResult.Ok
                 && renameResult.Mapping.Id == renamedMappingId
@@ -349,6 +352,25 @@ RunMappingHistoryIntegrationTests() {
         MappingHistoryIntegrationAssert(
             trackingRepository.SyntaxValidationCalls == 0,
             "Comment-only mapping edits launched redundant syntax checks.")
+        enabledIds := []
+        for candidateMapping in trackingRepository.Load() {
+            if candidateMapping.Enabled
+                enabledIds.Push(candidateMapping.Id)
+            if enabledIds.Length == 2
+                break
+        }
+        pausedMappings := trackingRepository.SetEnabledMany(enabledIds, false)
+        pausedState := trackingRepository.Load()
+        pausedIds := Map()
+        for candidateMapping in pausedState
+            pausedIds[candidateMapping.Id] := candidateMapping.Enabled
+        MappingHistoryIntegrationAssert(enabledIds.Length == 2
+                && pausedMappings.Length == 2
+                && !pausedIds[enabledIds[1]] && !pausedIds[enabledIds[2]],
+            "Setting multiple driver-dependent rules to paused did not persist deterministically.")
+        resumedMappings := trackingRepository.SetEnabledMany(enabledIds, true)
+        MappingHistoryIntegrationAssert(resumedMappings.Length == 2,
+            "Setting multiple rules to enabled did not restore their state.")
 
         settingsApp := SettingsTransactionApp()
         MappingHistoryIntegrationAssert(!settingsApp.SaveSettings(
@@ -508,7 +530,8 @@ class MappingHistoryRuntimeStub {
             this.FailNextApply := false
             throw Error("planned empty-body apply failure")
         }
-        return {Applied: mappings.Length, Registrations: mappings.Length}
+        return {Applied: mappings.Length, Registrations: mappings.Length,
+            Issues: []}
     }
 }
 

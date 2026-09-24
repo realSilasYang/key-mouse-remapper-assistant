@@ -44,11 +44,13 @@
 #Include src\Core\RuleSpec.ahk
 #Include src\Core\ScriptRuleSpec.ahk
 #Include src\Core\DeviceIdentityService.ahk
+#Include src\Core\InterceptionService.ahk
 #Include src\Core\InputEvent.ahk
 #Include src\Core\RuleCompiler.ahk
 #Include src\Core\ScriptRuleCompiler.ahk
 #Include src\Core\DirectRuntimeSupport.ahk
 #Include src\Core\DirectHotkeyRuntime.ahk
+#Include src\Core\InterceptionMappingRuntime.ahk
 #Include src\Core\ScriptRuleRuntime.ahk
 #Include src\Core\CompositeRemappingRuntime.ahk
 #Include src\Core\EventTraceService.ahk
@@ -1190,29 +1192,101 @@ ReleaseApplicationMutexOnExit(*) {
 ; @mapping-end
 
 ; @mapping-begin
-; @名称=NumLock 映射为 Delete
+; 给这条规则起一个容易辨认的名称；它会显示在主界面中。
+; @名称=上下文键 映射为 Windows
+; 选择规则的写法；请保留下方已有的类型名称。
 ; @类型=规则块
-; @来源按键=NumLock
-; @映射结果=Delete
+; 写清楚按下什么键或鼠标按键会触发这条规则。
+; @来源按键=AppsKey
+; 写清楚触发后会执行什么按键、鼠标操作或命令。
+; @映射结果=Win
+; 写清楚规则在哪里有效，例如“全局”或某个程序。
 ; @生效范围=全局
+; 下面是规则的详细设置，包括触发方式、生效条件、时间判定和执行动作。
 ; @spec-begin
 ; {
+;   // 说明什么键盘或鼠标输入会触发这条规则。
 ;   "from": {
+;     // 指定作为主要触发来源的单个按键。
 ;     "key": {
-;       "name": "NumLock"
+;       // 填写 AHK 能识别的按键名称。
+;       "name": "AppsKey",
+;       // 填写键盘扫描码，用于区分物理位置不同的按键。
+;       "sc": "15D",
+;       // 填写 Windows 虚拟键码，用于精确识别按键。
+;       "vk": "5D"
 ;     },
+;     // 列出允许同时按住、但不作为触发条件的修饰键。
+;     "optional_modifiers": [
+;       "any"
+;     ],
+;     // 决定长按产生自动重复时，是允许、忽略还是只响应重复。
 ;     "repeat": "ignore"
 ;   },
+;   // 来源按键触发时，立即执行这些动作。
 ;   "to": [
 ;     {
+;       // 选择这一项属于哪一种条件或执行动作。
+;       "type": "key_down",
+;       // 填写要比较的内容，或动作实际使用的参数。
+;       "value": "LWin"
+;     }
+;   ],
+;   // 来源按键松开后，执行这些动作。
+;   "to_after_key_up": [
+;     {
+;       // 选择这一项属于哪一种条件或执行动作。
+;       "type": "key_up",
+;       // 填写要比较的内容，或动作实际使用的参数。
+;       "value": "LWin"
+;     }
+;   ]
+; }
+; @spec-end
+; @generated-begin
+; 请让开头的内容摘要与上面的详细设置保持一致。
+; 小助手会直接读取并运行这些设置，不需要另写 AHK 脚本。
+; @generated-end
+; @mapping-end
+
+; @mapping-begin
+; 给这条规则起一个容易辨认的名称；它会显示在主界面中。
+; @名称=NumLock 映射为 Delete
+; 选择规则的写法；请保留下方已有的类型名称。
+; @类型=规则块
+; 写清楚按下什么键或鼠标按键会触发这条规则。
+; @来源按键=NumLock
+; 写清楚触发后会执行什么按键、鼠标操作或命令。
+; @映射结果=Delete
+; 写清楚规则在哪里有效，例如“全局”或某个程序。
+; @生效范围=全局
+; 下面是规则的详细设置，包括触发方式、生效条件、时间判定和执行动作。
+; @spec-begin
+; {
+;   // 说明什么键盘或鼠标输入会触发这条规则。
+;   "from": {
+;     // 指定作为主要触发来源的单个按键。
+;     "key": {
+;       // 填写 AHK 能识别的按键名称。
+;       "name": "NumLock"
+;     },
+;     // 决定长按产生自动重复时，是允许、忽略还是只响应重复。
+;     "repeat": "ignore"
+;   },
+;   // 来源按键触发时，立即执行这些动作。
+;   "to": [
+;     {
+;       // 选择这一项属于哪一种条件或执行动作。
 ;       "type": "send",
+;       // 填写要比较的内容，或动作实际使用的参数。
 ;       "value": "{Delete}"
 ;     }
 ;   ]
 ; }
 ; @spec-end
 ; @generated-begin
-; 此规则由托管运行时注册；此区域不包含可手工编辑的 AHK 代码。
+; 请让开头的内容摘要与上面的详细设置保持一致。
+; 小助手会直接读取并运行这些设置，不需要另写 AHK 脚本。
 ; @generated-end
 ; @mapping-end
 
@@ -1757,6 +1831,49 @@ ReleaseApplicationMutexOnExit(*) {
 ;       "value": "{Esc}"
 ;     }
 ;   ]
+; }
+; @spec-end
+; @generated-begin
+; 请让开头的内容摘要与上面的详细设置保持一致。
+; 小助手会直接读取并运行这些设置，不需要另写 AHK 脚本。
+; @generated-end
+; @mapping-end
+
+; @mapping-begin
+; 给这条规则起一个容易辨认的名称；它会显示在主界面中。
+; @名称=屏蔽外接键盘 Win 键
+; 选择规则的写法；请保留下方已有的类型名称。
+; @类型=规则块
+; 写清楚按下什么键或鼠标按键会触发这条规则。
+; @来源按键=Win（Interception 键盘 3）
+; 写清楚触发后会执行什么按键、鼠标操作或命令。
+; @映射结果=屏蔽
+; 写清楚规则在哪里有效，例如“全局”或某个程序。
+; @生效范围=全局
+; 下面是规则的详细设置，包括触发方式、生效条件、时间判定和执行动作。
+; @spec-begin
+; {
+;   // 设为 true 后，匹配的来源按键会被屏蔽且不产生输出动作。
+;   "block": true,
+;   // 说明什么键盘或鼠标输入会触发这条规则。
+;   "from": {
+;     // 限定触发输入必须来自指定的 Interception 物理设备。
+;     "device": {
+;       // 填写设备过滤后端，当前为 interception。
+;       "backend": "interception",
+;       // 记录设备硬件 ID，便于诊断和重新识别。
+;       "hardware_id": "HID\\VID_25A7&PID_FA10&REV_0200&MI_00",
+;       // 填写项目使用的 Interception 设备编号。
+;       "number": 3,
+;       // 选择这一项属于哪一种条件或执行动作。
+;       "type": "keyboard"
+;     },
+;     // 指定作为主要触发来源的单个按键。
+;     "key": {
+;       // 填写 AHK 能识别的按键名称。
+;       "name": "Win"
+;     }
+;   }
 ; }
 ; @spec-end
 ; @generated-begin

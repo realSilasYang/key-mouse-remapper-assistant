@@ -52,9 +52,13 @@ class KeyCaptureSession {
         this.PendingAppCommand := ""
         this.AppCommandTimer := ObjBindMethod(this,
             "FinalizePendingAppCommand")
+        this.InterceptionPollTimer := ObjBindMethod(this,
+            "PollInterceptionCapture")
+        this.DistinguishSourceDevice := false
+        this.InterceptionCaptureOwned := false
     }
 
-    Start(role) {
+    Start(role, distinguishSourceDevice := false) {
         this.Stop(false)
         this.LastStartError := ""
         if this.SuspensionOwned || this.InputGuardOwned {
@@ -66,6 +70,8 @@ class KeyCaptureSession {
             return false
         }
         this.Role := role
+        this.DistinguishSourceDevice := role == "source"
+            && !!distinguishSourceDevice
         this.HeldKeys.Clear()
         this.RecordedKeys.Clear()
         this.RecordedOrder := []
@@ -83,17 +89,28 @@ class KeyCaptureSession {
         SetTimer(this.InputDrainTimer, 0)
         this.PendingAppCommand := ""
         try {
-            this.InputGuardOwned := true
-            if !this.InputGuard.Start()
-                throw Error("无法取得录制期间的独占输入状态。")
-            ; The helper can already consume and forward input while script
-            ; workers acknowledge suspension, so recording must be live before
-            ; that wait begins.
-            this.Active := true
-            this.SuspensionOwned := this.App.SuspendRemappingForCapture()
-            if !this.SuspensionOwned
-                throw Error("无法取得录制期间的重映射暂停状态。")
-            this.SeedObservedModifiers()
+            if this.DistinguishSourceDevice {
+                this.Active := true
+                this.SuspensionOwned := this.App.SuspendRemappingForCapture()
+                if !this.SuspensionOwned
+                    throw Error("无法取得录制期间的重映射暂停状态。")
+                if !this.App.Interception.StartCapture()
+                    throw Error("无法启动 Interception 来源设备录制。")
+                this.InterceptionCaptureOwned := true
+                SetTimer(this.InterceptionPollTimer, 5)
+            } else {
+                this.InputGuardOwned := true
+                if !this.InputGuard.Start()
+                    throw Error("无法取得录制期间的独占输入状态。")
+                ; The helper can already consume and forward input while script
+                ; workers acknowledge suspension, so recording must be live before
+                ; that wait begins.
+                this.Active := true
+                this.SuspensionOwned := this.App.SuspendRemappingForCapture()
+                if !this.SuspensionOwned
+                    throw Error("无法取得录制期间的重映射暂停状态。")
+                this.SeedObservedModifiers()
+            }
             SetTimer(this.CaptureTimeoutTimer,
                 -KeyCaptureSession.CaptureTimeoutMs)
             this.Trace("capture_started", {Outcome: role})
@@ -113,6 +130,7 @@ class KeyCaptureSession {
             || this.InputGuardOwned
         pointerCancellationPending := this.PointerButtonCancelPending
         inputGuardError := ""
+        interceptionError := ""
         resumeError := ""
         this.Active := false
         this.PendingCapture := ""
@@ -128,10 +146,17 @@ class KeyCaptureSession {
         SetTimer(this.AppCommandTimer, 0)
         SetTimer(this.InputDrainTimer, 0)
         SetTimer(this.CaptureTimeoutTimer, 0)
+        SetTimer(this.InterceptionPollTimer, 0)
         this.PendingAppCommand := ""
         this.HeldKeys.Clear()
         this.RecordedKeys.Clear()
         this.RecordedOrder := []
+        if this.InterceptionCaptureOwned {
+            try this.App.Interception.StopCapture()
+            catch as caughtInterceptionError
+                interceptionError := caughtInterceptionError
+            this.InterceptionCaptureOwned := false
+        }
         if this.SuspensionOwned {
             this.SuspensionOwned := false
             if resumeRemapping {
@@ -160,21 +185,151 @@ class KeyCaptureSession {
         if IsObject(inputGuardError)
             this.Trace("capture_input_guard_failed", {Outcome: "error",
                 Detail: inputGuardError.Message})
+        if IsObject(interceptionError)
+            this.Trace("capture_interception_failed", {Outcome: "error",
+                Detail: interceptionError.Message})
         if IsObject(resumeError)
             this.Trace("capture_resume_failed", {Outcome: "error",
                 Detail: resumeError.Message})
         cleanupSucceeded := wasActive && !IsObject(inputGuardError)
+            && !IsObject(interceptionError)
             && !IsObject(resumeError)
         if wasActive && !cleanupSucceeded && restartOnFailure {
             detail := ""
             if IsObject(inputGuardError)
                 detail := inputGuardError.Message
+            if IsObject(interceptionError)
+                detail .= (detail == "" ? "" : "；")
+                    . interceptionError.Message
             if IsObject(resumeError)
                 detail .= (detail == "" ? "" : "；") resumeError.Message
             this.PendingCaptureStopFailure := detail
             SetTimer(this.CaptureStopFailureTimer, -1)
         }
         return cleanupSucceeded
+    }
+
+    PollInterceptionCapture(*) {
+        if !this.Active || !this.InterceptionCaptureOwned
+            return false
+        Loop 32 {
+            try stroke := this.App.Interception.PollCapture(0)
+            catch as captureError {
+                this.RejectInterceptionCapture(captureError.Message)
+                return false
+            }
+            if !IsObject(stroke)
+                break
+            try this.HandleInterceptionStroke(stroke)
+            catch as strokeError {
+                this.RejectInterceptionCapture(strokeError.Message)
+                return false
+            }
+            if !this.Active
+                break
+        }
+        return true
+    }
+
+    HandleInterceptionStroke(stroke) {
+        deviceNumber := Integer(stroke["device"])
+        typeName := stroke["type"]
+        hardwareId := stroke.Get("hardware_id", "")
+        device := Map("id", "interception:" deviceNumber,
+            "handle", "interception:" deviceNumber,
+            "usage_page", 1, "usage", typeName == "keyboard" ? 6 : 2)
+        events := []
+        if typeName == "keyboard" {
+            state := stroke["state"]
+            code := stroke["code"]
+            mapCode := code | ((state & 0x02) ? 0xE000
+                : ((state & 0x04) ? 0xE100 : 0))
+            vk := DllCall("user32\MapVirtualKeyW", "UInt", mapCode,
+                "UInt", 3, "UInt")
+            identity := KeyIdentity.FromRawKeyboard(vk, code,
+                state & 0x06, device)
+            events.Push(InputEvent.Create(identity,
+                (state & 0x01) ? "up" : "down", false, false,
+                "interception", "", Map("interception_device",
+                    deviceNumber, "hardware_id", hardwareId,
+                    "state", state)))
+        } else {
+            events := this.BuildInterceptionMouseEvents(stroke, device,
+                hardwareId)
+        }
+        for event in events {
+            capturedKey := this.CreateRawKeyInfo(event["identity"])
+            capturedKey.InterceptionDeviceNumber := deviceNumber
+            capturedKey.InterceptionDeviceType := typeName
+            capturedKey.InterceptionHardwareId := hardwareId
+            if !this.ValidateInterceptionCaptureDevice(capturedKey)
+                return false
+            switch event["phase"] {
+                case "down": this.HandleRawDown(capturedKey, event)
+                case "up": this.HandleRawUp(capturedKey, event)
+                case "wheel": this.HandleRawWheel(capturedKey, event)
+            }
+        }
+        return true
+    }
+
+    BuildInterceptionMouseEvents(stroke, device, hardwareId) {
+        definitions := [
+            [0x001, "LButton", "down"], [0x002, "LButton", "up"],
+            [0x004, "RButton", "down"], [0x008, "RButton", "up"],
+            [0x010, "MButton", "down"], [0x020, "MButton", "up"],
+            [0x040, "XButton1", "down"], [0x080, "XButton1", "up"],
+            [0x100, "XButton2", "down"], [0x200, "XButton2", "up"]]
+        result := []
+        state := stroke["state"]
+        for definition in definitions {
+            if !(state & definition[1])
+                continue
+            identity := KeyIdentity.FromRawPointer(definition[2], device)
+            result.Push(InputEvent.Create(identity, definition[3], false,
+                false, "interception", "", Map("interception_device",
+                    stroke["device"], "hardware_id", hardwareId,
+                    "state", state)))
+        }
+        if state & 0x400 {
+            name := stroke["rolling"] > 0 ? "WheelUp" : "WheelDown"
+            result.Push(InputEvent.Create(KeyIdentity.FromRawPointer(name,
+                device), "wheel", false, false, "interception", "",
+                Map("interception_device", stroke["device"],
+                    "hardware_id", hardwareId, "state", state)))
+        }
+        if state & 0x800 {
+            name := stroke["rolling"] > 0 ? "WheelRight" : "WheelLeft"
+            result.Push(InputEvent.Create(KeyIdentity.FromRawPointer(name,
+                device), "wheel", false, false, "interception", "",
+                Map("interception_device", stroke["device"],
+                    "hardware_id", hardwareId, "state", state)))
+        }
+        return result
+    }
+
+    ValidateInterceptionCaptureDevice(capturedKey) {
+        for identityKey in this.RecordedOrder {
+            if !this.RecordedKeys.Has(identityKey)
+                continue
+            existing := this.RecordedKeys[identityKey]
+            if existing.HasOwnProp("InterceptionDeviceNumber")
+                    && existing.InterceptionDeviceNumber
+                        != capturedKey.InterceptionDeviceNumber {
+                this.RejectInterceptionCapture(
+                    "组合来源按键必须来自同一个 Interception 设备，请重新录制。")
+                return false
+            }
+        }
+        return true
+    }
+
+    RejectInterceptionCapture(message) {
+        if !this.Active
+            return false
+        this.Stop(false)
+        try this.App.OnCaptureRejected(message)
+        return false
     }
 
     ForceStopAfterTimeout(*) {
@@ -813,7 +968,7 @@ class KeyCaptureSession {
                 this.Join(scParts, " + ")),
             KeyInfo: this.Join(keyInfoTextParts, " + ")
         }
-        return capture
+        return this.ApplyInterceptionDeviceToCapture(capture, keyInfos)
     }
 
     BuildCaptureFromInfo(capturedKey, heldModifiers) {
@@ -862,7 +1017,8 @@ class KeyCaptureSession {
         }
         if capturedKey.HasOwnProp("AppCommand")
             capture.AppCommand := capturedKey.AppCommand
-        return capture
+        return this.ApplyInterceptionDeviceToCapture(capture,
+            this.CombineKeyInfos(modifiers, capturedKey))
     }
 
     CreatePublicKeyInfos(keyInfos) {
@@ -877,7 +1033,25 @@ class KeyCaptureSession {
             keyInfo.VK, keyInfo.SC, keyInfo.KeySpec)
         if keyInfo.HasOwnProp("AppCommand")
             publicInfo.AppCommand := keyInfo.AppCommand
+        for propertyName in ["InterceptionDeviceNumber",
+                "InterceptionDeviceType", "InterceptionHardwareId"]
+            if keyInfo.HasOwnProp(propertyName)
+                publicInfo.%propertyName% := keyInfo.%propertyName%
         return publicInfo
+    }
+
+    ApplyInterceptionDeviceToCapture(capture, keyInfos) {
+        for keyInfo in keyInfos {
+            if !keyInfo.HasOwnProp("InterceptionDeviceNumber")
+                continue
+            capture.InterceptionDeviceNumber :=
+                keyInfo.InterceptionDeviceNumber
+            capture.InterceptionDeviceType := keyInfo.InterceptionDeviceType
+            capture.InterceptionHardwareId :=
+                keyInfo.InterceptionHardwareId
+            break
+        }
+        return capture
     }
 
     NotifyPreview(capture) {

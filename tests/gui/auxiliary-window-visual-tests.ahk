@@ -78,6 +78,11 @@ RunAuxiliaryWindowVisualTests() {
         UiThemeService.Configure("dark")
         MappingWindow.Colors := UiThemeService.GetPalette()
         ownerWindow := AuxiliaryVisualOwner()
+        if EnvGet("SETTINGS_TAB_LAYOUT_ONLY") == "1" {
+            VerifySettingsTabLanguagesAndScales(ownerWindow)
+            ReportAuxiliaryVisualResult("PASS settings tab layout`n")
+            return 0
+        }
 
         confirmVisualDialog := DarkConfirmDialog("test", "test", Tr("保存"),
             Tr("取消"), ownerWindow.Gui)
@@ -257,14 +262,26 @@ RunAuxiliaryWindowVisualTests() {
                 && !settingsVisualDialog.TabBuilt[2]
                 && !settingsVisualDialog.HasOwnProp("StartupTaskButton"),
             "Direct AI-settings navigation built another settings tab.")
+        AuxiliaryVisualAssert(NumGet(settingsVisualDialog.TabMeasureFontSpec,
+            0, "Int") < 0,
+            "Settings tab label measurement did not create a usable font.")
         appearanceTabState := settingsVisualDialog.Interactions.Controls[
             settingsVisualDialog.TabButtons[1].Hwnd]
         startupTabState := settingsVisualDialog.Interactions.Controls[
             settingsVisualDialog.TabButtons[2].Hwnd]
         aiTabState := settingsVisualDialog.Interactions.Controls[
             settingsVisualDialog.TabButtons[3].Hwnd]
-        rulesEventTabState := settingsVisualDialog.Interactions.Controls[
+        interceptionTabState := settingsVisualDialog.Interactions.Controls[
             settingsVisualDialog.TabButtons[4].Hwnd]
+        rulesEventTabState := settingsVisualDialog.Interactions.Controls[
+            settingsVisualDialog.TabButtons[5].Hwnd]
+        AuxiliaryVisualAssert(appearanceTabState.TextInsetDip
+                == SettingsWindow.TabHorizontalPadding
+                && appearanceTabState.ButtonImage.SizeDip
+                    == SettingsWindow.TabIconSize
+                && appearanceTabState.ButtonImage.GapDip
+                    == SettingsWindow.TabIconGap,
+            "Settings tabs do not reserve the same horizontal inset used by the painter.")
         AuxiliaryVisualAssert(appearanceTabState.HasOwnProp("ButtonImage")
                 && InStr(appearanceTabState.ButtonImage.SourcePath,
                     "monitor.svg")
@@ -278,16 +295,50 @@ RunAuxiliaryWindowVisualTests() {
                 && aiTabState.HasOwnProp("ButtonImage")
                 && aiTabState.ButtonImage.TintColor
                     == settingsVisualDialog.GetTabIconColor(3, true)
+                && interceptionTabState.HasOwnProp("ButtonImage")
+                && InStr(interceptionTabState.ButtonImage.SourcePath,
+                    "keyboard.svg")
+                && interceptionTabState.ButtonImage.TintColor
+                    == settingsVisualDialog.GetTabIconColor(4)
                 && rulesEventTabState.HasOwnProp("ButtonImage")
                 && InStr(rulesEventTabState.ButtonImage.SourcePath,
                     "file-output.svg")
                 && rulesEventTabState.ButtonImage.TintColor
+                    == settingsVisualDialog.GetTabIconColor(5)
+                && settingsVisualDialog.Interactions.Controls[
+                    settingsVisualDialog.TabButtons[4].Hwnd]
+                    .ButtonImage.TintColor
                     == settingsVisualDialog.GetTabIconColor(4),
             "The Appearance or AI tab icon lacks its semantic color.")
         AuxiliaryVisualAssert(settingsVisualDialog.TabButtons[1].Text
                 == Tr("显示")
-                && settingsVisualDialog.TabButtons[2].Text == Tr("启动"),
+            && settingsVisualDialog.TabButtons[2].Text == Tr("启动"),
             "Appearance and Startup tabs are not in the requested order.")
+        tabLabels := [Tr("显示"), Tr("启动"), Tr("AI 设置"),
+            Tr("设备过滤驱动"), Tr("规则与事件")]
+        AssertSettingsTabTextFits(settingsVisualDialog, tabLabels)
+        AuxiliaryVisualAssert(settingsVisualDialog.TabButtons[4].Text
+                == Tr("设备过滤驱动")
+                && settingsVisualDialog.TabButtons[5].Text
+                    == Tr("规则与事件"),
+            "The Interception tab is not in the requested penultimate position.")
+        tabGroupLeft := 0
+        tabGroupRight := 0
+        Loop tabLabels.Length {
+            settingsVisualDialog.TabButtons[A_Index].GetPos(&currentTabX,
+                , &currentTabWidth)
+            if A_Index == 1
+                tabGroupLeft := currentTabX
+            tabGroupRight := currentTabX + currentTabWidth
+        }
+        AuxiliaryVisualAssert(tabGroupLeft >= 0
+                && tabGroupRight <= settingsVisualDialog.WindowWidth
+                && Abs(tabGroupLeft - (settingsVisualDialog.WindowWidth
+                    - tabGroupRight)) <= 1,
+            "Settings tab group is not centered within the window.")
+        AuxiliaryVisualAssert(settingsVisualDialog.TabButtonPages[4] == 4
+                && settingsVisualDialog.TabButtonPages[5] == 5,
+            "The Interception tab is not in the requested position.")
         AuxiliaryVisualAssert(settingsVisualDialog.AIPromptsButton.Text
                 == Tr("编辑")
                 && !settingsVisualDialog.HasOwnProp("AISystemPromptButton")
@@ -670,12 +721,56 @@ RunAuxiliaryWindowVisualTests() {
         AuxiliaryVisualAssert(shortcutLabelY
                 == 62 + SettingsWindow.SparseMenuTopOffset,
             "The sparse Startup menu lacks the shared top spacing.")
-        Loop 4 {
+        Loop 5 {
             AuxiliaryVisualAssert(settingsVisualDialog.SwitchTab(A_Index),
                 "Could not switch to settings tab " A_Index ".")
             ValidateAuxiliaryWindow(settingsVisualDialog.Gui,
                 "settings tab " A_Index)
         }
+        AuxiliaryVisualAssert(settingsVisualDialog.InterceptionStatus.Value
+                == Tr("不可用")
+                && !settingsVisualDialog.InterceptionInstallButton.Enabled
+                && settingsVisualDialog.InterceptionReminderCheck.Value == 1,
+            "The Interception settings tab did not expose status, install availability, and reminder controls.")
+        settingsVisualDialog.InterceptionStatus.GetPos(&interceptionStatusX,
+            &interceptionStatusY, &interceptionStatusWidth)
+        settingsVisualDialog.InterceptionDetectButton.GetPos(
+            &interceptionDetectX, &interceptionDetectY,
+            &interceptionDetectWidth)
+        settingsVisualDialog.InterceptionInstallButton.GetPos(
+            &interceptionInstallX, &interceptionInstallY,
+            &interceptionInstallWidth)
+        settingsVisualDialog.InterceptionStatusLabel.GetPos(
+            &interceptionLabelX, , &interceptionLabelWidth)
+        settingsVisualDialog.TabButtons[3].GetPos(&aiTabX, , &aiTabWidth)
+        settingsVisualDialog.InterceptionReminderCheck.GetPos(
+            &reminderX, , &reminderWidth)
+        interceptionButtonGroupX := interceptionDetectX
+        interceptionButtonGroupWidth := interceptionDetectWidth
+            + interceptionInstallWidth
+            + interceptionInstallX - interceptionDetectX
+                - interceptionDetectWidth
+        AuxiliaryVisualAssert(interceptionStatusX
+                >= settingsVisualDialog.Layout.ContentX
+                && interceptionStatusWidth
+                    <= 420
+                && interceptionStatusX == interceptionLabelX
+                && interceptionStatusWidth == interceptionLabelWidth
+                && interceptionStatusX <= interceptionDetectX
+                && interceptionDetectY == interceptionInstallY
+                && interceptionDetectX < interceptionInstallX
+                && interceptionDetectWidth > 0
+                && interceptionInstallWidth > 0
+                && interceptionDetectWidth <= interceptionStatusWidth
+                && interceptionInstallWidth <= interceptionStatusWidth
+                && interceptionInstallX + interceptionInstallWidth
+                    <= interceptionStatusX + interceptionStatusWidth
+                && Abs(interceptionButtonGroupX
+                    + Floor(interceptionButtonGroupWidth / 2)
+                    - Floor(settingsClientWidth / 2)) <= 1
+                && interceptionStatusY < interceptionDetectY
+                && interceptionDetectWidth <= 132,
+            "Interception settings controls do not follow the shared content alignment and action-row layout.")
         settingsVisualDialog.ImportRulePackageButton.GetPos(&importPackageX,
             &importPackageY, &importPackageWidth, &importPackageHeight)
         settingsVisualDialog.ExportRulePackageButton.GetPos(&exportPackageX,
@@ -928,8 +1023,9 @@ RunAuxiliaryWindowVisualTests() {
         feedbackState := supportVisualDialog.Interactions.Controls[
             supportVisualDialog.FeedbackButton.Hwnd]
         AuxiliaryVisualAssert(supportVisualDialog.Gui.Title == Tr("帮助")
-                && feedbackState.TooltipText == Tr("找作者对线"),
-            "The Help window label or feedback tooltip is incorrect.")
+                && feedbackState.TooltipText == Tr("找作者对线")
+                && !supportVisualDialog.HasOwnProp("InterceptionButton"),
+            "The Help window label, feedback tooltip, or removed Interception entry is incorrect.")
         guideState := supportVisualDialog.Interactions.Controls[
             supportVisualDialog.GuideButton.Hwnd]
         eventButtonState := supportVisualDialog.Interactions.Controls[
@@ -1054,6 +1150,8 @@ RunAuxiliaryWindowVisualTests() {
         helpVisualDialog.Dispose(false)
         helpVisualDialog := ""
 
+        VerifySettingsTabLanguagesAndScales(ownerWindow)
+
         ReportAuxiliaryVisualResult("PASS auxiliary window visuals`n")
     } catch as testError {
         ReportAuxiliaryVisualResult(testError.Message "`n"
@@ -1155,6 +1253,7 @@ ValidateUiFontPersistence(explicitFont) {
         settings.UiFont := explicitFont
         settings.UiScalePercent := 125
         settings.RunAsAdministrator := false
+        settings.CheckInterceptionOnStartup := false
         settings.AIPrompt := "generate line 1`r`ngenerate=line 2\\literal"
         settings.AIOptimizePrompt := "optimize line 1`noptimize=line 2\\literal"
         settings.AISystemPrompt := "line 1`nline 2\\literal"
@@ -1170,6 +1269,9 @@ ValidateUiFontPersistence(explicitFont) {
                 && reloaded.UiScalePercent == 125
                 && !saved.RunAsAdministrator
                 && !reloaded.RunAsAdministrator
+                && !saved.CheckInterceptionOnStartup
+                && !reloaded.CheckInterceptionOnStartup
+                && InStr(service.GetSnapshot(), "CheckOnStartup=0")
                 && InStr(service.GetSnapshot(),
                     "RunAsAdministrator=0"),
             "The selected content font did not survive a settings reload.")
@@ -1703,6 +1805,89 @@ AuxiliaryVisualAssert(value, message) {
         throw Error(message)
 }
 
+AssertSettingsTabTextFits(window, labels) {
+    window.TabButtons[1].GetPos(&left)
+    window.TabButtons[labels.Length].GetPos(&lastX, , &lastWidth)
+    right := lastX + lastWidth
+    windowWidth := UiScaleService.Scale(window.WindowWidth)
+    margin := UiScaleService.Scale(14)
+    AuxiliaryVisualAssert(left >= margin && right <= windowWidth - margin
+            && Abs(left - (windowWidth - right)) <= 2,
+        "Settings tab group is not centered with enough edge space.")
+    Loop labels.Length {
+        button := window.TabButtons[A_Index]
+        state := window.Interactions.Controls[button.Hwnd]
+        clientRect := Buffer(16, 0)
+        AuxiliaryVisualAssert(DllCall("user32\GetClientRect", "Ptr",
+            button.Hwnd, "Ptr", clientRect, "Int"),
+            "Settings tab " A_Index " has no client rectangle.")
+        width := NumGet(clientRect, 8, "Int")
+        hdc := DllCall("user32\GetDC", "Ptr", button.Hwnd, "Ptr")
+        font := SendMessage(0x0031, 0, 0, , button.Hwnd)
+        AuxiliaryVisualAssert(hdc && font,
+            "Settings tab " A_Index " has no measurable drawing font.")
+        previousFont := DllCall("gdi32\SelectObject", "Ptr", hdc,
+            "Ptr", font, "Ptr")
+        try {
+            textWidth := TextVisualAlignment.MeasureText(hdc,
+                labels[A_Index]).Width
+        } finally {
+            DllCall("gdi32\SelectObject", "Ptr", hdc,
+                "Ptr", previousFont)
+            DllCall("user32\ReleaseDC", "Ptr", button.Hwnd, "Ptr", hdc)
+        }
+        dpi := UiScaleService.GetEffectiveDpi(button.Hwnd)
+        image := window.Interactions.Painter.GetButtonImageMetrics(
+            state.ButtonImage, dpi)
+        inset := Round(state.TextInsetDip * dpi / 96)
+        availableTextWidth := width - inset * 2 - image.Width - image.Gap
+        AuxiliaryVisualAssert(availableTextWidth >= textWidth + 2,
+            "Settings tab " A_Index " clips '" labels[A_Index]
+                "': " availableTextWidth "px available, " textWidth
+                "px required.")
+    }
+}
+
+VerifySettingsTabLanguagesAndScales(ownerWindow) {
+    previousLanguage := LocalizationService.GetLanguage()
+    previousScale := UiScaleService.GetPercent()
+    try {
+        for choice in LocalizationService.GetLanguageChoices() {
+            if choice.Code == "auto"
+                continue
+            LocalizationService.Configure(choice.Code, "auto")
+            UiScaleService.Configure(100)
+            try window := SettingsWindow(ownerWindow, 3)
+            catch as buildError
+                throw Error(choice.Code ": " buildError.Message)
+            try {
+                window.Show()
+                labels := [Tr("显示"), Tr("启动"), Tr("AI 设置"),
+                    Tr("设备过滤驱动"), Tr("规则与事件")]
+                try AssertSettingsTabTextFits(window, labels)
+                catch as layoutError
+                    throw Error(choice.Code ": " layoutError.Message)
+            } finally window.Dispose(false)
+        }
+        LocalizationService.Configure("zh-CN", "auto")
+        for scale in [110, 125, 150, 175, 200] {
+            UiScaleService.Configure(scale)
+            window := SettingsWindow(ownerWindow, 3)
+            try {
+                window.Show()
+                labels := [Tr("显示"), Tr("启动"), Tr("AI 设置"),
+                    Tr("设备过滤驱动"), Tr("规则与事件")]
+                try AssertSettingsTabTextFits(window, labels)
+                catch as layoutError
+                    throw Error(scale "%: " layoutError.Message)
+            } finally window.Dispose(false)
+        }
+    } finally {
+        UiScaleService.Configure(previousScale)
+        LocalizationService.Configure(previousLanguage, "auto")
+    }
+}
+
 class MappingWindow {
     static Colors := {}
 }
@@ -1738,6 +1923,7 @@ class AuxiliaryVisualApp {
             UiScalePercent: 100,
             ShowAtStartup: false, RunAsAdministrator: true,
             CheckUpdatesOnStartup: true,
+            CheckInterceptionOnStartup: true,
             EscapeCancelsRecording: true, EventBufferCapacity: 1000,
             EventViewerAutoScroll: true,
             AIAddress: "", AIKey: "", AIModel: "", AITimeoutS: 600,

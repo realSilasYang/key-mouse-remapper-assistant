@@ -26,7 +26,7 @@ class RuleSpec {
             throw TypeError("RuleSpec 根值必须是 JSON 对象。")
         source := this.Clone(value)
         this.ValidateKnownFields(source, ["id", "enabled",
-            "passthrough", "priority", "stop_processing", "description",
+            "block", "passthrough", "priority", "stop_processing", "description",
             "display", "from", "conditions", "to",
             "to_if_alone", "to_if_held_down", "to_after_key_up",
             "to_if_other_key_pressed", "to_delayed_if_invoked",
@@ -35,7 +35,12 @@ class RuleSpec {
         spec := Map("id", id)
         if !this.ReadBoolean(source, "enabled", true)
             spec["enabled"] := JsonBoolean(false)
+        blocksSourceInput := this.ReadBoolean(source, "block", false)
+        if blocksSourceInput
+            spec["block"] := JsonBoolean(true)
         preserveSourceInput := this.ReadBoolean(source, "passthrough", false)
+        if blocksSourceInput && preserveSourceInput
+            throw Error("block=true 不能同时设置 passthrough=true。")
         if preserveSourceInput
             spec["passthrough"] := JsonBoolean(true)
         priority := this.ReadInteger(source, "priority", 0)
@@ -96,7 +101,9 @@ class RuleSpec {
                     if action["type"] == "key_down"
                         throw Error("Key-up source rules cannot leave a key pressed.")
         }
-        if !hasAction
+        if blocksSourceInput && hasAction
+            throw Error("block=true 不能同时包含输出动作。")
+        if !hasAction && !blocksSourceInput
             throw Error("RuleSpec 至少需要一个输出动作。")
         timing := this.NormalizeTiming(this.ReadMap(source, "timing", Map()))
         if timing.Count
@@ -105,11 +112,15 @@ class RuleSpec {
     }
 
     static CreateFromCaptures(id, sourceCapture, targetCapture,
-            distinguishModifierSides := true) {
+            distinguishModifierSides := true,
+            distinguishSourceDevice := false) {
         sourceName := sourceCapture.HasOwnProp("RawDisplay")
             ? sourceCapture.RawDisplay : sourceCapture.Display
-        targetName := targetCapture.HasOwnProp("RawDisplay")
-            ? targetCapture.RawDisplay : targetCapture.Display
+        targetIsEmpty := !IsObject(targetCapture)
+        targetName := targetIsEmpty ? "屏蔽" : (targetCapture.HasOwnProp(
+            "RawDisplay") ? targetCapture.RawDisplay : targetCapture.Display)
+        if !distinguishModifierSides
+            targetName := this.NormalizeCapturedSourceDisplay(targetName)
         isSimultaneous := sourceCapture.HasOwnProp("IsSimultaneous")
             && sourceCapture.IsSimultaneous
         if isSimultaneous {
@@ -163,14 +174,185 @@ class RuleSpec {
                     && sourceCapture.SCHex != ""
                 from["key"]["sc"] := sourceCapture.SCHex
         }
-        action := Map("type", "send", "value", targetCapture.TargetSend)
+        if distinguishSourceDevice {
+            device := this.BuildCapturedSourceDevice(sourceCapture)
+            from["device"] := device
+            sourceName .= "（Interception "
+                . (device["type"] == "keyboard" ? "键盘 " : "鼠标 ")
+                . device["number"] "）"
+        }
+        targetSend := targetIsEmpty ? "" : this.BuildCapturedTargetSend(
+            targetCapture, distinguishModifierSides)
+        actions := []
+        releaseActions := []
+        if !targetIsEmpty && from.Get("event", "down") == "down"
+                && this.IsSingleTargetCapture(targetCapture) {
+            from["optional_modifiers"] := ["any"]
+            if this.IsReleasableCapturedSource(sourceCapture) {
+                targetKey := this.GetCapturedTargetOutputKey(targetCapture,
+                    distinguishModifierSides)
+                from["repeat"] := "ignore"
+                actions.Push(Map("type", "key_down", "value", targetKey))
+                releaseActions.Push(Map("type", "key_up", "value",
+                    targetKey))
+            } else {
+                if !RegExMatch(targetSend, "i)^\{blind\}")
+                    targetSend := "{Blind}" targetSend
+                actions.Push(Map("type", "send", "value", targetSend))
+            }
+        } else if !targetIsEmpty {
+            actions.Push(Map("type", "send", "value", targetSend))
+        }
         conditions := []
         scope := "全局"
         spec := Map("id", id,
             "display", Map("source", sourceName, "target", targetName,
                 "scope", scope),
-            "from", from, "conditions", conditions, "to", [action])
+            "from", from, "conditions", conditions, "to", actions)
+        if targetIsEmpty
+            spec["block"] := JsonBoolean(true)
+        if releaseActions.Length
+            spec["to_after_key_up"] := releaseActions
         return this.Normalize(spec)
+    }
+
+    static BuildCapturedSourceDevice(sourceCapture) {
+        if !IsObject(sourceCapture)
+            throw TypeError("来源录制结果无效。")
+        if !sourceCapture.HasOwnProp("InterceptionDeviceNumber")
+                || !sourceCapture.HasOwnProp("InterceptionDeviceType")
+            throw Error("来源录制结果没有 Interception 设备信息；请重新录制来源按键。")
+        device := Map("backend", "interception",
+            "number", sourceCapture.InterceptionDeviceNumber,
+            "type", sourceCapture.InterceptionDeviceType)
+        if sourceCapture.HasOwnProp("InterceptionHardwareId")
+                && sourceCapture.InterceptionHardwareId != ""
+            device["hardware_id"] := sourceCapture.InterceptionHardwareId
+        return this.NormalizeSourceDevice(device)
+    }
+
+    static IsSingleTargetCapture(targetCapture) {
+        if !IsObject(targetCapture)
+                || !targetCapture.HasOwnProp("TargetSend")
+            return false
+        if targetCapture.HasOwnProp("Kind")
+                && StrLower(String(targetCapture.Kind)) != "keyboard"
+            return false
+        if targetCapture.HasOwnProp("IsSimultaneous")
+                && targetCapture.IsSimultaneous
+            return false
+        if targetCapture.HasOwnProp("Modifiers")
+                && IsObject(targetCapture.Modifiers)
+                && targetCapture.Modifiers.Length
+            return false
+        if targetCapture.HasOwnProp("Keys")
+                && IsObject(targetCapture.Keys)
+                && targetCapture.Keys.Length != 1
+            return false
+        ; A single captured key is represented by exactly one AHK key token.
+        ; This fallback also keeps synthetic captures used by integrations and
+        ; tests unambiguous when they do not expose Keys/Modifiers metadata.
+        targetSend := RegExReplace(String(targetCapture.TargetSend),
+            "i)^\{blind\}")
+        return RegExMatch(targetSend, "^\{[^{}\s]+\}$") > 0
+    }
+
+    static IsReleasableCapturedSource(sourceCapture) {
+        if !IsObject(sourceCapture)
+            return false
+        kind := sourceCapture.HasOwnProp("Kind")
+            ? StrLower(String(sourceCapture.Kind)) : "keyboard"
+        if kind == "wheel"
+            return false
+        name := sourceCapture.HasOwnProp("KeyName")
+            ? String(sourceCapture.KeyName) : ""
+        return !RegExMatch(name,
+            "i)^(?:WheelUp|WheelDown|WheelLeft|WheelRight|MouseMove)$")
+    }
+
+    static BuildCapturedTargetSend(targetCapture,
+            distinguishModifierSides := true) {
+        if !IsObject(targetCapture)
+                || !targetCapture.HasOwnProp("TargetSend")
+            throw TypeError("目标录制结果缺少 TargetSend。")
+        if !targetCapture.HasOwnProp("KeyName")
+            return String(targetCapture.TargetSend)
+        if targetCapture.HasOwnProp("IsSimultaneous")
+                && targetCapture.IsSimultaneous
+                && targetCapture.HasOwnProp("Keys")
+                && IsObject(targetCapture.Keys)
+                && targetCapture.Keys.Length > 1
+            return this.BuildCapturedSimultaneousTargetSend(
+                targetCapture.Keys, distinguishModifierSides)
+        modifiers := targetCapture.HasOwnProp("Modifiers")
+            && IsObject(targetCapture.Modifiers)
+            ? targetCapture.Modifiers : []
+        result := ""
+        for modifierInfo in modifiers
+            result .= "{" this.GetCapturedTargetOutputKey(modifierInfo,
+                distinguishModifierSides) " down}"
+        result .= "{" this.GetCapturedTargetOutputKey(targetCapture,
+            distinguishModifierSides) "}"
+        Loop modifiers.Length {
+            modifierInfo := modifiers[modifiers.Length - A_Index + 1]
+            result .= "{" this.GetCapturedTargetOutputKey(modifierInfo,
+                distinguishModifierSides) " up}"
+        }
+        return result
+    }
+
+    static BuildCapturedSimultaneousTargetSend(keyInfos,
+            distinguishModifierSides := true) {
+        result := ""
+        lastIndex := keyInfos.Length
+        Loop lastIndex - 1
+            result .= "{" this.GetCapturedTargetOutputKey(
+                keyInfos[A_Index], distinguishModifierSides) " down}"
+        result .= "{" this.GetCapturedTargetOutputKey(keyInfos[lastIndex],
+            distinguishModifierSides) "}"
+        index := lastIndex - 1
+        while index >= 1 {
+            result .= "{" this.GetCapturedTargetOutputKey(keyInfos[index],
+                distinguishModifierSides) " up}"
+            index--
+        }
+        return result
+    }
+
+    static GetCapturedTargetOutputKey(keyInfo,
+            distinguishModifierSides := true) {
+        if IsObject(keyInfo) && keyInfo.HasOwnProp("KeyName") {
+            keyName := String(keyInfo.KeyName)
+            if this.IsModifierName(keyName)
+                return this.NormalizeCapturedTargetModifierName(keyName,
+                    distinguishModifierSides)
+            if keyInfo.HasOwnProp("KeySpec") && keyInfo.KeySpec != ""
+                return String(keyInfo.KeySpec)
+            if keyInfo.HasOwnProp("SCHex") && keyInfo.SCHex != ""
+                return "sc" String(keyInfo.SCHex)
+            if keyInfo.HasOwnProp("VKHex") && keyInfo.VKHex != ""
+                return "vk" String(keyInfo.VKHex)
+            return keyName
+        }
+        if IsObject(keyInfo) && keyInfo.HasOwnProp("TargetSend")
+                && RegExMatch(RegExReplace(String(keyInfo.TargetSend),
+                    "i)^\{blind\}"), "^\{([^{}\s]+)\}$", &match)
+            return match[1]
+        throw TypeError("目标录制结果缺少可发送的单键标识。")
+    }
+
+    static NormalizeCapturedTargetModifierName(value,
+            distinguishModifierSides := true) {
+        canonical := this.CanonicalModifierName(value)
+        if distinguishModifierSides
+            return canonical
+        switch this.GetModifierFamily(canonical) {
+            case "ctrl": return "LCtrl"
+            case "shift": return "LShift"
+            case "alt": return "LAlt"
+            case "win": return "LWin"
+        }
+        throw Error("未知目标修饰键：" value)
     }
 
     static CaptureKeyInfosToSpecs(keyInfos,
@@ -234,7 +416,7 @@ class RuleSpec {
     static NormalizeFrom(from, passthrough := false) {
         this.ValidateKnownFields(from, ["hotkey", "key", "simultaneous",
             "modifiers", "optional_modifiers", "sequence", "event",
-            "repeat", "tap_count"], "from")
+            "repeat", "tap_count", "device"], "from")
         hotkeyName := this.RequireMaximumLength(
             this.ReadString(from, "hotkey", ""),
             this.MaximumHotkeyLength, "from.hotkey")
@@ -269,8 +451,7 @@ class RuleSpec {
             throw Error("复杂来源不能同时指定 hotkey。")
         if simultaneous.Length && key.Count
             throw Error("复杂来源不能同时指定 key 和 simultaneous。")
-        if simultaneous.Length
-                && (modifiers.Length || optionalModifiers.Length)
+        if simultaneous.Length && modifiers.Length
             throw Error("复杂来源暂不接受独立 modifiers；请把修饰键写入按键数组。")
         if simultaneous.Length == 1
             throw Error("A simultaneous source needs at least two keys.")
@@ -281,6 +462,9 @@ class RuleSpec {
             eventName := "up"
         }
         normalized := Map()
+        if from.Has("device")
+            normalized["device"] := this.NormalizeSourceDevice(
+                this.ReadMap(from, "device"))
         if eventName != "down"
             normalized["event"] := eventName
         if key.Count {
@@ -367,6 +551,31 @@ class RuleSpec {
                 }
             }
         }
+        return normalized
+    }
+
+    static NormalizeSourceDevice(device) {
+        this.ValidateKnownFields(device,
+            ["backend", "number", "type", "hardware_id"], "from.device")
+        backend := StrLower(this.ReadRequiredString(device, "backend"))
+        if backend != "interception"
+            throw Error("from.device.backend 当前只支持 interception。")
+        deviceNumber := this.ReadInteger(device, "number", 0)
+        if deviceNumber < 1 || deviceNumber > 20
+            throw Error("from.device.number 必须在 1 到 20 之间。")
+        typeName := StrLower(this.ReadRequiredString(device, "type"))
+        if typeName != "keyboard" && typeName != "mouse"
+            throw Error("from.device.type 只能是 keyboard 或 mouse。")
+        if (typeName == "keyboard" && deviceNumber > 10)
+                || (typeName == "mouse" && deviceNumber <= 10)
+            throw Error("from.device.number 与设备类型不匹配。")
+        normalized := Map("backend", backend, "number", deviceNumber,
+            "type", typeName)
+        hardwareId := this.RequireMaximumLength(
+            this.ReadString(device, "hardware_id", ""),
+            this.MaximumActionValueLength, "from.device.hardware_id")
+        if hardwareId != ""
+            normalized["hardware_id"] := hardwareId
         return normalized
     }
 
@@ -607,6 +816,19 @@ class RuleSpec {
         keyName := Trim(String(value))
         if keyName == "" || !RegExMatch(keyName, "^[A-Za-z0-9_]+$")
             throw Error(label " 必须是单个 AHK 按键名称。")
+        if RegExMatch(keyName, "i)^(vk|sc)([0-9a-f]+)$", &codeMatch) {
+            prefix := StrLower(codeMatch[1])
+            digits := prefix == "vk" ? 2 : 3
+            maximumValue := prefix == "vk" ? 0xFF : 0x1FF
+            normalizedCode := prefix this.NormalizeHexCode(codeMatch[2],
+                4, label, maximumValue, digits)
+            resolvedCodeName := ""
+            try resolvedCodeName := GetKeyName(normalizedCode)
+            if resolvedCodeName == ""
+                throw Error(label " 不是当前 AHK 运行时支持的按键：“"
+                    keyName "”。")
+            return normalizedCode
+        }
         canonicalName := ""
         try {
             canonicalName := GetKeyName(keyName)
@@ -712,6 +934,14 @@ class RuleSpec {
                     normalized)
             throw Error(label ".name 与实际触发码不一致。")
         if !normalized.Has("sc") && !normalized.Has("vk") {
+            ; A generic modifier is an intentional family matcher.  AHK
+            ; accepts Ctrl/Shift/Alt in modifier prefixes, but it does not
+            ; resolve every neutral modifier name through GetKeyName (most
+            ; notably Win).  Keep the neutral name in RuleSpec so runtimes
+            ; can expand it to both physical sides when it is the primary
+            ; source key.
+            if this.IsModifierName(normalized["name"])
+                return normalized
             resolvedName := ""
             try resolvedName := GetKeyName(normalized["name"])
             if resolvedName == "" {

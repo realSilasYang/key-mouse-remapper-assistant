@@ -183,6 +183,10 @@ AssertAi(purposeMessages.Length == 2
             '"host_process_is_elevated":')
         && InStr(purposeMessages[2]["content"],
             '"run_as_administrator_setting":false')
+        && InStr(purposeMessages[2]["content"],
+            '"interception_keyboard_device_range":"1..10"')
+        && InStr(purposeMessages[2]["content"],
+            '"interception_mouse_device_range":"11..20"')
         && InStr(purposeMessages[1]["content"],
             "即使只有一项也一样")
         && InStr(purposeMessages[1]["content"],
@@ -330,6 +334,15 @@ AssertAi(!InStr(defaultSystemPrompt, "@spec-begin")
             "input_source.language_id") != 0
         && InStr(immutableSystemPrompt,
             "custom_system_guidance 和 operation_guidance 是实现偏好") != 0
+        && InStr(immutableSystemPrompt,
+            "Interception 能力说明") != 0
+        && InStr(immutableSystemPrompt,
+            "官方 identify 样例通常显示零基索引") != 0
+        && InStr(immutableSystemPrompt,
+            "简单的指定物理键盘/鼠标映射必须优先生成规则块") != 0
+        && InStr(immutableSystemPrompt, "from.device") != 0
+        && InStr(immutableSystemPrompt,
+            "不得为简单设备专属映射再创建独立 Interception consumer") != 0
         && InStr(AIService.CurrentCodeCommentReminder,
             "必须使用当前界面语言添加详细、准确且与实现一致的注释") != 0
         && InStr(immutableSystemPrompt,

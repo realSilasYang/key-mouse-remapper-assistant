@@ -526,6 +526,32 @@ class MappingCodeRepository {
         return toggledMappings
     }
 
+    SetEnabledMany(mappingIds, enabled) {
+        requestedIds := this.NormalizeMappingIds(mappingIds)
+        snapshot := this.ReadSnapshot()
+        region := snapshot.Region
+        changedMappings := []
+        foundIds := Map()
+        for index, mapping in snapshot.Mappings {
+            if !requestedIds.Has(mapping.Id)
+                continue
+            foundIds[mapping.Id] := true
+            if mapping.Enabled == !!enabled
+                continue
+            mapping.Enabled := !!enabled
+            mapping.Spec["enabled"] := JsonBoolean(!!enabled)
+            mapping.Block := this.BuildMappingBlock(mapping, region.Eol)
+            mapping := this.ParseMappings(mapping.Block)[1]
+            snapshot.Mappings[index] := mapping
+            changedMappings.Push(mapping)
+        }
+        if foundIds.Count != requestedIds.Count
+            throw Error("找不到一个或多个要修改状态的映射代码块。")
+        if changedMappings.Length
+            this.Rewrite(snapshot.Mappings, snapshot, true)
+        return changedMappings
+    }
+
     NormalizeMappingIds(mappingIds) {
         if Type(mappingIds) != "Array"
             throw TypeError("映射名称集合必须是数组。")

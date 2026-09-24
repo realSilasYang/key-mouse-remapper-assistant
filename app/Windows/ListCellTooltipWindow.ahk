@@ -190,26 +190,39 @@ class ListCellTooltipWindow {
         this.VisibleCell := this.PendingCell
         point := Buffer(8, 0)
         DllCall("user32\GetCursorPos", "Ptr", point)
+        cursorX := NumGet(point, 0, "Int")
+        cursorY := NumGet(point, 4, "Int")
         pointerDpi := UiScaleService.GetEffectiveDpi(this.List.Hwnd)
-        x := NumGet(point, 0, "Int") + Round(12 * pointerDpi / 96)
-        y := NumGet(point, 4, "Int") + Round(20 * pointerDpi / 96)
-        workArea := this.GetWorkArea(x, y)
+        x := cursorX + Round(12 * pointerDpi / 96)
+        y := cursorY + Round(20 * pointerDpi / 96)
+        workArea := this.GetWorkArea(cursorX, cursorY)
         tooltipDpi := UiScaleService.GetEffectiveDpi(this.List.Hwnd)
+        marginX := Round(style.MarginX * tooltipDpi / 96)
         maximumTextWidth := Max(80,
-            Floor((workArea.Right - workArea.Left - 32) * 96 / tooltipDpi))
+            Floor((workArea.Right - workArea.Left - 8 - marginX * 2)
+                * 96 / tooltipDpi))
         textSize := this.MeasureTooltipText(this.PendingText,
             Min(420, maximumTextWidth), tooltipDpi)
         UiScaleService.MoveControl(this.TextControl, , , textSize.Width,
             textSize.Height)
         this.Gui.Show("Hide AutoSize")
-        this.Gui.GetPos(, , &tooltipWidth, &tooltipHeight)
+        windowRect := Buffer(16, 0)
+        if !DllCall("user32\GetWindowRect", "Ptr", this.Gui.Hwnd,
+                "Ptr", windowRect, "Int")
+            return this.Hide()
+        tooltipWidth := NumGet(windowRect, 8, "Int")
+            - NumGet(windowRect, 0, "Int")
+        tooltipHeight := NumGet(windowRect, 12, "Int")
+            - NumGet(windowRect, 4, "Int")
         maximumWidth := Max(1, workArea.Right - workArea.Left - 8)
         maximumHeight := Max(1, workArea.Bottom - workArea.Top - 8)
         tooltipWidth := Min(tooltipWidth, maximumWidth)
         tooltipHeight := Min(tooltipHeight, maximumHeight)
         this.ConstrainToWorkArea(&x, &y, tooltipWidth, tooltipHeight, workArea)
-        this.Gui.Show("x" x " y" y " w" tooltipWidth " h" tooltipHeight
-            " NoActivate")
+        if !DllCall("user32\SetWindowPos", "Ptr", this.Gui.Hwnd,
+                "Ptr", -1, "Int", x, "Int", y, "Int", tooltipWidth,
+                "Int", tooltipHeight, "UInt", 0x0050, "Int")
+            return this.Hide()
     }
 
     GetWorkArea(x, y) {

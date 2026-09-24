@@ -13,7 +13,7 @@
 
 L’Assistant de remappage clavier et souris est un outil AutoHotkey v2 pour Windows 10 et 11 x64. Il réunit l’enregistrement des entrées, la gestion des règles, l’édition de code, la génération et l’optimisation par IA, la validation locale et l’état d’exécution. Chaque version contient les règles modifiables présentes dans son commit de publication ; le nombre de blocs et de scripts gérés peut varier.
 
-Les règles sont enregistrées dans la zone commentée `@mapping`, lisible et sauvegardable. Aucun pilote ni service Windows n’est installé ; les remappages ne fonctionnent que pendant l’exécution de l’assistant. Les paquets officiels n’intègrent jamais l’adresse IA, la clé API, le modèle, les invites personnalisées ou les réglages personnels de la machine de compilation.
+Les règles sont enregistrées dans la zone commentée `@mapping`, lisible et sauvegardable. Les règles Interception propres à un périphérique peuvent utiliser un pilote facultatif installé avec l’accord de l’administrateur, suivi d’un redémarrage de Windows ; les remappages ne fonctionnent que pendant l’exécution de l’assistant. Les paquets officiels n’intègrent jamais l’adresse IA, la clé API, le modèle, les invites personnalisées ou les réglages personnels de la machine de compilation.
 
 # Aperçu de l’interface
 
@@ -39,7 +39,7 @@ La barre supérieure ajoute, suspend／reprend par lot et supprime les règles. 
 ## Périmètre
 
 - Windows 10／11 x64 uniquement.
-- Sans pilote noyau, le bureau sécurisé, `Ctrl+Alt+Delete` et les logiciels bloquant les hooks en mode utilisateur restent hors de portée.
+- Les règles ordinaires fonctionnent sans le pilote Interception facultatif. Le bureau sécurisé et `Ctrl+Alt+Delete` restent hors de portée même avec le pilote.
 - Le mode administrateur par défaut élève les blocs et les scripts enfants afin d’agir sur les applications élevées.
 - Les résultats de l’IA doivent être relus même après validation locale, surtout pour les scripts manipulant fichiers, réseau, processus ou système.
 

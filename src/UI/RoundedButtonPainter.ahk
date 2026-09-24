@@ -634,39 +634,8 @@ class RoundedButtonPainter {
                 ? state.TextAlign : "center"
             if state.HasOwnProp("LeadingTextSlotDip")
                     && RegExMatch(text, "^(\S+)\s+(.+)$", &leadingMatch) {
-                leadingText := leadingMatch[1]
-                bodyText := leadingMatch[2]
-                availableWidth := Max(1, width - inset * 2)
-                slotWidth := Min(availableWidth, Max(1, Round(
-                    state.LeadingTextSlotDip * textDpi / 96)))
-                gap := Min(Max(0, availableWidth - slotWidth), Max(0,
-                    Round(state.LeadingTextGapDip * textDpi / 96)))
-                bodyExtent := TextVisualAlignment.MeasureText(hdc, bodyText)
-                contentWidth := Min(availableWidth,
-                    slotWidth + gap + bodyExtent.Width)
-                contentX := textAlign == "left" ? inset
-                    : (textAlign == "right"
-                        ? width - inset - contentWidth
-                        : Floor((width - contentWidth) / 2))
-                visualSize := Max(1, Round(
-                    state.LeadingTextVisualSizeDip * textDpi / 96))
-                if !this.DrawLeadingCommandSymbol(hdc, leadingText,
-                        contentX, 0, contentX + slotWidth, height,
-                        state.TextColor, visualSize) {
-                    leadingRect := TextVisualAlignment
-                        .CreateRasterCenteredTextRect(hdc, leadingText,
-                            contentX, 0, contentX + slotWidth, height)
-                    DllCall("user32\DrawTextW", "Ptr", hdc,
-                        "Str", leadingText, "Int", -1,
-                        "Ptr", leadingRect, "UInt", 0x00000825, "Int")
-                }
-                bodyLeft := contentX + slotWidth + gap
-                bodyRect := TextVisualAlignment.CreateCenteredTextRect(hdc,
-                    bodyText, bodyLeft, 0, contentX + contentWidth, height)
-                DllCall("user32\DrawTextW", "Ptr", hdc,
-                    "Str", bodyText, "Int", -1, "Ptr", bodyRect,
-                    "UInt", 0x00008824, "Int")
-                return
+                return this.DrawLeadingTextSlot(hdc, width, height, state,
+                    textDpi, inset, textAlign, text, leadingMatch)
             }
             hasLeadingImage := state.HasOwnProp("ButtonImage")
                 && IsObject(state.ButtonImage)
@@ -792,6 +761,43 @@ class RoundedButtonPainter {
                 DllCall("gdi32\SelectObject", "Ptr", hdc,
                     "Ptr", previousFont, "Ptr")
         }
+    }
+
+    DrawLeadingTextSlot(hdc, width, height, state, textDpi, inset,
+            textAlign, text, leadingMatch) {
+        leadingText := leadingMatch[1]
+        bodyText := leadingMatch[2]
+        availableWidth := Max(1, width - inset * 2)
+        slotWidth := Min(availableWidth, Max(1, Round(
+            state.LeadingTextSlotDip * textDpi / 96)))
+        gap := Min(Max(0, availableWidth - slotWidth), Max(0,
+            Round(state.LeadingTextGapDip * textDpi / 96)))
+        bodyExtent := TextVisualAlignment.MeasureText(hdc, bodyText)
+        contentWidth := Min(availableWidth,
+            slotWidth + gap + bodyExtent.Width)
+        contentX := textAlign == "left" ? inset
+            : (textAlign == "right"
+                ? width - inset - contentWidth
+                : Max(inset, Floor((width - contentWidth) / 2)))
+        visualSize := Max(1, Round(
+            state.LeadingTextVisualSizeDip * textDpi / 96))
+        if !this.DrawLeadingCommandSymbol(hdc, leadingText,
+                contentX, 0, contentX + slotWidth, height,
+                state.TextColor, visualSize) {
+            leadingRect := TextVisualAlignment
+                .CreateRasterCenteredTextRect(hdc, leadingText,
+                    contentX, 0, contentX + slotWidth, height)
+            DllCall("user32\DrawTextW", "Ptr", hdc,
+                "Str", leadingText, "Int", -1,
+                "Ptr", leadingRect, "UInt", 0x00000825, "Int")
+        }
+        bodyLeft := contentX + slotWidth + gap
+        bodyRect := TextVisualAlignment.CreateCenteredTextRect(hdc,
+            bodyText, bodyLeft, 0, contentX + contentWidth, height)
+        DllCall("user32\DrawTextW", "Ptr", hdc,
+            "Str", bodyText, "Int", -1, "Ptr", bodyRect,
+            "UInt", 0x00008824, "Int")
+        return true
     }
 
     DrawCenteredClearMark(hdc, width, height, state) {

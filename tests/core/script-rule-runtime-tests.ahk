@@ -71,6 +71,22 @@ RunScriptRuleRuntimeTests() {
 
         app := ScriptRuleTestApp(testRoot)
         runtime := ScriptRuleRuntime(app, testRoot "\runtime")
+        errorRuntime := ScriptRuleRuntime(app,
+            testRoot "\error-runtime")
+        errorSpec := ScriptRuleSpec.FromCode("interception-context-failure",
+            "throw Error(" Chr(34) "无法创建 Interception 设备上下文。"
+                Chr(34) ")")
+        errorMapping := {Id: errorSpec["id"], Mode: "script",
+            Spec: errorSpec}
+        errorRuntime.ApplyMappings([errorMapping])
+        ScriptRuleWaitFor(() => app.Failures.Length == 1, 3000,
+            "A worker exception was not reported to the host.")
+        ScriptRuleAssert(app.Failures[1].Id == errorSpec["id"]
+                && InStr(app.Failures[1].Detail,
+                    "无法创建 Interception 设备上下文")
+                && errorRuntime.Workers.Count == 0,
+            "An Interception worker exception was not diagnosed and cleaned up.")
+        errorRuntime.Shutdown()
         signalRuntime := ScriptRuleRuntime(app, testRoot "\signal-runtime")
         confirmationPauseHandle := signalRuntime.CreateSignal(
             "Local\KMRA-capture-pause-" A_TickCount, false)
@@ -256,8 +272,7 @@ RunScriptRuleRuntimeTests() {
         DllCall("kernel32\CloseHandle", "Ptr", resumedObservedHandle)
         resumedObservedHandle := 0
         parentCommand := QuoteRuntimeCommandArgument(A_ComSpec)
-            . " /D /C " Chr(34) "ping.exe -n 30 127.0.0.1 >nul"
-            . Chr(34)
+            . " /D /Q /K"
         Run(parentCommand, testRoot, "Hide", &probeParentPid)
         probeToken := "parent-exit-" A_TickCount "-"
             . Format("{:08X}", Random(0, 0xFFFFFFFF))
@@ -441,6 +456,8 @@ RunScriptRuleRuntimeTests() {
     } finally {
         if IsSet(runtime)
             try runtime.Shutdown()
+        if IsSet(errorRuntime)
+            try errorRuntime.Shutdown()
         if IsSet(blockingRuntime)
             try blockingRuntime.Shutdown()
         if IsSet(descendantRuntime)
@@ -514,10 +531,15 @@ class ScriptRuleTestApp {
         this.DataDirectory := dataDirectory
         this.InterpreterPath := A_AhkPath
         this.Events := []
+        this.Failures := []
     }
 
     TraceEvent(category, eventName, fields) {
         this.Events.Push({Category: category, Event: eventName,
             Fields: fields})
+    }
+
+    OnScriptRuleWorkerError(ruleId, detail) {
+        this.Failures.Push({Id: ruleId, Detail: detail})
     }
 }

@@ -41,9 +41,12 @@ class RuleCompiler {
     }
 
     static BuildHotkeyName(from) {
-        if !from.Has("key")
-            return from.Get("simultaneous", []).Length
-                ? this.BuildSimultaneousHotkey(from["simultaneous"]) : ""
+        if !from.Has("key") {
+            if !from.Get("simultaneous", []).Length
+                return ""
+            return (from.Get("optional_modifiers", []).Length ? "*" : "")
+                . this.BuildSimultaneousHotkey(from["simultaneous"])
+        }
         prefixes := Map("Ctrl", "^", "Shift", "+", "Alt", "!", "Win", "#",
             "LCtrl", "<^", "RCtrl", ">^",
             "LShift", "<+", "RShift", ">+", "LAlt", "<!", "RAlt", ">!",
@@ -119,8 +122,6 @@ class RuleCompiler {
                 && from.Get("event", "down") != "up"
             return "通用修饰键“" keyName
                 . "”的裸热键会被 AHK 延后到松开时触发，无法作为可靠的按下事件；请改用受托管脚本并分别处理左右修饰键。"
-        if StrLower(keyName) == "win"
-            return "AHK 没有可同时代表左右 Win 键的中性来源键；请分别处理 LWin/RWin，或改用受托管脚本。"
         if this.IsModifierName(keyName)
                 && (descriptor.Spec.Get("to_if_alone", []).Length
                     || descriptor.Spec.Get("to_if_held_down", []).Length)
@@ -333,6 +334,7 @@ class RuleCompiler {
     static SpecFieldComment(name) {
         static comments := Map(
             "enabled", "控制规则是否生效：true 为启用，false 为暂停。",
+            "block", "设为 true 后，匹配的来源按键会被屏蔽且不产生输出动作。",
             "passthrough", "设为 true 后，来源按键原本的输入仍会传给系统。",
             "priority", "多条规则同时符合时，数值越大越先处理。",
             "stop_processing", "设为 true 后，匹配成功便不再检查优先级更低的规则。",
@@ -353,6 +355,10 @@ class RuleCompiler {
             "event", "选择按下（down）还是松开（up）时触发。",
             "repeat", "决定长按产生自动重复时，是允许、忽略还是只响应重复。",
             "tap_count", "指定连续按几次才触发。",
+            "device", "限定触发输入必须来自指定的 Interception 物理设备。",
+            "backend", "填写设备过滤后端，当前为 interception。",
+            "number", "填写项目使用的 Interception 设备编号。",
+            "hardware_id", "记录设备硬件 ID，便于诊断和重新识别。",
             "name", "填写 AHK 能识别的按键名称。",
             "kind", "说明输入来自键盘、鼠标、滚轮还是应用命令。",
             "vk", "填写 Windows 虚拟键码，用于精确识别按键。",

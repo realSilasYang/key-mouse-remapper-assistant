@@ -399,6 +399,16 @@ try {
         "value", "DefinitelyNotAKey")]
     FoundationAssertThrows(() => RuleSpec.Normalize(unknownOutputKey),
         "An unknown output key reached runtime Send().")
+    scanCodeOutput := RuleSpec.Clone(baseSpec)
+    scanCodeOutput["to"] := [Map("type", "key_down", "value", "sc15b")]
+    FoundationAssertEqual("sc15B", RuleSpec.Normalize(
+        scanCodeOutput)["to"][1]["value"],
+        "A valid output scan code was converted to a layout-dependent key name.")
+    invalidScanCodeOutput := RuleSpec.Clone(baseSpec)
+    invalidScanCodeOutput["to"] := [Map("type", "key_down",
+        "value", "sc200")]
+    FoundationAssertThrows(() => RuleSpec.Normalize(invalidScanCodeOutput),
+        "An out-of-range output scan code reached runtime Send().")
 
     evaluator := RuleConditionEvaluator()
     FoundationAssertTrue(!evaluator.Compare("0409", true,

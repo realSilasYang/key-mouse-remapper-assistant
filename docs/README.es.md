@@ -13,7 +13,7 @@
 
 El Asistente de reasignación de teclado y ratón es una aplicación AutoHotkey v2 para Windows 10 y 11 x64. Reúne captura de entradas, administración de reglas, edición de código, generación y optimización con IA, validación local y estado de ejecución. Cada versión incluye las reglas editables presentes en su commit de publicación; la cantidad de bloques y scripts administrados puede variar.
 
-Las reglas se guardan en la región comentada `@mapping`, que se puede leer y respaldar. La aplicación no instala controladores ni servicios de Windows; las asignaciones solo funcionan mientras el asistente está abierto. Los paquetes oficiales nunca incluyen la dirección de IA, la clave de API, el modelo, las indicaciones personalizadas ni otros ajustes del equipo de compilación.
+Las reglas se guardan en la región comentada `@mapping`, que se puede leer y respaldar. Las reglas de Interception por dispositivo pueden usar un controlador opcional instalado con aprobación de administrador y un reinicio de Windows; las asignaciones solo funcionan mientras el asistente está abierto. Los paquetes oficiales nunca incluyen la dirección de IA, la clave de API, el modelo, las indicaciones personalizadas ni otros ajustes del equipo de compilación.
 
 # Vista general de la interfaz
 
@@ -39,7 +39,7 @@ La barra superior añade, pausa／reanuda por lotes y elimina reglas. La lista m
 ## Ámbito
 
 - Solo admite Windows 10／11 x64.
-- No usa un controlador del núcleo, por lo que no controla el escritorio seguro, `Ctrl+Alt+Delete` ni software que bloquee ganchos de modo usuario.
+- Las reglas normales funcionan sin el controlador opcional de Interception. El escritorio seguro y `Ctrl+Alt+Delete` siguen fuera de su alcance incluso con el controlador.
 - El modo administrador predeterminado eleva los bloques y los scripts secundarios para que puedan actuar sobre aplicaciones elevadas.
 - Debes revisar los resultados de IA incluso después de la validación local, especialmente scripts con operaciones de archivos, red, procesos o sistema.
 

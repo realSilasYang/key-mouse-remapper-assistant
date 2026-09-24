@@ -9,9 +9,7 @@ class TraditionalTaiwanStrings {
         catalog.Set(
             "键鼠重映射小助手",
                 "鍵鼠重映射小幫手")
-        catalog.Set(
-            "新增",
-                "新增")
+        catalog.Set("新建", "建立")
         catalog.Set(
             "删除",
                 "刪除")
@@ -38,8 +36,8 @@ class TraditionalTaiwanStrings {
             "名称",
                 "名稱")
         catalog.Set(
-            "新建映射",
-                "新增映射")
+            "新建简易规则",
+                "新增簡易規則")
         catalog.Set(
             "映射为",
                 "映射到")
@@ -286,9 +284,6 @@ class TraditionalTaiwanStrings {
             "请先完成或取消当前按键录制。",
                 "請先完成或取消目前的按鍵錄製。")
         catalog.Set(
-            "请先录制来源按键和目标按键。",
-                "請先錄製來源按鍵與目標按鍵。")
-        catalog.Set(
             "已清空新建区域。",
                 "清除新的映射區域。")
         catalog.Set(
@@ -471,7 +466,7 @@ class TraditionalTaiwanStrings {
         catalog.Set("无法打开反馈页面：{1}", "無法開啟意見回饋頁面：{1}")
         catalog.Set("键鼠重映射小助手用于录制、审阅和维护键盘与鼠标映射。关闭主窗口只会隐藏到系统托盘，已经启用的映射仍会继续生效。", "鍵鼠重映射小幫手用於錄製、檢閱與維護鍵盤和滑鼠映射。關閉主視窗只會隱藏到系統匣，已啟用的映射仍會繼續生效。")
         catalog.Set("一、快速上手", "一、快速上手")
-        catalog.Set("• 点击顶部“新增”，会打开已经填好元数据字段的 @mapping 编辑器；也可以在下方分别录制来源按键和目标按键，填写名称后保存。", "• 點選頂端的「新增」，會開啟已準備好中繼資料欄位的 @mapping 編輯器；也可以在下方分別錄製來源按鍵和目標按鍵，填寫名稱後儲存。")
+        catalog.Set("• 点击顶部“新建”，会打开已经填好元数据字段的 @mapping 编辑器；也可以在下方分别录制来源按键和目标按键，填写名称后保存。", "• 點選頂端的「建立」，會開啟已準備好中繼資料欄位的 @mapping 編輯器；也可以在下方分別錄製來源按鍵和目標按鍵，填寫名稱後儲存。")
         catalog.Set("• 录制会实时显示原始规范名称、阅读友好名称、虚拟键码和扫描码，并区分左右 Ctrl、Shift、Alt、Win 以及键盘、鼠标和滚轮输入。", "• 錄製會即時顯示原始標準名稱、易讀名稱、虛擬鍵碼和掃描碼，並區分左右 Ctrl、Shift、Alt、Win，以及鍵盤、滑鼠和滾輪輸入。")
         catalog.Set("二、主界面与代码编辑", "二、主畫面與程式碼編輯")
         catalog.Set("• 单击选择映射；双击条目、选中后按 F2 或使用右键菜单，可编辑完整 @mapping 代码块。", "• 點選以選取映射；連按兩下項目、選取後按 F2，或使用右鍵選單，可編輯完整的 @mapping 程式碼區塊。")
@@ -544,7 +539,38 @@ class TraditionalTaiwanStrings {
         catalog.Set("自定义 AHK 代码可读取文件、启动程序、控制窗口并请求管理员权限。确认运行当前代码吗？", "自訂 AHK 程式碼可讀寫檔案、啟動程式、控制視窗及要求系統管理員權限。確定要執行目前程式碼嗎？")
         catalog.Set("规则未应用：{1}", "規則未套用：{1}")
         catalog.Set("• 映射区域以注释形式保存规则块和受托管脚本。规则块在主进程热应用；受托管脚本的自定义 AHK v2 源码在独立受管进程运行，保存、暂停、恢复、删除和退出均由小助手统一管理。", "• 映射區域以註解形式儲存一般規則區塊與受管理指令碼。一般規則區塊會在主程序即時套用，自訂 AutoHotkey v2 原始碼則在由小助手控制的獨立受管程序中執行。")
-        catalog.Set("区分左右修饰键", "區分左右修飾鍵")
+        catalog.Set("区分左/右侧修饰键", "區分左右修飾鍵")
+        catalog.Set("区分来源设备", "區分來源裝置")
+        catalog.Set("目标按键可留空，表示屏蔽来源按键。", "目標按鍵留空即可封鎖來源按鍵。")
+        catalog.Set("请先录制来源按键。", "請先錄製來源按鍵。")
+        catalog.Set("安装 Interception 驱动", "安裝 Interception 驅動程式")
+        catalog.Set("安装驱动", "安裝驅動程式")
+        catalog.Set("来源设备：Interception {1} {2}{3}", "來源裝置：Interception {1} {2}{3}")
+        catalog.Set("已启用来源设备区分，请重新录制来源按键。", "已啟用來源裝置區分，請重新錄製來源按鍵。")
+        catalog.Set("Interception 驱动", "Interception 驅動程式")
+        catalog.Set("驱动状态：", "驅動程式狀態：")
+        catalog.Set("重新检测", "重新檢查")
+        catalog.Set("已就绪", "已就緒")
+        catalog.Set("{1}`r`n状态：{2}`r`n{3}", "{1}`r`n狀態：{2}`r`n{3}")
+        catalog.Set("启动时自动检测并提醒", "啟動時自動檢查並提醒")
+        catalog.Set("Interception 驱动未安装。可在设置的 Interception 选项卡检测或安装。", "尚未安裝 Interception 驅動程式。可在設定的 Interception 分頁檢查或安裝。")
+        catalog.Set("Interception 规则未运行；请在设置中安装驱动，或暂停这些规则。", "Interception 規則尚未執行。請在設定中安裝驅動程式，或暫停這些規則。")
+        catalog.Set("以下启用规则需要 Interception 驱动，但当前不可用：{1}`n`n选择“安装驱动”尝试提权安装；选择“暂停规则”则停用这些规则。安装成功后需要重启 Windows。", "以下已啟用規則需要 Interception 驅動程式，但目前無法使用：{1}`n`n選擇「安裝驅動程式」以系統管理員權限執行安裝程式，或選擇「暫停規則」停用這些規則。安裝後需要重新啟動 Windows。")
+        catalog.Set("Interception 驱动缺失", "Interception 驅動程式無法使用")
+        catalog.Set("暂停规则", "暫停規則")
+        catalog.Set("已暂停 {1} 条需要 Interception 驱动的规则。", "已暫停 {1} 條需要 Interception 驅動程式的規則。")
+        catalog.Set("暂停 Interception 规则失败：{1}", "無法暫停 Interception 規則：{1}")
+        catalog.Set("Interception 设备专属规则需要内核驱动。小助手可以请求管理员权限并运行随包官方安装器；安装后必须重启 Windows。是否继续？", "裝置專屬 Interception 規則需要核心驅動程式。小助手可要求系統管理員權限並執行隨附的官方安裝程式；安裝後需要重新啟動 Windows。是否繼續？")
+        catalog.Set("Interception 驱动安装程序已成功返回。请重启 Windows 后再启用相关规则。", "Interception 安裝程式已成功完成。請重新啟動 Windows 後再啟用相關規則。")
+        catalog.Set("Interception 驱动已经安装，请重启 Windows 后再录制来源设备。", "Interception 驅動程式已安裝，請重新啟動 Windows 後再錄製來源裝置。")
+        catalog.Set("Interception 不可用，且发行包中未找到驱动安装器：{1}", "Interception 無法使用，且發行套件中找不到驅動程式安裝工具：{1}")
+        catalog.Set("区分来源设备需要安装 Interception 内核驱动。小助手可以立即请求管理员权限并自动安装；安装后必须重启 Windows。是否继续？", "區分來源裝置需要安裝 Interception 核心驅動程式。小助手可立即要求系統管理員權限並自動安裝；安裝後必須重新啟動 Windows。是否繼續？")
+        catalog.Set("Interception 驱动安装失败：{1}", "Interception 驅動程式安裝失敗：{1}")
+        catalog.Set("设备过滤驱动", "裝置篩選驅動程式")
+        catalog.Set("脚本规则 {1} 运行失败：{2}", "腳本規則 {1} 執行失敗：{2}")
+        catalog.Set("Interception 驱动已安装；请重启 Windows 后再运行规则 {1}。", "Interception 驅動程式已安裝；請重新啟動 Windows 後再執行規則 {1}。")
+        catalog.Set("规则 {1} 未运行：{2}", "規則 {1} 未執行：{2}")
+        catalog.Set("规则 {1} 无法使用 Interception：{2}", "規則 {1} 無法使用 Interception：{2}")
         catalog.Set("帮助", "幫助")
         catalog.Set("打赏", "打賞")
         catalog.Set("打开帮助`n可选择查看使用说明、运行日志或提交反馈", "開啟幫助`n可選擇查看使用說明、執行記錄或提交意見回饋")
