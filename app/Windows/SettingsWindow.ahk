@@ -155,9 +155,13 @@ class SettingsWindow {
         installButtonWidth := this.MeasureControlTextWidth(
             this.InterceptionStatusLabel, Tr("安装驱动"))
             + buttonTextPadding
+        uninstallButtonWidth := this.MeasureControlTextWidth(
+            this.InterceptionStatusLabel, Tr("卸载驱动"))
+            + buttonTextPadding
         maximumButtonWidth := Floor((panelWidth - buttonGap) / 2)
         detectButtonWidth := Min(maximumButtonWidth, detectButtonWidth)
-        installButtonWidth := Min(maximumButtonWidth, installButtonWidth)
+        installButtonWidth := Min(maximumButtonWidth,
+            Max(installButtonWidth, uninstallButtonWidth))
         buttonGroupWidth := detectButtonWidth + installButtonWidth + buttonGap
         buttonX := Floor((layout.WindowWidth - buttonGroupWidth) / 2)
         this.InterceptionDetectButton := this.AddTabControl(pageIndex,
@@ -167,7 +171,7 @@ class SettingsWindow {
         this.InterceptionInstallButton := this.AddTabControl(pageIndex,
             this.AddActionButton(buttonX + detectButtonWidth + buttonGap, 182,
                 Tr("安装驱动"), colors.Primary,
-                colors.ButtonText, ObjBindMethod(this, "InstallInterceptionDriver"),
+                colors.ButtonText, ObjBindMethod(this, "ManageInterceptionDriver"),
                 installButtonWidth, 30))
         reminderWidth := this.MeasureControlTextWidth(
             this.InterceptionStatusLabel, Tr("启动时自动检测并提醒")) + 28
@@ -192,6 +196,11 @@ class SettingsWindow {
         if !this.App.HasOwnProp("Interception")
                 || !IsObject(this.App.Interception) {
             this.InterceptionStatus.Value := Tr("不可用")
+            this.Interactions.SetTextNoErase(this.InterceptionInstallButton,
+                Tr("安装驱动"))
+            this.Interactions.SetButtonAppearance(this.InterceptionInstallButton,
+                UiThemeService.Color("Primary"),
+                UiThemeService.Color("ButtonText"), false)
             this.InterceptionInstallButton.Enabled := false
             return false
         }
@@ -201,16 +210,26 @@ class SettingsWindow {
         this.InterceptionStatus.Value := Tr("{1}`r`n状态：{2}`r`n{3}",
             available ? Tr("已就绪") : Tr("不可用"), code,
             status.Get("message", ""))
-        this.InterceptionInstallButton.Enabled := !available
-            && code != "restart_required"
-            && this.App.Interception.CanInstallDriver()
+        actionEnabled := this.App.Interception.CanInstallDriver()
+            && (available || code != "restart_required")
+        actionText := available ? Tr("卸载驱动") : Tr("安装驱动")
+        actionColor := available ? UiThemeService.Color("DangerButton")
+            : UiThemeService.Color("Primary")
+        this.Interactions.SetTextNoErase(this.InterceptionInstallButton,
+            actionText)
+        this.Interactions.SetButtonAppearance(this.InterceptionInstallButton,
+            actionColor, UiThemeService.Color("ButtonText"), actionEnabled)
+        this.InterceptionInstallButton.Enabled := actionEnabled
         return status
     }
 
-    InstallInterceptionDriver(*) {
+    ManageInterceptionDriver(*) {
         if this.Disposed
             return false
-        result := this.App.OfferInterceptionDriverInstallation(this.Gui)
+        status := this.App.Interception.GetStatus()
+        result := status.Get("available", false)
+            ? this.App.OfferInterceptionDriverUninstallation(this.Gui)
+            : this.App.OfferInterceptionDriverInstallation(this.Gui)
         this.RefreshInterceptionStatus()
         return result
     }

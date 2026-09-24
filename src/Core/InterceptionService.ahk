@@ -22,6 +22,7 @@ class InterceptionService {
             "architecture", "x64",
             "library_path", "",
             "code", "not_loaded",
+            "pending_operation", "",
             "message", "尚未加载 Interception。")
         this.IdentifyContext := 0
         this.IdentifyPredicateCallback := 0
@@ -56,6 +57,14 @@ class InterceptionService {
         return '"' String(installerPath) '" /install'
     }
 
+    BuildUninstallCommand(installerPath := "") {
+        if installerPath == ""
+            installerPath := this.GetInstallerPath()
+        if installerPath == ""
+            throw Error("未找到 Interception 驱动安装器。")
+        return '"' String(installerPath) '" /uninstall'
+    }
+
     InstallDriver() {
         installerPath := this.GetInstallerPath()
         if installerPath == ""
@@ -67,8 +76,26 @@ class InterceptionService {
         this.Status["available"] := false
         this.Status["driver_available"] := false
         this.Status["code"] := "restart_required"
+        this.Status["pending_operation"] := "install"
         this.Status["message"] := "Interception 驱动已安装；重启 Windows 后生效。"
         return Map("installed", true, "restart_required", true,
+            "exit_code", exitCode, "installer_path", installerPath)
+    }
+
+    UninstallDriver() {
+        installerPath := this.GetInstallerPath()
+        if installerPath == ""
+            throw Error("未找到 Interception 驱动安装器。")
+        exitCode := this.ExecuteInstaller(this.BuildUninstallCommand(
+            installerPath), this.GetInstallerWorkingDirectory(installerPath))
+        if exitCode != 0
+            throw Error("Interception 驱动卸载程序返回错误代码 " exitCode "。")
+        this.Status["available"] := false
+        this.Status["driver_available"] := false
+        this.Status["code"] := "restart_required"
+        this.Status["pending_operation"] := "uninstall"
+        this.Status["message"] := "Interception 驱动已卸载；重启 Windows 后生效。"
+        return Map("uninstalled", true, "restart_required", true,
             "exit_code", exitCode, "installer_path", installerPath)
     }
 

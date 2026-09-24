@@ -63,6 +63,14 @@ try {
     InterceptionAssert(pendingRestartStatus["code"] == "restart_required"
             && !pendingRestartStatus["available"],
         "The successful driver installation did not remain pending restart.")
+    uninstallResult := installer.UninstallDriver()
+    InterceptionAssert(installer.ExecutedCommand
+            == '"C:\Package\install-interception.exe" /uninstall'
+            && uninstallResult["uninstalled"]
+            && uninstallResult["restart_required"]
+            && installer.Status["pending_operation"] == "uninstall"
+            && InStr(installer.Status["message"], "卸载"),
+        "The one-click uninstaller did not build the expected elevated command.")
     registeredServiceProbe := UnavailableRegisteredInterceptionService()
     registeredStatus := registeredServiceProbe.GetStatus()
     InterceptionAssert(registeredStatus["code"] == "restart_required"

@@ -1215,6 +1215,19 @@ class KeyMouseRemapperAssistantApp {
         return true
     }
 
+    UninstallInterceptionDriver(ownerGui := "") {
+        try result := this.Interception.UninstallDriver()
+        catch as uninstallError {
+            ShowDarkMsgBox(Tr("Interception 驱动卸载失败：{1}",
+                TrDiagnostic(uninstallError.Message)),
+                Tr("Interception 驱动"), "Error", ownerGui)
+            return false
+        }
+        ShowDarkMsgBox(Tr("Interception 驱动卸载程序已成功返回。请重启 Windows 后生效。"),
+            Tr("Interception 驱动"), "Info", ownerGui)
+        return true
+    }
+
     OfferInterceptionDriverInstallation(ownerGui := "",
             forDeviceCapture := false) {
         if !this.Interception.CanInstallDriver() {
@@ -1232,6 +1245,21 @@ class KeyMouseRemapperAssistantApp {
         if this.InstallInterceptionDriver(ownerGui)
             return true
         return false
+    }
+
+    OfferInterceptionDriverUninstallation(ownerGui := "") {
+        if !this.Interception.CanInstallDriver() {
+            ShowDarkMsgBox(Tr("Interception 不可用，且发行包中未找到驱动安装器：{1}",
+                "third_party\\interception\\command-line-installer\\install-interception.exe"),
+                Tr("Interception 驱动"), "Error", ownerGui)
+            return false
+        }
+        if !ShowDarkConfirmBox(
+                Tr("Interception 驱动当前已就绪。卸载后需要重启 Windows 才能生效。是否继续？"),
+                Tr("卸载 Interception 驱动"), Tr("卸载驱动"), Tr("取消"),
+                ownerGui)
+            return false
+        return this.UninstallInterceptionDriver(ownerGui)
     }
 
     OpenEventViewer(*) {

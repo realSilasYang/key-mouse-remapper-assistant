@@ -7,7 +7,7 @@ categories based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## 🚧 [Unreleased]
 
-## 🎉 Version [1.1.0] - 2026-09-24
+## 🎉 Version [1.1.0] - 2026-09-25
 
 ### 📦 Release Assets
 
@@ -19,7 +19,7 @@ categories based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### ✨ Added
 
-- **Interception device rules:** Integrated the x64 DLL, driver status checks and installation, device-aware source capture, and a centralized device-rule runtime. Rules can match a physical keyboard or mouse when source-device distinction is enabled; unmatched input is passed through.
+- **Interception device rules:** Integrated the x64 DLL, driver status checks, installation and uninstallation, device-aware source capture, and a centralized device-rule runtime. Rules can match a physical keyboard or mouse when source-device distinction is enabled; unmatched input is passed through. Installing or uninstalling the driver requires administrator privileges and a Windows restart.
 - **Empty target blocking:** A simple rule can leave its target key empty and use `block=true` to suppress the source key.
 
 ---
@@ -28,6 +28,7 @@ categories based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **Shortcut substitution:** A single target key is pressed and released with the source key so it can participate in subsequent Ctrl, Shift, Alt, and Win chords. When left/right modifier distinction is disabled, either source side matches and target modifiers consistently use the left side.
 - **Creation and settings layout:** Refined labels, alignment, and visual states for simple rules and device and modifier controls; improved scope-column sizing, control visibility after resizing, and tooltips near screen edges.
+- **Driver controls:** When the driver is ready, the Settings action changes to “Uninstall driver” and asks for confirmation before requesting administrator privileges; the uninstall button uses a deeper red to improve white-text readability on the dark interface.
 - **AI device-rule guidance:** Generation, optimization, repair, and review now include Interception device numbering and driver prerequisites.
 
 ---
