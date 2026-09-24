@@ -1193,6 +1193,68 @@ ReleaseApplicationMutexOnExit(*) {
 
 ; @mapping-begin
 ; 给这条规则起一个容易辨认的名称；它会显示在主界面中。
+; @名称=F3 唤起/最小化欧路词典
+; 选择规则的写法；请保留下方已有的类型名称。
+; @类型=受托管独立脚本
+; 写清楚按下什么键或鼠标按键会触发这条规则。
+; @来源按键=F3
+; 写清楚触发后会执行什么按键、鼠标操作或命令。
+; @映射结果=欧路词典最小化时唤起主窗口，否则最小化主窗口
+; 写清楚规则在哪里有效，例如“全局”或某个程序。
+; @生效范围=全局
+
+; 下面是一份完整的 AHK v2 脚本；小助手会单独启动和停止它。
+; @script-code-begin
+;  $F3::ToggleEudic()
+;  ;
+;  ToggleEudic(*) {
+;      hwnd := FindEudicMainWindow()
+;      if !hwnd {
+;          KeyWait("F3")
+;          return
+;      }
+;  ;
+;      title := "ahk_id " hwnd
+;      isHidden := !DllCall("user32\IsWindowVisible", "Ptr", hwnd, "Int")
+;      if isHidden || WinGetMinMax(title) == -1 {
+;          WinShow(title)
+;          WinRestore(title)
+;          WinActivate(title)
+;      } else {
+;          WinMinimize(title)
+;      }
+;  ;
+;      ; 等待物理 F3 松开，避免长按触发多次切换。
+;      KeyWait("F3")
+;  }
+;  ;
+;  FindEudicMainWindow() {
+;      previousDetectHidden := A_DetectHiddenWindows
+;      DetectHiddenWindows(true)
+;      try {
+;          fallback := 0
+;          for hwnd in WinGetList("ahk_exe Eudic.exe") {
+;              try {
+;                  title := WinGetTitle("ahk_id " hwnd)
+;                  if title == ""
+;                      continue
+;                  if InStr(title, "欧路词典")
+;                      return hwnd
+;                  if !fallback
+;                      fallback := hwnd
+;              } catch {
+;                  continue
+;              }
+;          }
+;          return fallback
+;      } finally DetectHiddenWindows(previousDetectHidden)
+;  }
+; @script-code-end
+
+; @mapping-end
+
+; @mapping-begin
+; 给这条规则起一个容易辨认的名称；它会显示在主界面中。
 ; @名称=上下文键 映射为 Windows
 ; 选择规则的写法；请保留下方已有的类型名称。
 ; @类型=规则块
