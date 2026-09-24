@@ -1208,46 +1208,85 @@ ReleaseApplicationMutexOnExit(*) {
 ;  $F3::ToggleEudic()
 ;  ;
 ;  ToggleEudic(*) {
-;      hwnd := FindEudicMainWindow()
-;      if !hwnd {
-;          KeyWait("F3")
-;          return
-;      }
-;  ;
-;      title := "ahk_id " hwnd
-;      isHidden := !DllCall("user32\IsWindowVisible", "Ptr", hwnd, "Int")
-;      if isHidden || WinGetMinMax(title) == -1 {
-;          WinShow(title)
-;          WinRestore(title)
-;          WinActivate(title)
-;      } else {
-;          WinMinimize(title)
-;      }
-;  ;
-;      ; 等待物理 F3 松开，避免长按触发多次切换。
-;      KeyWait("F3")
-;  }
-;  ;
-;  FindEudicMainWindow() {
+;      ; Hidden Qt helper windows are also owned by Eudic.exe. Keep hidden
+;      ; window detection enabled for the whole transition so WinShow and
+;      ; WinActivate operate on the same main-window handle that was found.
 ;      previousDetectHidden := A_DetectHiddenWindows
 ;      DetectHiddenWindows(true)
 ;      try {
-;          fallback := 0
-;          for hwnd in WinGetList("ahk_exe Eudic.exe") {
-;              try {
-;                  title := WinGetTitle("ahk_id " hwnd)
-;                  if title == ""
-;                      continue
-;                  if InStr(title, "欧路词典")
-;                      return hwnd
-;                  if !fallback
-;                      fallback := hwnd
-;              } catch {
-;                  continue
-;              }
+;          hwnd := FindEudicMainWindow()
+;          if !hwnd
+;              return
+;  ;
+;          isVisible := DllCall("user32\IsWindowVisible", "Ptr", hwnd, "Int")
+;          isMinimized := DllCall("user32\IsIconic", "Ptr", hwnd, "Int")
+;          if !isVisible || isMinimized {
+;              RestoreAndActivateEudic(hwnd)
+;          } else {
+;              DllCall("user32\ShowWindowAsync", "Ptr", hwnd, "Int", 6,
+;                  "Int") ; SW_MINIMIZE
 ;          }
-;          return fallback
-;      } finally DetectHiddenWindows(previousDetectHidden)
+;      } finally {
+;          DetectHiddenWindows(previousDetectHidden)
+;          ; Wait for the physical F3 release so a held key cannot toggle the
+;          ; window again when the worker receives its next keyboard event.
+;          KeyWait("F3")
+;      }
+;  }
+;  ;
+;  RestoreAndActivateEudic(hwnd) {
+;      ; ShowWindow is synchronous and works even when DetectHiddenWindows is
+;      ; off. Calling it before WinActivate avoids restoring a blank helper
+;      ; surface when Qt leaves the main window hidden after minimization.
+;      DllCall("user32\ShowWindow", "Ptr", hwnd, "Int", 9, "Int")
+;          ; SW_RESTORE
+;      DllCall("user32\BringWindowToTop", "Ptr", hwnd, "Int")
+;      try WinShow("ahk_id " hwnd)
+;      try WinRestore("ahk_id " hwnd)
+;      try WinActivate("ahk_id " hwnd)
+;      DllCall("user32\SetForegroundWindow", "Ptr", hwnd, "Int")
+;      ; Qt can defer painting until after the restore message. Force a full
+;      ; client and child repaint before returning control to the user.
+;      DllCall("user32\RedrawWindow", "Ptr", hwnd, "Ptr", 0, "Ptr", 0,
+;          "UInt", 0x0185, "Int")
+;      DllCall("user32\UpdateWindow", "Ptr", hwnd, "Int")
+;      Loop 8 {
+;          if !DllCall("user32\IsIconic", "Ptr", hwnd, "Int")
+;                  && WinGetID("A") == hwnd
+;              break
+;          Sleep(20)
+;          DllCall("user32\ShowWindow", "Ptr", hwnd, "Int", 9, "Int")
+;          try WinActivate("ahk_id " hwnd)
+;          DllCall("user32\SetForegroundWindow", "Ptr", hwnd, "Int")
+;      }
+;  }
+;  ;
+;  FindEudicMainWindow() {
+;      exact := 0
+;      titled := 0
+;      classFallback := 0
+;      for hwnd in WinGetList("ahk_exe Eudic.exe") {
+;          try {
+;              title := WinGetTitle("ahk_id " hwnd)
+;              className := WinGetClass("ahk_id " hwnd)
+;              if title == ""
+;                  continue
+;              ; Settings, language panels and popup shadows are not the main
+;              ; dictionary window even though they use the same executable.
+;              if title == "设置中心" || title == "eusoft_eudic_en_win32"
+;                      || title == "eudic"
+;                  continue
+;              if title == "欧路词典"
+;                  exact := hwnd
+;              else if !titled && InStr(title, "欧路词典")
+;                  titled := hwnd
+;              else if !classFallback && className == "Qt51516QWindowIcon"
+;                  classFallback := hwnd
+;          } catch {
+;              continue
+;          }
+;      }
+;      return exact || titled || classFallback
 ;  }
 ; @script-code-end
 
