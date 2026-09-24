@@ -173,6 +173,7 @@ class MappingWindow {
         this.InitialClientHeight := MappingWindow.DefaultClientHeight
         this.LastNormalClientWidth := 0
         this.LastNormalClientHeight := 0
+        this.RestoreSurfaceRefreshPending := false
         this.StatusIsError := false
         this.StatusRevision := 0
         this.AppliedColumnWidths := Map()
@@ -1322,14 +1323,23 @@ class MappingWindow {
             return false
         if WindowHierarchy.IsOwnerLocked(this.Gui)
             return WindowHierarchy.ActivateTopOwned(this.Gui)
-        preventSelectionFlash := visible && this.GetSelectedRows().Length > 0
+        wasMinimized := DllCall("user32\IsIconic", "Ptr", hwnd, "Int")
+        preventSelectionFlash := visible && !wasMinimized
+            && this.GetSelectedRows().Length > 0
         if preventSelectionFlash
             this.SetListActivationRedraw(false)
+        restoredFromMinimized := false
         activated := false
         try {
-            if DllCall("user32\IsIconic", "Ptr", hwnd, "Int")
+            restoredFromMinimized := wasMinimized
+            if restoredFromMinimized {
+                ; OnResize normally observes the restore WM_SIZE. Keep a
+                ; fallback marker for activation paths where AHK does not
+                ; deliver that event before ShowWindow returns.
+                this.RestoreSurfaceRefreshPending := true
                 DllCall("user32\ShowWindow", "Ptr", hwnd,
                     "Int", Win32.SW_RESTORE, "Int")
+            }
             try WinActivate("ahk_id " hwnd)
             this.RefreshVisibleRoundedButtons()
             activated := DllCall("user32\IsWindowVisible", "Ptr", hwnd,
@@ -1339,6 +1349,15 @@ class MappingWindow {
                 this.SetListActivationRedraw(true)
                 this.RefreshSelectedListRows()
             }
+        }
+        if restoredFromMinimized && this.RestoreSurfaceRefreshPending {
+            ; Restoring a minimized top-level window can expose a stale
+            ; client surface after the WM_SIZE layout pass. Commit one full
+            ; synchronous redraw after the ListView redraw guard is released
+            ; so native and owner-drawn siblings become visible together.
+            this.RestoreSurfaceRefreshPending := false
+            this.RedrawStable(true, true)
+            this.RefreshVisibleRoundedButtons()
         }
         return activated
     }
@@ -3624,8 +3643,11 @@ class MappingWindow {
     }
 
     OnResize(guiObj, minMax, width, height) {
-        if minMax == -1
+        if minMax == -1 {
+            if DllCall("user32\IsIconic", "Ptr", this.Gui.Hwnd, "Int")
+                this.RestoreSurfaceRefreshPending := true
             return
+        }
         width := UiScaleService.ToDesign(width)
         height := UiScaleService.ToDesign(height)
         if minMax == 0 && width > 0 && height > 0 {
@@ -3639,6 +3661,14 @@ class MappingWindow {
         ; exposed client area never displays the previous child layout.
         this.CancelPendingResize()
         this.ApplyLayout(width, height, false, true)
+        if minMax == 0 && this.RestoreSurfaceRefreshPending {
+            ; A taskbar restore reaches WM_SIZE without going through
+            ; MappingWindow.Activate. Refresh after the restored layout has
+            ; been committed so all child surfaces are painted together.
+            this.RestoreSurfaceRefreshPending := false
+            this.RedrawStable(true, true)
+            this.RefreshVisibleRoundedButtons()
+        }
     }
 
     OnInteractiveResizeMessage(wParam, lParam, message, hwnd) {

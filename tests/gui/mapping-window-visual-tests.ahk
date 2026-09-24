@@ -1417,19 +1417,80 @@ AssertMainStatusCaretHidden(window, context) {
 }
 
 ValidateMainWindowActivation(window) {
-    if EnvGet("KEY_MOUSE_REMAPPER_GUI_TEST_OFFSCREEN") == "1" {
+    window.FullWindowRedrawCount := 0
+    window.RestoreSurfaceRefreshPending := false
+    restoreSurfaceSignatures := CaptureMappingWindowRestoreSurfaceSignatures(
+        window)
+    DllCall("user32\ShowWindow", "Ptr", window.Gui.Hwnd,
+        "Int", Win32.SW_MINIMIZE, "Int")
+    Sleep(150)
+    if DllCall("user32\IsIconic", "Ptr", window.Gui.Hwnd, "Int") {
+        ; A taskbar click restores the window through the native path and
+        ; does not call MappingWindow.Activate, so cover that path directly.
+        window.FullWindowRedrawCount := 0
         DllCall("user32\ShowWindow", "Ptr", window.Gui.Hwnd,
-            "Int", Win32.SW_HIDE, "Int")
-        MappingWindowVisualAssert(!DllCall("user32\IsWindowVisible", "Ptr",
+            "Int", Win32.SW_RESTORE, "Int")
+        Sleep(150)
+        MappingWindowVisualAssert(!DllCall("user32\IsIconic", "Ptr",
+                window.Gui.Hwnd, "Int")
+                && window.FullWindowRedrawCount > 0
+                && !window.RestoreSurfaceRefreshPending,
+            "The native minimized-window restore did not synchronously redraw its child surfaces.")
+        AssertMappingWindowRestoreSurfaceSignatures(window,
+            restoreSurfaceSignatures)
+
+        ; Also keep the tray activation path covered, including its ListView
+        ; redraw guard and fallback when WM_SIZE is not delivered in time.
+        window.FullWindowRedrawCount := 0
+        DllCall("user32\ShowWindow", "Ptr", window.Gui.Hwnd,
+            "Int", Win32.SW_MINIMIZE, "Int")
+        Sleep(150)
+        MappingWindowVisualAssert(DllCall("user32\IsIconic", "Ptr",
                 window.Gui.Hwnd, "Int"),
-            "The offscreen activation probe could not first hide the main window.")
+            "The activation probe could not minimize the main window a second time.")
         activationResult := window.Activate()
+        Sleep(150)
         MappingWindowVisualAssert(activationResult
-                && DllCall("user32\IsWindowVisible", "Ptr", window.Gui.Hwnd,
-                    "Int")
                 && !DllCall("user32\IsIconic", "Ptr", window.Gui.Hwnd,
-                    "Int"),
-            "The unified main-window activation path did not restore a hidden window.")
+                    "Int")
+                && window.FullWindowRedrawCount > 0
+                && !window.RestoreSurfaceRefreshPending,
+            "The tray minimized-window restore did not synchronously redraw its child surfaces.")
+        AssertMappingWindowRestoreSurfaceSignatures(window,
+            restoreSurfaceSignatures)
+        return true
+    }
+    if EnvGet("KEY_MOUSE_REMAPPER_GUI_TEST_OFFSCREEN") == "1" {
+        ; The visual runner places the window offscreen, but the native
+        ; minimize/restore state still exercises the same WM_SIZE path.
+        DllCall("user32\ShowWindow", "Ptr", window.Gui.Hwnd,
+            "Int", Win32.SW_MINIMIZE, "Int")
+        Sleep(150)
+        if !DllCall("user32\IsIconic", "Ptr", window.Gui.Hwnd, "Int") {
+            DllCall("user32\ShowWindow", "Ptr", window.Gui.Hwnd,
+                "Int", Win32.SW_HIDE, "Int")
+            MappingWindowVisualAssert(!DllCall("user32\IsWindowVisible",
+                    "Ptr", window.Gui.Hwnd, "Int"),
+                "The offscreen activation probe could not first hide the main window.")
+            activationResult := window.Activate()
+            MappingWindowVisualAssert(activationResult
+                    && DllCall("user32\IsWindowVisible", "Ptr",
+                        window.Gui.Hwnd, "Int")
+                    && !DllCall("user32\IsIconic", "Ptr", window.Gui.Hwnd,
+                        "Int"),
+                "The unified main-window activation path did not restore a hidden window.")
+            return true
+        }
+        activationResult := window.Activate()
+        Sleep(150)
+        MappingWindowVisualAssert(activationResult
+                && !DllCall("user32\IsIconic", "Ptr", window.Gui.Hwnd,
+                    "Int")
+                && window.FullWindowRedrawCount > 0
+                && !window.RestoreSurfaceRefreshPending,
+            "The offscreen minimized main window did not synchronously redraw its child surfaces after restore.")
+        AssertMappingWindowRestoreSurfaceSignatures(window,
+            restoreSurfaceSignatures)
         return true
     }
     DllCall("user32\ShowWindow", "Ptr", window.Gui.Hwnd,
@@ -1444,6 +1505,46 @@ ValidateMainWindowActivation(window) {
             && !DllCall("user32\IsIconic", "Ptr", window.Gui.Hwnd,
                 "Int"),
         "The unified main-window activation path did not restore a minimized window.")
+    MappingWindowVisualAssert(window.FullWindowRedrawCount > 0
+            && !window.RestoreSurfaceRefreshPending,
+        "The minimized main window did not synchronously redraw its child surfaces after restore.")
+    AssertMappingWindowRestoreSurfaceSignatures(window,
+        restoreSurfaceSignatures)
+}
+
+CaptureMappingWindowRestoreSurfaceSignatures(window) {
+    signatures := Map()
+    for entry in [
+            {Name: "section heading", Control: window.SectionTitle},
+            {Name: "source label", Control: window.SourceLabel},
+            {Name: "target label", Control: window.TargetLabel},
+            {Name: "name label", Control: window.NameLabel},
+            {Name: "source detail", Control: window.SourceDetail},
+            {Name: "target detail", Control: window.TargetDetail}] {
+        signatures[entry.Name] := CaptureMappingWindowControlSignature(
+            entry.Control)
+    }
+    return signatures
+}
+
+AssertMappingWindowRestoreSurfaceSignatures(window, expected) {
+    for name, signature in expected {
+        MappingWindowVisualAssert(signature != ""
+                && CaptureMappingWindowControlSignature(
+                    FindMappingWindowRestoreSurfaceControl(window, name))
+                    == signature,
+            "The " name " surface changed after minimized-window restore.")
+    }
+}
+
+FindMappingWindowRestoreSurfaceControl(window, name) {
+    return Map(
+        "section heading", window.SectionTitle,
+        "source label", window.SourceLabel,
+        "target label", window.TargetLabel,
+        "name label", window.NameLabel,
+        "source detail", window.SourceDetail,
+        "target detail", window.TargetDetail)[name]
 }
 
 ReportMappingWindowVisualResult(message, isError := false) {
