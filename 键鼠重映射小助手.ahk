@@ -1199,7 +1199,7 @@ ReleaseApplicationMutexOnExit(*) {
 ; 写清楚按下什么键或鼠标按键会触发这条规则。
 ; @来源按键=F3
 ; 写清楚触发后会执行什么按键、鼠标操作或命令。
-; @映射结果=欧路词典最小化时唤起主窗口，否则最小化主窗口
+; @映射结果=欧路词典最小化时唤起主窗口，否则最小化主窗口；主窗口不显示任务栏按钮但保留 Alt+Tab/Win+Tab
 ; 写清楚规则在哪里有效，例如“全局”或某个程序。
 ; @生效范围=全局
 
@@ -1225,7 +1225,12 @@ ReleaseApplicationMutexOnExit(*) {
 ;          } else {
 ;              DllCall("user32\ShowWindowAsync", "Ptr", hwnd, "Int", 6,
 ;                  "Int") ; SW_MINIMIZE
+;              Sleep(30)
 ;          }
+;          ; ITaskbarList::DeleteTab removes only the taskbar button. The
+;          ; normal top-level window style remains, so Alt+Tab and Win+Tab
+;          ; continue to include the dictionary window in the switcher.
+;          RemoveEudicTaskbarTab(hwnd)
 ;      } finally {
 ;          DetectHiddenWindows(previousDetectHidden)
 ;          ; Wait for the physical F3 release so a held key cannot toggle the
@@ -1259,6 +1264,30 @@ ReleaseApplicationMutexOnExit(*) {
 ;          try WinActivate("ahk_id " hwnd)
 ;          DllCall("user32\SetForegroundWindow", "Ptr", hwnd, "Int")
 ;      }
+;      RemoveEudicTaskbarTab(hwnd)
+;  }
+;  ;
+;  RemoveEudicTaskbarTab(hwnd) {
+;      if !hwnd || !DllCall("user32\IsWindow", "Ptr", hwnd, "Int")
+;          return false
+;      ; CLSID_TaskbarList / IID_ITaskbarList. HrInit is required before
+;      ; DeleteTab when the COM object is created in the worker process.
+;      Loop 2 {
+;          try taskbarList := ComObject(
+;              "{56FDF344-FD6D-11D0-958A-006097C9A090}",
+;              "{56FDF342-FD6D-11D0-958A-006097C9A090}")
+;          catch
+;              return false
+;          try {
+;              if ComCall(3, taskbarList, "Int") < 0
+;                  continue
+;              if ComCall(5, taskbarList, "Ptr", hwnd, "Int") >= 0
+;                  return true
+;          } catch {
+;              continue
+;          }
+;      }
+;      return false
 ;  }
 ;  ;
 ;  FindEudicMainWindow() {
