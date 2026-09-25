@@ -1215,14 +1215,24 @@ ReleaseApplicationMutexOnExit(*) {
 ;      DetectHiddenWindows(true)
 ;      try {
 ;          hwnd := FindEudicMainWindow()
-;          if !hwnd
-;              hwnd := LaunchEudicMainWindow()
+;          relaunched := !hwnd
+;          if hwnd {
+;              ; Closing the Qt main window can leave a same-titled hidden
+;              ; handle behind the taskbar process. It is not recoverable with
+;              ; ShowWindow, so treat a hidden, non-minimized handle as closed.
+;              isVisible := DllCall("user32\IsWindowVisible", "Ptr", hwnd,
+;                  "Int")
+;              isMinimized := DllCall("user32\IsIconic", "Ptr", hwnd, "Int")
+;              relaunched := !isVisible && !isMinimized
+;          }
+;          if relaunched
+;              hwnd := LaunchEudicMainWindow(hwnd)
 ;          if !hwnd
 ;              return
 ;  ;
 ;          isVisible := DllCall("user32\IsWindowVisible", "Ptr", hwnd, "Int")
 ;          isMinimized := DllCall("user32\IsIconic", "Ptr", hwnd, "Int")
-;          if !isVisible || isMinimized {
+;          if relaunched || !isVisible || isMinimized {
 ;              RestoreAndActivateEudic(hwnd)
 ;          } else {
 ;              DllCall("user32\ShowWindowAsync", "Ptr", hwnd, "Int", 6,
@@ -1269,7 +1279,7 @@ ReleaseApplicationMutexOnExit(*) {
 ;      RemoveEudicTaskbarTab(hwnd)
 ;  }
 ;  ;
-;  LaunchEudicMainWindow() {
+;  LaunchEudicMainWindow(previousHwnd := 0) {
 ;      executable := FindEudicExecutablePath()
 ;      workingDir := ""
 ;      if InStr(executable, "\")
@@ -1280,7 +1290,9 @@ ReleaseApplicationMutexOnExit(*) {
 ;      deadline := A_TickCount + 8000
 ;      Loop {
 ;          hwnd := FindEudicMainWindow()
-;          if hwnd
+;          if hwnd && (hwnd != previousHwnd
+;                  || DllCall("user32\IsWindowVisible", "Ptr", hwnd, "Int")
+;                  || DllCall("user32\IsIconic", "Ptr", hwnd, "Int"))
 ;              return hwnd
 ;          if A_TickCount >= deadline
 ;              break
@@ -1296,7 +1308,18 @@ ReleaseApplicationMutexOnExit(*) {
 ;          try path := WinGetProcessPath("ahk_id " hwnd)
 ;          catch
 ;              continue
-;          if path != ""
+;          if path != "" && FileExist(path)
+;              return path
+;      }
+;      for key in [
+;          "HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\eudic",
+;          "HKLM\Software\Microsoft\Windows\CurrentVersion\Uninstall\eudic",
+;          "HKLM\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\eudic"] {
+;          try path := RegRead(key, "DisplayIcon")
+;          catch
+;              continue
+;          path := Trim(path, '"')
+;          if FileExist(path)
 ;              return path
 ;      }
 ;      for candidate in [
