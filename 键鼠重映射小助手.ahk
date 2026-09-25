@@ -573,7 +573,30 @@ ReleaseApplicationMutexOnExit(*) {
 
 ; 下面是一份完整的 AHK v2 脚本；小助手会单独启动和停止它。
 ; @script-code-begin
+;  EudicTaskbarPollStartedAt := A_TickCount
+;  ; 启动后每秒尝试移除任务栏按钮，成功或满 120 秒即停止。
+;  SetTimer(PollEudicTaskbarTabRemoval, 1000)
+;  ;
 ;  $F3::ToggleEudic()
+;  ;
+;  PollEudicTaskbarTabRemoval() {
+;      global EudicTaskbarPollStartedAt
+;      if A_TickCount - EudicTaskbarPollStartedAt >= 120000 {
+;          SetTimer(PollEudicTaskbarTabRemoval, 0)
+;          return
+;      }
+;      previousDetectHidden := A_DetectHiddenWindows
+;      DetectHiddenWindows(true)
+;      try {
+;          hwnd := FindEudicMainWindow()
+;          if hwnd && (DllCall("user32\IsWindowVisible", "Ptr", hwnd, "Int")
+;                  || DllCall("user32\IsIconic", "Ptr", hwnd, "Int"))
+;                  && RemoveEudicTaskbarTab(hwnd)
+;              SetTimer(PollEudicTaskbarTabRemoval, 0)
+;      } finally {
+;          DetectHiddenWindows(previousDetectHidden)
+;      }
+;  }
 ;  ;
 ;  ToggleEudic(*) {
 ;      ; Eudic.exe 也会创建隐藏的 Qt 辅助窗口。整个切换过程都保持隐藏窗口检测，

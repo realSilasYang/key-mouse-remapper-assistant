@@ -71,6 +71,11 @@ RunScriptRuleRuntimeTests() {
 
         app := ScriptRuleTestApp(testRoot)
         runtime := ScriptRuleRuntime(app, testRoot "\runtime")
+        eudicRule := MappingCodeRepository(
+            A_ScriptDir "\..\..\键鼠重映射小助手.ahk")
+            .GetById("F3 唤起/最小化欧路词典")
+        ScriptRuleAssert(runtime.ValidateSpec(eudicRule.Spec),
+            "Built-in Eudic script failed worker syntax validation.")
         errorRuntime := ScriptRuleRuntime(app,
             testRoot "\error-runtime")
         errorSpec := ScriptRuleSpec.FromCode("interception-context-failure",
