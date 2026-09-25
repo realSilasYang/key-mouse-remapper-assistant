@@ -1235,14 +1235,15 @@ ReleaseApplicationMutexOnExit(*) {
 ;          if relaunched || !isVisible || isMinimized {
 ;              RestoreAndActivateEudic(hwnd)
 ;          } else {
-;              DllCall("user32\ShowWindowAsync", "Ptr", hwnd, "Int", 6,
+;              ; Use the synchronous API so the visual state changes before
+;              ; this hotkey thread performs any follow-up work.
+;              DllCall("user32\ShowWindow", "Ptr", hwnd, "Int", 6,
 ;                  "Int") ; SW_MINIMIZE
-;              Sleep(30)
 ;          }
 ;          ; ITaskbarList::DeleteTab removes only the taskbar button. The
 ;          ; normal top-level window style remains, so Alt+Tab and Win+Tab
 ;          ; continue to include the dictionary window in the switcher.
-;          RemoveEudicTaskbarTab(hwnd)
+;          ScheduleEudicTaskbarTabRemoval(hwnd)
 ;      } finally {
 ;          DetectHiddenWindows(previousDetectHidden)
 ;          ; Wait for the physical F3 release so a held key cannot toggle the
@@ -1276,7 +1277,13 @@ ReleaseApplicationMutexOnExit(*) {
 ;          try WinActivate("ahk_id " hwnd)
 ;          DllCall("user32\SetForegroundWindow", "Ptr", hwnd, "Int")
 ;      }
-;      RemoveEudicTaskbarTab(hwnd)
+;  }
+;  ;
+;  ScheduleEudicTaskbarTabRemoval(hwnd) {
+;      ; Explorer can occasionally take time to service ITaskbarList. Keep
+;      ; that shell call out of the F3 transition so minimize/restore remains
+;      ; immediate; the one-shot timer removes the button moments later.
+;      SetTimer((*) => RemoveEudicTaskbarTab(hwnd), -1)
 ;  }
 ;  ;
 ;  LaunchEudicMainWindow(previousHwnd := 0) {
