@@ -1199,7 +1199,7 @@ ReleaseApplicationMutexOnExit(*) {
 ; 写清楚按下什么键或鼠标按键会触发这条规则。
 ; @来源按键=F3
 ; 写清楚触发后会执行什么按键、鼠标操作或命令。
-; @映射结果=欧路词典最小化时唤起主窗口，否则最小化主窗口；主窗口不显示任务栏按钮但保留 Alt+Tab/Win+Tab
+; @映射结果=欧路词典关闭或最小化时唤起主窗口，否则最小化主窗口；主窗口不显示任务栏按钮但保留 Alt+Tab/Win+Tab
 ; 写清楚规则在哪里有效，例如“全局”或某个程序。
 ; @生效范围=全局
 
@@ -1215,6 +1215,8 @@ ReleaseApplicationMutexOnExit(*) {
 ;      DetectHiddenWindows(true)
 ;      try {
 ;          hwnd := FindEudicMainWindow()
+;          if !hwnd
+;              hwnd := LaunchEudicMainWindow()
 ;          if !hwnd
 ;              return
 ;  ;
@@ -1265,6 +1267,48 @@ ReleaseApplicationMutexOnExit(*) {
 ;          DllCall("user32\SetForegroundWindow", "Ptr", hwnd, "Int")
 ;      }
 ;      RemoveEudicTaskbarTab(hwnd)
+;  }
+;  ;
+;  LaunchEudicMainWindow() {
+;      executable := FindEudicExecutablePath()
+;      workingDir := ""
+;      if InStr(executable, "\")
+;          SplitPath(executable, , &workingDir)
+;      try Run('"' executable '"', workingDir, , &processId)
+;      catch
+;          return 0
+;      deadline := A_TickCount + 8000
+;      Loop {
+;          hwnd := FindEudicMainWindow()
+;          if hwnd
+;              return hwnd
+;          if A_TickCount >= deadline
+;              break
+;          Sleep(50)
+;      }
+;      return 0
+;  }
+;  ;
+;  FindEudicExecutablePath() {
+;      ; Reusing the path from a remaining helper process makes relaunch work
+;      ; for custom installation locations as well as the default location.
+;      for hwnd in WinGetList("ahk_exe Eudic.exe") {
+;          try path := WinGetProcessPath("ahk_id " hwnd)
+;          catch
+;              continue
+;          if path != ""
+;              return path
+;      }
+;      for candidate in [
+;          EnvGet("ProgramFiles") "\eudic\eudic.exe",
+;          EnvGet("ProgramFiles(x86)") "\eudic\eudic.exe",
+;          EnvGet("LocalAppData") "\eudic\eudic.exe"] {
+;          if candidate != "\eudic\eudic.exe" && FileExist(candidate)
+;              return candidate
+;      }
+;      ; ShellExecute can resolve an App Paths registration when only the
+;      ; executable name is available.
+;      return "eudic.exe"
 ;  }
 ;  ;
 ;  RemoveEudicTaskbarTab(hwnd) {
