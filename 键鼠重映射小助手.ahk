@@ -561,6 +561,196 @@ ReleaseApplicationMutexOnExit(*) {
 
 ; @mapping-begin
 ; 给这条规则起一个容易辨认的名称；它会显示在主界面中。
+; @名称=F3 唤起/最小化欧路词典
+; 选择规则的写法；请保留下方已有的类型名称。
+; @类型=受托管独立脚本
+; 写清楚按下什么键或鼠标按键会触发这条规则。
+; @来源按键=F3
+; 写清楚触发后会执行什么按键、鼠标操作或命令。
+; @映射结果=欧路词典关闭或最小化时唤起主窗口，否则最小化主窗口；主窗口不显示任务栏按钮
+; 写清楚规则在哪里有效，例如“全局”或某个程序。
+; @生效范围=全局
+
+; 下面是一份完整的 AHK v2 脚本；小助手会单独启动和停止它。
+; @script-code-begin
+;  $F3::ToggleEudic()
+;  ;
+;  ToggleEudic(*) {
+;      ; Eudic.exe 也会创建隐藏的 Qt 辅助窗口。整个切换过程都保持隐藏窗口检测，
+;      ; 确保 WinShow 和 WinActivate 始终作用于找到的同一个主窗口句柄。
+;      previousDetectHidden := A_DetectHiddenWindows
+;      DetectHiddenWindows(true)
+;      try {
+;          hwnd := FindEudicMainWindow()
+;          relaunched := !hwnd
+;          if hwnd {
+;              ; 关闭 Qt 主窗口后，任务栏进程可能仍会留下一个同名的隐藏句柄。
+;              ; ShowWindow 无法恢复该句柄，因此将隐藏且未最小化的句柄视为已关闭。
+;              isVisible := DllCall("user32\IsWindowVisible", "Ptr", hwnd,
+;                  "Int")
+;              isMinimized := DllCall("user32\IsIconic", "Ptr", hwnd, "Int")
+;              relaunched := !isVisible && !isMinimized
+;          }
+;          if relaunched
+;              hwnd := LaunchEudicMainWindow(hwnd)
+;          if !hwnd
+;              return
+;  ;
+;          isVisible := DllCall("user32\IsWindowVisible", "Ptr", hwnd, "Int")
+;          isMinimized := DllCall("user32\IsIconic", "Ptr", hwnd, "Int")
+;          if relaunched || !isVisible || isMinimized {
+;              RestoreAndActivateEudic(hwnd)
+;          } else {
+;              ; 使用同步 API，确保视觉状态先完成改变，再执行热键线程的后续操作。
+;              DllCall("user32\ShowWindow", "Ptr", hwnd, "Int", 6,
+;                  "Int") ; SW_MINIMIZE：最小化窗口
+;          }
+;          ; ITaskbarList::DeleteTab 只移除任务栏按钮，不改变普通顶层窗口样式。
+;          ScheduleEudicTaskbarTabRemoval(hwnd)
+;      } finally {
+;          DetectHiddenWindows(previousDetectHidden)
+;          ; 等待物理 F3 键释放，避免用户按住按键时工作进程收到下一次键盘事件，
+;          ; 导致窗口再次切换。
+;          KeyWait("F3")
+;      }
+;  }
+;  ;
+;  RestoreAndActivateEudic(hwnd) {
+;      ; ShowWindow 是同步调用，即使 DetectHiddenWindows 关闭也能工作。
+;      ; 先调用它再执行 WinActivate，避免 Qt 最小化后主窗口仍隐藏而恢复出空白辅助窗口。
+;      DllCall("user32\ShowWindow", "Ptr", hwnd, "Int", 9, "Int")
+;          ; SW_RESTORE：恢复窗口
+;      DllCall("user32\BringWindowToTop", "Ptr", hwnd, "Int")
+;      try WinShow("ahk_id " hwnd)
+;      try WinRestore("ahk_id " hwnd)
+;      try WinActivate("ahk_id " hwnd)
+;      DllCall("user32\SetForegroundWindow", "Ptr", hwnd, "Int")
+;      ; Qt 可能会延迟到恢复消息之后才绘制。将控制权交还用户前，强制重绘客户区及子窗口。
+;      DllCall("user32\RedrawWindow", "Ptr", hwnd, "Ptr", 0, "Ptr", 0,
+;          "UInt", 0x0185, "Int")
+;      DllCall("user32\UpdateWindow", "Ptr", hwnd, "Int")
+;      Loop 8 {
+;          if !DllCall("user32\IsIconic", "Ptr", hwnd, "Int")
+;                  && WinGetID("A") == hwnd
+;              break
+;          Sleep(20)
+;          DllCall("user32\ShowWindow", "Ptr", hwnd, "Int", 9, "Int")
+;          try WinActivate("ahk_id " hwnd)
+;          DllCall("user32\SetForegroundWindow", "Ptr", hwnd, "Int")
+;      }
+;  }
+;  ;
+;  ScheduleEudicTaskbarTabRemoval(hwnd) {
+;      ; Explorer 偶尔需要较长时间处理 ITaskbarList。将该 Shell 调用移出 F3 切换过程，
+;      ; 让最小化或恢复立即完成，再由一次性定时器稍后移除任务栏按钮。
+;      SetTimer((*) => RemoveEudicTaskbarTab(hwnd), -1)
+;  }
+;  ;
+;  LaunchEudicMainWindow(previousHwnd := 0) {
+;      executable := FindEudicExecutablePath()
+;      workingDir := ""
+;      if InStr(executable, "\")
+;          SplitPath(executable, , &workingDir)
+;      try Run('"' executable '"', workingDir, , &processId)
+;      catch
+;          return 0
+;      deadline := A_TickCount + 8000
+;      Loop {
+;          hwnd := FindEudicMainWindow()
+;          if hwnd && (hwnd != previousHwnd
+;                  || DllCall("user32\IsWindowVisible", "Ptr", hwnd, "Int")
+;                  || DllCall("user32\IsIconic", "Ptr", hwnd, "Int"))
+;              return hwnd
+;          if A_TickCount >= deadline
+;              break
+;          Sleep(50)
+;      }
+;      return 0
+;  }
+;  ;
+;  FindEudicExecutablePath() {
+;      ; 复用残留辅助进程中的路径，使重新启动同时支持自定义安装位置和默认位置。
+;      for hwnd in WinGetList("ahk_exe Eudic.exe") {
+;          try path := WinGetProcessPath("ahk_id " hwnd)
+;          catch
+;              continue
+;          if path != "" && FileExist(path)
+;              return path
+;      }
+;      for key in [
+;          "HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\eudic",
+;          "HKLM\Software\Microsoft\Windows\CurrentVersion\Uninstall\eudic",
+;          "HKLM\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\eudic"] {
+;          try path := RegRead(key, "DisplayIcon")
+;          catch
+;              continue
+;          path := Trim(path, '"')
+;          if FileExist(path)
+;              return path
+;      }
+;      for candidate in [
+;          EnvGet("ProgramFiles") "\eudic\eudic.exe",
+;          EnvGet("ProgramFiles(x86)") "\eudic\eudic.exe",
+;          EnvGet("LocalAppData") "\eudic\eudic.exe"] {
+;          if candidate != "\eudic\eudic.exe" && FileExist(candidate)
+;              return candidate
+;      }
+;      ; 仅有可执行文件名时，ShellExecute 可以通过 App Paths 注册表项解析路径。
+;      return "eudic.exe"
+;  }
+;  ;
+;  RemoveEudicTaskbarTab(hwnd) {
+;      if !hwnd || !DllCall("user32\IsWindow", "Ptr", hwnd, "Int")
+;          return false
+;      ; CLSID_TaskbarList / IID_ITaskbarList。工作进程创建 COM 对象后，
+;      ; 必须先调用 HrInit，才能使用 DeleteTab。
+;      Loop 2 {
+;          try taskbarList := ComObject(
+;              "{56FDF344-FD6D-11D0-958A-006097C9A090}",
+;              "{56FDF342-FD6D-11D0-958A-006097C9A090}")
+;          catch
+;              return false
+;          try {
+;              if ComCall(3, taskbarList, "Int") < 0
+;                  continue
+;              if ComCall(5, taskbarList, "Ptr", hwnd, "Int") >= 0
+;                  return true
+;          } catch {
+;              continue
+;          }
+;      }
+;      return false
+;  }
+;  ;
+;  FindEudicMainWindow() {
+;      exact := 0
+;      titled := 0
+;      for hwnd in WinGetList("ahk_exe Eudic.exe") {
+;          try {
+;              title := WinGetTitle("ahk_id " hwnd)
+;              if title == ""
+;                  continue
+;              ; 设置窗口、语言面板和弹出阴影不是词典主窗口，尽管它们使用同一个可执行文件。
+;              if title == "设置中心" || title == "eusoft_eudic_en_win32"
+;                      || title == "eudic"
+;                  continue
+;              if title == "欧路词典"
+;                  exact := hwnd
+;              else if !titled && InStr(title, "欧路词典")
+;                  titled := hwnd
+;          } catch {
+;              continue
+;          }
+;      }
+;      ; 不要回退到普通 Qt 窗口。主窗口关闭后，Eudic.exe 可能留下显示为空白的隐藏辅助窗口。
+;      return exact || titled
+;  }
+; @script-code-end
+
+; @mapping-end
+
+; @mapping-begin
+; 给这条规则起一个容易辨认的名称；它会显示在主界面中。
 ; @名称=Shift+滚轮 水平滚动
 ; 选择规则的写法；请保留下方已有的类型名称。
 ; @类型=受托管独立脚本
@@ -1186,208 +1376,6 @@ ReleaseApplicationMutexOnExit(*) {
 ;      ; 退出清理使用同步 ShowWindow 后再尽力恢复原 Z 序与置顶分组，不启动
 ;      ; 新定时器，也不会覆盖宿主注册的其他退出处理函数。
 ;      ApplyRecordedZOrder(validRecords)
-;  }
-; @script-code-end
-
-; @mapping-end
-
-; @mapping-begin
-; 给这条规则起一个容易辨认的名称；它会显示在主界面中。
-; @名称=F3 唤起/最小化欧路词典
-; 选择规则的写法；请保留下方已有的类型名称。
-; @类型=受托管独立脚本
-; 写清楚按下什么键或鼠标按键会触发这条规则。
-; @来源按键=F3
-; 写清楚触发后会执行什么按键、鼠标操作或命令。
-; @映射结果=欧路词典关闭或最小化时唤起主窗口，否则最小化主窗口；主窗口不显示任务栏按钮但保留 Alt+Tab/Win+Tab
-; 写清楚规则在哪里有效，例如“全局”或某个程序。
-; @生效范围=全局
-
-; 下面是一份完整的 AHK v2 脚本；小助手会单独启动和停止它。
-; @script-code-begin
-;  $F3::ToggleEudic()
-;  ;
-;  ToggleEudic(*) {
-;      ; Hidden Qt helper windows are also owned by Eudic.exe. Keep hidden
-;      ; window detection enabled for the whole transition so WinShow and
-;      ; WinActivate operate on the same main-window handle that was found.
-;      previousDetectHidden := A_DetectHiddenWindows
-;      DetectHiddenWindows(true)
-;      try {
-;          hwnd := FindEudicMainWindow()
-;          relaunched := !hwnd
-;          if hwnd {
-;              ; Closing the Qt main window can leave a same-titled hidden
-;              ; handle behind the taskbar process. It is not recoverable with
-;              ; ShowWindow, so treat a hidden, non-minimized handle as closed.
-;              isVisible := DllCall("user32\IsWindowVisible", "Ptr", hwnd,
-;                  "Int")
-;              isMinimized := DllCall("user32\IsIconic", "Ptr", hwnd, "Int")
-;              relaunched := !isVisible && !isMinimized
-;          }
-;          if relaunched
-;              hwnd := LaunchEudicMainWindow(hwnd)
-;          if !hwnd
-;              return
-;  ;
-;          isVisible := DllCall("user32\IsWindowVisible", "Ptr", hwnd, "Int")
-;          isMinimized := DllCall("user32\IsIconic", "Ptr", hwnd, "Int")
-;          if relaunched || !isVisible || isMinimized {
-;              RestoreAndActivateEudic(hwnd)
-;          } else {
-;              ; Use the synchronous API so the visual state changes before
-;              ; this hotkey thread performs any follow-up work.
-;              DllCall("user32\ShowWindow", "Ptr", hwnd, "Int", 6,
-;                  "Int") ; SW_MINIMIZE
-;          }
-;          ; ITaskbarList::DeleteTab removes only the taskbar button. The
-;          ; normal top-level window style remains, so Alt+Tab and Win+Tab
-;          ; continue to include the dictionary window in the switcher.
-;          ScheduleEudicTaskbarTabRemoval(hwnd)
-;      } finally {
-;          DetectHiddenWindows(previousDetectHidden)
-;          ; Wait for the physical F3 release so a held key cannot toggle the
-;          ; window again when the worker receives its next keyboard event.
-;          KeyWait("F3")
-;      }
-;  }
-;  ;
-;  RestoreAndActivateEudic(hwnd) {
-;      ; ShowWindow is synchronous and works even when DetectHiddenWindows is
-;      ; off. Calling it before WinActivate avoids restoring a blank helper
-;      ; surface when Qt leaves the main window hidden after minimization.
-;      DllCall("user32\ShowWindow", "Ptr", hwnd, "Int", 9, "Int")
-;          ; SW_RESTORE
-;      DllCall("user32\BringWindowToTop", "Ptr", hwnd, "Int")
-;      try WinShow("ahk_id " hwnd)
-;      try WinRestore("ahk_id " hwnd)
-;      try WinActivate("ahk_id " hwnd)
-;      DllCall("user32\SetForegroundWindow", "Ptr", hwnd, "Int")
-;      ; Qt can defer painting until after the restore message. Force a full
-;      ; client and child repaint before returning control to the user.
-;      DllCall("user32\RedrawWindow", "Ptr", hwnd, "Ptr", 0, "Ptr", 0,
-;          "UInt", 0x0185, "Int")
-;      DllCall("user32\UpdateWindow", "Ptr", hwnd, "Int")
-;      Loop 8 {
-;          if !DllCall("user32\IsIconic", "Ptr", hwnd, "Int")
-;                  && WinGetID("A") == hwnd
-;              break
-;          Sleep(20)
-;          DllCall("user32\ShowWindow", "Ptr", hwnd, "Int", 9, "Int")
-;          try WinActivate("ahk_id " hwnd)
-;          DllCall("user32\SetForegroundWindow", "Ptr", hwnd, "Int")
-;      }
-;  }
-;  ;
-;  ScheduleEudicTaskbarTabRemoval(hwnd) {
-;      ; Explorer can occasionally take time to service ITaskbarList. Keep
-;      ; that shell call out of the F3 transition so minimize/restore remains
-;      ; immediate; the one-shot timer removes the button moments later.
-;      SetTimer((*) => RemoveEudicTaskbarTab(hwnd), -1)
-;  }
-;  ;
-;  LaunchEudicMainWindow(previousHwnd := 0) {
-;      executable := FindEudicExecutablePath()
-;      workingDir := ""
-;      if InStr(executable, "\")
-;          SplitPath(executable, , &workingDir)
-;      try Run('"' executable '"', workingDir, , &processId)
-;      catch
-;          return 0
-;      deadline := A_TickCount + 8000
-;      Loop {
-;          hwnd := FindEudicMainWindow()
-;          if hwnd && (hwnd != previousHwnd
-;                  || DllCall("user32\IsWindowVisible", "Ptr", hwnd, "Int")
-;                  || DllCall("user32\IsIconic", "Ptr", hwnd, "Int"))
-;              return hwnd
-;          if A_TickCount >= deadline
-;              break
-;          Sleep(50)
-;      }
-;      return 0
-;  }
-;  ;
-;  FindEudicExecutablePath() {
-;      ; Reusing the path from a remaining helper process makes relaunch work
-;      ; for custom installation locations as well as the default location.
-;      for hwnd in WinGetList("ahk_exe Eudic.exe") {
-;          try path := WinGetProcessPath("ahk_id " hwnd)
-;          catch
-;              continue
-;          if path != "" && FileExist(path)
-;              return path
-;      }
-;      for key in [
-;          "HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\eudic",
-;          "HKLM\Software\Microsoft\Windows\CurrentVersion\Uninstall\eudic",
-;          "HKLM\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\eudic"] {
-;          try path := RegRead(key, "DisplayIcon")
-;          catch
-;              continue
-;          path := Trim(path, '"')
-;          if FileExist(path)
-;              return path
-;      }
-;      for candidate in [
-;          EnvGet("ProgramFiles") "\eudic\eudic.exe",
-;          EnvGet("ProgramFiles(x86)") "\eudic\eudic.exe",
-;          EnvGet("LocalAppData") "\eudic\eudic.exe"] {
-;          if candidate != "\eudic\eudic.exe" && FileExist(candidate)
-;              return candidate
-;      }
-;      ; ShellExecute can resolve an App Paths registration when only the
-;      ; executable name is available.
-;      return "eudic.exe"
-;  }
-;  ;
-;  RemoveEudicTaskbarTab(hwnd) {
-;      if !hwnd || !DllCall("user32\IsWindow", "Ptr", hwnd, "Int")
-;          return false
-;      ; CLSID_TaskbarList / IID_ITaskbarList. HrInit is required before
-;      ; DeleteTab when the COM object is created in the worker process.
-;      Loop 2 {
-;          try taskbarList := ComObject(
-;              "{56FDF344-FD6D-11D0-958A-006097C9A090}",
-;              "{56FDF342-FD6D-11D0-958A-006097C9A090}")
-;          catch
-;              return false
-;          try {
-;              if ComCall(3, taskbarList, "Int") < 0
-;                  continue
-;              if ComCall(5, taskbarList, "Ptr", hwnd, "Int") >= 0
-;                  return true
-;          } catch {
-;              continue
-;          }
-;      }
-;      return false
-;  }
-;  ;
-;  FindEudicMainWindow() {
-;      exact := 0
-;      titled := 0
-;      for hwnd in WinGetList("ahk_exe Eudic.exe") {
-;          try {
-;              title := WinGetTitle("ahk_id " hwnd)
-;              if title == ""
-;                  continue
-;              ; Settings, language panels and popup shadows are not the main
-;              ; dictionary window even though they use the same executable.
-;              if title == "设置中心" || title == "eusoft_eudic_en_win32"
-;                      || title == "eudic"
-;                  continue
-;              if title == "欧路词典"
-;                  exact := hwnd
-;              else if !titled && InStr(title, "欧路词典")
-;                  titled := hwnd
-;          } catch {
-;              continue
-;          }
-;      }
-;      ; Do not fall back to a generic Qt window. After the main window is
-;      ; closed, Eudic.exe can leave hidden helper windows that render blank.
-;      return exact || titled
 ;  }
 ; @script-code-end
 
