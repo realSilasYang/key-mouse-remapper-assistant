@@ -1293,11 +1293,9 @@ ReleaseApplicationMutexOnExit(*) {
 ;  FindEudicMainWindow() {
 ;      exact := 0
 ;      titled := 0
-;      classFallback := 0
 ;      for hwnd in WinGetList("ahk_exe Eudic.exe") {
 ;          try {
 ;              title := WinGetTitle("ahk_id " hwnd)
-;              className := WinGetClass("ahk_id " hwnd)
 ;              if title == ""
 ;                  continue
 ;              ; Settings, language panels and popup shadows are not the main
@@ -1309,13 +1307,13 @@ ReleaseApplicationMutexOnExit(*) {
 ;                  exact := hwnd
 ;              else if !titled && InStr(title, "欧路词典")
 ;                  titled := hwnd
-;              else if !classFallback && className == "Qt51516QWindowIcon"
-;                  classFallback := hwnd
 ;          } catch {
 ;              continue
 ;          }
 ;      }
-;      return exact || titled || classFallback
+;      ; Do not fall back to a generic Qt window. After the main window is
+;      ; closed, Eudic.exe can leave hidden helper windows that render blank.
+;      return exact || titled
 ;  }
 ; @script-code-end
 
