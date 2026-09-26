@@ -2068,6 +2068,8 @@ ReleaseApplicationMutexOnExit(*) {
 ; {
 ;   // 设为 true 后，匹配的来源按键会被屏蔽且不产生输出动作。
 ;   "block": true,
+;   // 控制规则是否生效：true 为启用，false 为暂停。
+;   "enabled": false,
 ;   // 说明什么键盘或鼠标输入会触发这条规则。
 ;   "from": {
 ;     // 限定触发输入必须来自指定的 Interception 物理设备。
@@ -2109,6 +2111,8 @@ ReleaseApplicationMutexOnExit(*) {
 ; 下面是规则的详细设置，包括触发方式、生效条件、时间判定和执行动作。
 ; @spec-begin
 ; {
+;   // 控制规则是否生效：true 为启用，false 为暂停。
+;   "enabled": false,
 ;   // 说明什么键盘或鼠标输入会触发这条规则。
 ;   "from": {
 ;     // 限定触发输入必须来自指定的 Interception 物理设备。
@@ -2156,6 +2160,49 @@ ReleaseApplicationMutexOnExit(*) {
 ;       "value": "LWin"
 ;     }
 ;   ]
+; }
+; @spec-end
+; @generated-begin
+; 请让开头的内容摘要与上面的详细设置保持一致。
+; 小助手会直接读取并运行这些设置，不需要另写 AHK 脚本。
+; @generated-end
+; @mapping-end
+
+; @mapping-begin
+; 给这条规则起一个容易辨认的名称；它会显示在主界面中。
+; @名称=屏蔽笔记本键盘 Win 键
+; 选择规则的写法；请保留下方已有的类型名称。
+; @类型=规则块
+; 写清楚按下什么键或鼠标按键会触发这条规则。
+; @来源按键=Win（Interception 键盘 1）
+; 写清楚触发后会执行什么按键、鼠标操作或命令。
+; @映射结果=屏蔽
+; 写清楚规则在哪里有效，例如“全局”或某个程序。
+; @生效范围=全局
+; 下面是规则的详细设置，包括触发方式、生效条件、时间判定和执行动作。
+; @spec-begin
+; {
+;   // 设为 true 后，匹配的来源按键会被屏蔽且不产生输出动作。
+;   "block": true,
+;   // 说明什么键盘或鼠标输入会触发这条规则。
+;   "from": {
+;     // 限定触发输入必须来自指定的 Interception 物理设备。
+;     "device": {
+;       // 填写设备过滤后端，当前为 interception。
+;       "backend": "interception",
+;       // 记录设备硬件 ID，便于诊断和重新识别。
+;       "hardware_id": "ACPI\\VEN_MSFT&DEV_0001",
+;       // 填写项目使用的 Interception 设备编号。
+;       "number": 1,
+;       // 选择这一项属于哪一种条件或执行动作。
+;       "type": "keyboard"
+;     },
+;     // 指定作为主要触发来源的单个按键。
+;     "key": {
+;       // 填写 AHK 能识别的按键名称。
+;       "name": "Win"
+;     }
+;   }
 ; }
 ; @spec-end
 ; @generated-begin

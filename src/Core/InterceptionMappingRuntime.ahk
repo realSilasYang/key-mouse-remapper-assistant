@@ -477,10 +477,34 @@ class InterceptionMappingRuntime extends DirectHotkeyRuntime {
     }
 
     RecoverAfterResume() {
+        return this.EnsureRunning("resume")
+    }
+
+    EnsureRunning(reason := "lifecycle") {
+        if this.Suspended
+            return true
         cleaned := this.CancelAllActive()
         this.HeldByDevice.Clear()
         this.ActiveSources.Clear()
         this.SuppressedSources.Clear()
+        if !this.Rules.Count
+            return cleaned
+        try {
+            if !this.ContextActive
+                this.StartContext()
+            else
+                SetTimer(this.PollTimer,
+                    InterceptionMappingRuntime.PollIntervalMs)
+        } catch as ensureError {
+            this.ScheduleUnavailableNotification()
+            this.Trace("interception_runtime_recovery_failed", {
+                Outcome: "error", Detail: ensureError.Message,
+                Data: Map("reason", reason)})
+            return false
+        }
+        this.Trace("interception_runtime_recovered", {
+            Outcome: "ok", Data: Map("reason", reason,
+                "devices", this.DeviceNumbers.Length)})
         return cleaned
     }
 

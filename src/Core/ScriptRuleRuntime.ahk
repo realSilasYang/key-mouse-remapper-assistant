@@ -552,6 +552,24 @@ class ScriptRuleRuntime {
         if failures.Length
             throw Error("无法恢复脚本规则控制信号："
                 . ScriptRuleSpec.Join(failures, "、"))
+        return this.EnsureRunning("resume")
+    }
+
+    EnsureRunning(reason := "lifecycle") {
+        if this.ShuttingDown
+            return false
+        if this.Suspended
+            return true
+        ; 不在这里无条件重建 worker，因为脚本正常退出可能是用户有意为之；
+        ; 但定时器或消息循环被中断后，必须重新挂接 worker 监控。
+        if this.Workers.Count
+            SetTimer(this.MonitorTimer,
+                ScriptRuleRuntime.MonitorIntervalMilliseconds)
+        else
+            SetTimer(this.MonitorTimer, 0)
+        this.Trace("script_runtime_monitor_recovered", {
+            Outcome: "ok", Data: Map("reason", reason,
+                "workers", this.Workers.Count)})
         return true
     }
 

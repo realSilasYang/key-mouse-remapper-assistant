@@ -1397,11 +1397,33 @@ class DirectHotkeyRuntime {
     }
 
     RecoverAfterResume() {
+        return this.EnsureRunning("resume")
+    }
+
+    EnsureRunning(reason := "lifecycle") {
+        ; 桌面或会话切换后，热键注册可能丢失而进程和规则对象仍然存在。
+        ; 重新注册具有幂等性，不需要重建规则，也不会触碰界面。
+        if this.Suspended
+            return true
         cleaned := this.CancelAllActive()
         this.ResetSourceCycleState()
         this.ArmPhysicallyHeldSources()
-        this.Trace("resume_state_recovered", {Outcome: cleaned ? "ok" : "error",
-            Data: Map("pending_outputs", this.OutputOwners.Count)})
+        try {
+            for registration in this.Registrations
+                this.EnableRegistration(registration)
+        } catch as ensureError {
+            for registration in this.Registrations
+                try this.DisableRegistration(registration)
+            this.Trace("hotkey_registration_recovery_failed", {
+                Outcome: "error", Detail: ensureError.Message,
+                Data: Map("reason", reason)})
+            throw ensureError
+        }
+        this.Trace("hotkey_registration_recovered", {
+            Outcome: cleaned ? "ok" : "error",
+            Data: Map("reason", reason, "registrations",
+                this.Registrations.Length, "pending_outputs",
+                this.OutputOwners.Count)})
         return cleaned
     }
 

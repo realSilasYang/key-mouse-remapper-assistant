@@ -216,10 +216,53 @@ class CompositeRemappingRuntime {
     }
 
     RecoverAfterResume() {
-        directRecovered := this.Direct.RecoverAfterResume()
-        interceptionRecovered := this.Interception.RecoverAfterResume()
-        scriptRecovered := this.Scripts.RecoverAfterResume()
+        return this.EnsureRunning("resume")
+    }
+
+    EnsureRunning(reason := "lifecycle") {
+        if this.Suspended {
+            captureActive := IsObject(this.App)
+                && this.App.HasOwnProp("Capture")
+                && IsObject(this.App.Capture)
+                && this.App.Capture.Active
+            if captureActive
+                return true
+            ; 当前只有输入录制会正常持有整个运行时的暂停状态；录制结束后，
+            ; 残留的暂停状态会让所有后端永久静默失效，必须在生命周期恢复时解除。
+            try this.Resume()
+            catch as resumeError {
+                if IsObject(this.App) && this.App.HasMethod("TraceEvent")
+                    try this.App.TraceEvent("system",
+                        "runtime_stale_suspension_recovery_failed", {
+                            Outcome: "error", Detail: resumeError.Message,
+                            Data: Map("reason", reason)})
+                return false
+            }
+        }
+        directRecovered := this.EnsureRuntimePart(this.Direct, reason)
+        interceptionRecovered := this.EnsureRuntimePart(this.Interception,
+            reason)
+        scriptRecovered := this.EnsureRuntimePart(this.Scripts, reason)
         return directRecovered && interceptionRecovered && scriptRecovered
+    }
+
+    EnsureRuntimePart(runtime, reason) {
+        if !IsObject(runtime)
+            return true
+        try {
+            if runtime.HasMethod("EnsureRunning")
+                return runtime.EnsureRunning(reason)
+            if runtime.HasMethod("RecoverAfterResume")
+                return runtime.RecoverAfterResume()
+            return true
+        } catch as ensureError {
+            if IsObject(this.App) && this.App.HasMethod("TraceEvent")
+                try this.App.TraceEvent("system",
+                    "runtime_recovery_failed", {Outcome: "error",
+                        Detail: ensureError.Message,
+                        Data: Map("reason", reason)})
+            return false
+        }
     }
 
     GetCapabilities() {

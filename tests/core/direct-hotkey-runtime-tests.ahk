@@ -825,6 +825,14 @@ try {
     AssertEqual("F6 up", resumeRuntime.Events[2],
         "Resume recovery did not release the interrupted output key.")
 
+    registrationRuntime := RegistrationRecoveryRuntime(app)
+    registrationRuntime.Registrations := [{DownHotkey: "F15", UpHotkey: "",
+        DownCallback: "", UpCallback: "", DownCriterion: "",
+        UpCriterion: ""}]
+    AssertTrue(registrationRuntime.EnsureRunning("window_activation")
+            && registrationRuntime.EnableCalls == 1,
+        "Lifecycle recovery did not restore the Direct hotkey registration.")
+
     cycleDescriptor := ownershipRules[1]
     firstCycle := ownershipRuntime.CreateActiveState(cycleDescriptor)
     secondCycle := ownershipRuntime.CreateActiveState(cycleDescriptor)
@@ -1657,6 +1665,18 @@ class FlakyOutputDirectHotkeyRuntime extends OwnershipDirectHotkeyRuntime {
 class RecoveryDirectHotkeyRuntime extends OwnershipDirectHotkeyRuntime {
     EnableRegistration(*) => true
     DisableRegistration(*) => true
+}
+
+class RegistrationRecoveryRuntime extends DirectHotkeyRuntime {
+    __New(app) {
+        super.__New(app)
+        this.EnableCalls := 0
+    }
+
+    EnableRegistration(*) {
+        this.EnableCalls++
+        return true
+    }
 }
 
 class DeferredPassthroughRuntime extends DirectHotkeyRuntime {

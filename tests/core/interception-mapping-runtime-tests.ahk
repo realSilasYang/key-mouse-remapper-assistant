@@ -23,6 +23,11 @@ try {
             && service.DeviceNumbers[1] == 2,
         "A device rule did not start one centralized Interception context.")
 
+    runtime.StopContext()
+    InterceptionRuntimeAssert(runtime.EnsureRunning("session_unlock")
+            && service.StartCount == 2 && runtime.ContextActive,
+        "Session recovery did not recreate a stopped Interception context.")
+
     runtime.ProcessStroke(InterceptionKeyboardStroke(2, 0x5D, 0x02))
     runtime.ProcessStroke(InterceptionKeyboardStroke(2, 0x5D, 0x03))
     InterceptionRuntimeAssert(runtime.Dispatches.Length == 2

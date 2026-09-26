@@ -65,6 +65,7 @@ class KeyMouseRemapperAssistantApp {
         this.UiScaleRestartTimer := ObjBindMethod(this,
             "RestartAfterUiScaleChange")
         this.RawObservationDepth := 0
+        this.RuntimeRecoveryInProgress := false
         this.ShuttingDown := false
         this.CallbacksRegistered := false
         this.MainWindowRegistered := false
@@ -107,6 +108,8 @@ class KeyMouseRemapperAssistantApp {
             "OnPowerBroadcast")
         this.SessionChangeCallback := ObjBindMethod(this,
             "OnSessionChange")
+        this.WindowActivationCallback := ObjBindMethod(this,
+            "OnMainWindowActivated")
         this.ShowApplicationMessage := GetApplicationShowMessage()
         this.ShowApplicationCallback := ObjBindMethod(this,
             "OnShowApplicationRequest")
@@ -115,6 +118,8 @@ class KeyMouseRemapperAssistantApp {
             "BeginApplicationUpdateCheck")
         this.InterceptionDriverStartupTimer := ObjBindMethod(this,
             "CheckInterceptionDriverAtStartup")
+        this.RuntimeRecoveryTimer := ObjBindMethod(this,
+            "RecoverRuntimeAfterActivation")
         this.ExternalTakeoverTimer := ObjBindMethod(this,
             "ExitForExternalLaunch")
         this.SourceRevision := ReadApplicationSourceRevision()
@@ -244,7 +249,8 @@ class KeyMouseRemapperAssistantApp {
 
     ConfigureTray() {
         A_TrayMenu.Delete()
-        A_TrayMenu.Add(Tr("显示主界面"), ObjBindMethod(this.Window, "Activate"))
+        A_TrayMenu.Add(Tr("显示主界面"),
+            ObjBindMethod(this, "ActivateMainWindowFromTray"))
         A_TrayMenu.Add(Tr("重新加载"), ObjBindMethod(this, "ReloadFromTray"))
         A_TrayMenu.Add(Tr("退出程序"), (*) => ExitApp())
         A_TrayMenu.Default := Tr("显示主界面")
@@ -257,6 +263,15 @@ class KeyMouseRemapperAssistantApp {
         if FileExist(iconPath)
             TraySetIcon(iconPath)
         return true
+    }
+
+    ActivateMainWindowFromTray(*) {
+        if this.ShuttingDown
+            return false
+        activated := this.Window.Activate()
+        if activated
+            this.ScheduleRuntimeRecovery("tray")
+        return activated
     }
 
     NormalizeSignature(displayName) {
@@ -1778,6 +1793,51 @@ class KeyMouseRemapperAssistantApp {
         }
     }
 
+    ScheduleRuntimeRecovery(reason := "activation") {
+        if this.ShuttingDown || !IsObject(this.RuntimeRecoveryTimer)
+            return false
+        this.PendingRuntimeRecoveryReason := String(reason)
+        SetTimer(this.RuntimeRecoveryTimer, -1)
+        return true
+    }
+
+    RecoverRuntimeAfterActivation(*) {
+        if this.ShuttingDown
+            return false
+        if IsObject(this.Capture) && this.Capture.Active
+            return false
+        if this.RuntimeRecoveryInProgress
+            return true
+        reason := this.HasOwnProp("PendingRuntimeRecoveryReason")
+            ? this.PendingRuntimeRecoveryReason : "activation"
+        this.PendingRuntimeRecoveryReason := ""
+        this.RuntimeRecoveryInProgress := true
+        try {
+            recovered := this.Runtime.HasMethod("EnsureRunning")
+                ? this.Runtime.EnsureRunning(reason)
+                : this.Runtime.RecoverAfterResume()
+            this.TraceEvent("system", "runtime_activation_recovery", {
+                Outcome: recovered ? "ok" : "error",
+                Data: Map("reason", reason)})
+            return recovered
+        } catch as recoveryError {
+            this.TraceEvent("system", "runtime_activation_recovery_failed", {
+                Outcome: "error", Detail: recoveryError.Message,
+                Data: Map("reason", reason)})
+            return false
+        } finally {
+            this.RuntimeRecoveryInProgress := false
+        }
+    }
+
+    OnMainWindowActivated(wParam, lParam, message, hwnd) {
+        if this.ShuttingDown || !wParam
+                || (hwnd && hwnd != this.Window.Gui.Hwnd)
+            return 0
+        this.ScheduleRuntimeRecovery("window_activation")
+        return 0
+    }
+
     RegisterSessionNotifications() {
         if this.SessionNotificationsRegistered
             return true
@@ -1814,6 +1874,9 @@ class KeyMouseRemapperAssistantApp {
             {Message: Win32.WM_WTSSESSION_CHANGE,
                 Callback: this.SessionChangeCallback}
         ]
+        if this.HasOwnProp("WindowActivationCallback")
+            registrations.Push({Message: Win32.WM_ACTIVATEAPP,
+                Callback: this.WindowActivationCallback})
         if this.ShowApplicationMessage
             registrations.Push({Message: this.ShowApplicationMessage,
                 Callback: this.ShowApplicationCallback})
@@ -1853,6 +1916,9 @@ class KeyMouseRemapperAssistantApp {
             Win32.WM_POWERBROADCAST, this.PowerBroadcastCallback, 0))
         cleanup.Run("注销会话消息", () => OnMessage(
             Win32.WM_WTSSESSION_CHANGE, this.SessionChangeCallback, 0))
+        if this.HasOwnProp("WindowActivationCallback")
+            cleanup.Run("注销窗口激活消息", () => OnMessage(
+                Win32.WM_ACTIVATEAPP, this.WindowActivationCallback, 0))
         if this.ShowApplicationMessage
             cleanup.Run("注销单实例唤醒消息", () => OnMessage(
                 this.ShowApplicationMessage, this.ShowApplicationCallback, 0))
@@ -1892,7 +1958,10 @@ class KeyMouseRemapperAssistantApp {
     ShowMainWindowAfterReload(*) {
         if this.ShuttingDown
             return false
-        return this.Window.Activate()
+        activated := this.Window.Activate()
+        if activated
+            this.ScheduleRuntimeRecovery("show_main_window")
+        return activated
     }
 
     OnShowApplicationRequest(sourceModified, sourceSize, message, hwnd) {
@@ -2009,6 +2078,8 @@ class KeyMouseRemapperAssistantApp {
             try SetTimer(this.ElevationRestartTimer, 0)
         if IsObject(this.UiScaleRestartTimer)
             try SetTimer(this.UiScaleRestartTimer, 0)
+        if IsObject(this.RuntimeRecoveryTimer)
+            try SetTimer(this.RuntimeRecoveryTimer, 0)
         this.PendingScriptApply := ""
         this.TrySaveMainWindowLayout()
         ; Runtime shutdown may wait for isolated script-rule processes. Hide

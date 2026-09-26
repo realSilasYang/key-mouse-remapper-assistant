@@ -3,6 +3,7 @@
 class Win32 {
     static WM_NULL := 0x0000
     static WM_MOVE := 0x0003
+    static WM_ACTIVATEAPP := 0x001C
     static WM_SETTINGCHANGE := 0x001A
     static WM_POWERBROADCAST := 0x0218
     static WM_WTSSESSION_CHANGE := 0x02B1
