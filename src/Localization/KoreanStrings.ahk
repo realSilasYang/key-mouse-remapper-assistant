@@ -424,14 +424,8 @@ class KoreanStrings {
             "시작")
         catalog.Set("显示",
             "표시")
-        catalog.Set("规则与事件",
-            "규칙 및 이벤트")
         catalog.Set("关于",
             "정보")
-        catalog.Set("事件缓冲区容量（条）：",
-            "이벤트 버퍼 용량:")
-        catalog.Set("事件查看自动跟随最新事件",
-            "이벤트 뷰어에서 최신 이벤트 자동 추적")
         catalog.Set("让每一条键鼠映射都可录制、可审阅、可掌控",
             "모든 키보드 및 마우스 매핑을 기록하고 검토하며 제어")
         catalog.Set("当前版本",
@@ -442,8 +436,6 @@ class KoreanStrings {
             "오픈 소스 저장소")
         catalog.Set("“{1}”必须是 {2} 到 {3} 之间的整数。",
             "“{1}”은(는) {2}에서 {3} 사이의 정수여야 합니다.")
-        catalog.Set("事件缓冲区容量",
-            "이벤트 버퍼 용량")
         catalog.Set("未知版本",
             "알 수 없는 버전")
         catalog.Set("{1}（EXE 版）",
@@ -452,8 +444,6 @@ class KoreanStrings {
             "{1}(소스 버전)")
         catalog.Set("设置已保存并已应用。",
             "설정을 저장하고 적용했습니다.")
-        catalog.Set("Esc 取消录制",
-            "Esc로 기록 취소")
         catalog.Set("{1}（便携版）", "{1}(포터블 버전)")
         catalog.Set("快揭不开锅了（≥Д≤）",
             "살림이 빠듯해요（≥Д≤）")
@@ -658,6 +648,40 @@ class KoreanStrings {
         catalog.Set("当前等待时间：{1} 秒", "Current wait time: {1} seconds")
         catalog.Set("界面缩放：", "인터페이스 배율:")
         catalog.Set("界面缩放已保存，正在重新加载…", "인터페이스 배율을 저장했습니다. 다시 불러오는 중…")
+        catalog.Set("按键实时可视化已开启。", "실시간 키 시각화가 켜졌습니다.")
+        catalog.Set("按键实时可视化已关闭。", "실시간 키 시각화가 꺼졌습니다.")
+        catalog.Set("按键可视化", "키 시각화")
+        catalog.Set("按键实时可视化已开启（点击关闭）", "실시간 키 시각화가 켜져 있습니다(클릭하여 끄기)")
+        catalog.Set("按键实时可视化已关闭（点击开启）", "실시간 키 시각화가 꺼져 있습니다(클릭하여 켜기)")
+        catalog.Set("基准对齐", "기준 정렬")
+        catalog.Set("X 轴偏移", "X축 오프셋")
+        catalog.Set("Y 轴偏移", "Y축 오프셋")
+        catalog.Set("左下角", "왼쪽 아래")
+        catalog.Set("中下", "가운데 아래")
+        catalog.Set("右下角", "오른쪽 아래")
+        catalog.Set("左中", "왼쪽 가운데")
+        catalog.Set("右中", "오른쪽 가운데")
+        catalog.Set("左上角", "왼쪽 위")
+        catalog.Set("中上", "가운데 위")
+        catalog.Set("右上角", "오른쪽 위")
+        catalog.Set("屏幕中央", "화면 중앙")
+        catalog.Set("字体大小 (pt)：", "글꼴 크기 (pt):")
+        catalog.Set("字体大小", "글꼴 크기")
+        catalog.Set("配色方案：", "색상 구성표:")
+        catalog.Set("深灰经典", "클래식 다크 그레이")
+        catalog.Set("纯黑高亮", "퓨어 블랙 고대비")
+        catalog.Set("暗夜深蓝", "미드나이트 다크 블루")
+        catalog.Set("极简浅色", "미니멀 라이트")
+        catalog.Set("翠绿终端", "터미널 그린")
+        catalog.Set("自定义", "사용자 지정")
+        catalog.Set("背景色：", "배경색:")
+        catalog.Set("文字色：", "글자색:")
+        catalog.Set("停留时长（秒）：", "표시 시간(초):")
+        catalog.Set("停留时长（秒）", "표시 시간(초)")
+        catalog.Set("按键可视化效果预览", "키 시각화 효과 미리보기")
+        catalog.Set("背景色格式无效（支持 16 进制如 #2E3032 或 RGB 如 46,48,50）。", "잘못된 배경색 형식입니다(16진수 예: #2E3032 또는 RGB 예: 46,48,50 지원).")
+        catalog.Set("文字色格式无效（支持 16 进制如 #FFFFFF 或 RGB 如 255,255,255）。", "잘못된 글자색 형식입니다(16진수 예: #FFFFFF 또는 RGB 예: 255,255,255 지원).")
+        catalog.Set("“{1}”必须是 {2} 到 {3} 之间的数值。", "“{1}”은(는) {2}에서 {3} 사이의 숫자여야 합니다.")
         return catalog
     }
 }

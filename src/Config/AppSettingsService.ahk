@@ -3,6 +3,17 @@ class AppSettingsService {
     static MaximumSnapshotCharacters := 64 * 1024
     static MinimumEventBufferCapacity := 100
     static MaximumEventBufferCapacity := 10000
+    static DefaultKeystrokeOsdPosition := "bottom-left"
+    static DefaultKeystrokeOsdOffsetX := 0
+    static DefaultKeystrokeOsdOffsetY := 0
+    static DefaultKeystrokeOsdOffsetUp := 0
+    static DefaultKeystrokeOsdOffsetDown := 0
+    static DefaultKeystrokeOsdOffsetLeft := 0
+    static DefaultKeystrokeOsdOffsetRight := 0
+    static DefaultKeystrokeOsdFontSize := 12
+    static DefaultKeystrokeOsdBgColor := "2e3032"
+    static DefaultKeystrokeOsdTextColor := "b3aea8"
+    static DefaultKeystrokeOsdDisplayTimeMs := 1000
 
     __New(settingsPath) {
         settingsPath := Trim(String(settingsPath))
@@ -39,6 +50,8 @@ class AppSettingsService {
                     "Startup", "RunAsAdministrator", "1"),
                 CheckUpdatesOnStartup: this.ReadSnapshotValue(values,
                     "Startup", "CheckUpdatesOnStartup", "1"),
+                EnableKeystrokeOsd: this.ReadSnapshotValue(values,
+                    "Startup", "EnableKeystrokeOsd", "0"),
                 CheckInterceptionOnStartup: this.ReadSnapshotValue(values,
                     "Interception", "CheckOnStartup", "1"),
                 EscapeCancelsRecording: this.ReadSnapshotValue(values, "Recording",
@@ -46,7 +59,7 @@ class AppSettingsService {
                 EventBufferCapacity: this.ReadSnapshotValue(values, "Events",
                     "EventBufferCapacity", "1000"),
                 EventViewerAutoScroll: this.ReadSnapshotValue(values, "Events",
-                    "EventViewerAutoScroll", "1"),
+                    "EventViewerAutoScroll", "0"),
                 AIAddress: this.ReadSnapshotValue(values, "AI", "Address",
                     ""),
                 AIKey: this.ReadSnapshotValue(values, "AI", "Key", ""),
@@ -61,7 +74,29 @@ class AppSettingsService {
                     AIService.DefaultOptimizePrompt),
                 AISystemPrompt: this.ReadMultilineSnapshotValue(values,
                     "AI", "SystemPromptEscaped", "SystemPrompt",
-                    AIService.DefaultSystemPrompt)
+                    AIService.DefaultSystemPrompt),
+                KeystrokeOsdPosition: this.ReadSnapshotValue(values, "KeystrokeOsd",
+                    "Position", AppSettingsService.DefaultKeystrokeOsdPosition),
+                KeystrokeOsdOffsetX: this.ReadSnapshotValue(values, "KeystrokeOsd",
+                    "OffsetX", String(Integer(this.ReadSnapshotValue(values, "KeystrokeOsd", "OffsetRight", "0")) - Integer(this.ReadSnapshotValue(values, "KeystrokeOsd", "OffsetLeft", "0")))),
+                KeystrokeOsdOffsetY: this.ReadSnapshotValue(values, "KeystrokeOsd",
+                    "OffsetY", String(Integer(this.ReadSnapshotValue(values, "KeystrokeOsd", "OffsetDown", "0")) - Integer(this.ReadSnapshotValue(values, "KeystrokeOsd", "OffsetUp", "0")))),
+                KeystrokeOsdOffsetUp: this.ReadSnapshotValue(values, "KeystrokeOsd",
+                    "OffsetUp", "0"),
+                KeystrokeOsdOffsetDown: this.ReadSnapshotValue(values, "KeystrokeOsd",
+                    "OffsetDown", "0"),
+                KeystrokeOsdOffsetLeft: this.ReadSnapshotValue(values, "KeystrokeOsd",
+                    "OffsetLeft", "0"),
+                KeystrokeOsdOffsetRight: this.ReadSnapshotValue(values, "KeystrokeOsd",
+                    "OffsetRight", "0"),
+                KeystrokeOsdFontSize: this.ReadSnapshotValue(values, "KeystrokeOsd",
+                    "FontSize", String(AppSettingsService.DefaultKeystrokeOsdFontSize)),
+                KeystrokeOsdBgColor: this.ReadSnapshotValue(values, "KeystrokeOsd",
+                    "BgColor", AppSettingsService.DefaultKeystrokeOsdBgColor),
+                KeystrokeOsdTextColor: this.ReadSnapshotValue(values, "KeystrokeOsd",
+                    "TextColor", AppSettingsService.DefaultKeystrokeOsdTextColor),
+                KeystrokeOsdDisplayTimeMs: this.ReadSnapshotValue(values, "KeystrokeOsd",
+                    "DisplayTimeMs", String(AppSettingsService.DefaultKeystrokeOsdDisplayTimeMs))
             })
         } finally readLease.Release()
     }
@@ -93,6 +128,9 @@ class AppSettingsService {
             CheckUpdatesOnStartup: this.NormalizeBoolean(
                 this.GetProperty(settings, "CheckUpdatesOnStartup", true),
                 true),
+            EnableKeystrokeOsd: this.NormalizeBoolean(
+                this.GetProperty(settings, "EnableKeystrokeOsd", false),
+                false),
             CheckInterceptionOnStartup: this.NormalizeBoolean(
                 this.GetProperty(settings, "CheckInterceptionOnStartup", true),
                 true),
@@ -104,8 +142,8 @@ class AppSettingsService {
                 AppSettingsService.MinimumEventBufferCapacity,
                 AppSettingsService.MaximumEventBufferCapacity, 1000),
             EventViewerAutoScroll: this.NormalizeBoolean(
-                this.GetProperty(settings, "EventViewerAutoScroll", true),
-                true),
+                this.GetProperty(settings, "EventViewerAutoScroll", false),
+                false),
             AIAddress: Trim(String(this.GetProperty(settings, "AIAddress",
                 ""))),
             AIKey: Trim(String(this.GetProperty(settings, "AIKey", ""))),
@@ -121,7 +159,50 @@ class AppSettingsService {
                 this.GetProperty(settings, "AIOptimizePrompt",
                     AIService.DefaultOptimizePrompt)),
             AISystemPrompt: AIService.NormalizeSystemPrompt(this.GetProperty(
-                settings, "AISystemPrompt", AIService.DefaultSystemPrompt))
+                settings, "AISystemPrompt", AIService.DefaultSystemPrompt)),
+            KeystrokeOsdPosition: this.NormalizeOsdPosition(
+                this.GetProperty(settings, "KeystrokeOsdPosition",
+                    AppSettingsService.DefaultKeystrokeOsdPosition)),
+            KeystrokeOsdOffsetX: (rawOffsetX := this.NormalizeInteger(
+                this.GetProperty(settings, "KeystrokeOsdOffsetX",
+                    (this.GetProperty(settings, "KeystrokeOsdOffsetRight", 0) - this.GetProperty(settings, "KeystrokeOsdOffsetLeft", 0))),
+                -1000, 1000, AppSettingsService.DefaultKeystrokeOsdOffsetX)),
+            KeystrokeOsdOffsetY: (rawOffsetY := this.NormalizeInteger(
+                this.GetProperty(settings, "KeystrokeOsdOffsetY",
+                    (this.GetProperty(settings, "KeystrokeOsdOffsetDown", 0) - this.GetProperty(settings, "KeystrokeOsdOffsetUp", 0))),
+                -1000, 1000, AppSettingsService.DefaultKeystrokeOsdOffsetY)),
+            KeystrokeOsdOffsetUp: this.NormalizeInteger(
+                this.GetProperty(settings, "KeystrokeOsdOffsetUp",
+                    rawOffsetY < 0 ? -rawOffsetY : 0),
+                -1000, 1000, AppSettingsService.DefaultKeystrokeOsdOffsetUp),
+            KeystrokeOsdOffsetDown: this.NormalizeInteger(
+                this.GetProperty(settings, "KeystrokeOsdOffsetDown",
+                    rawOffsetY > 0 ? rawOffsetY : 0),
+                -1000, 1000, AppSettingsService.DefaultKeystrokeOsdOffsetDown),
+            KeystrokeOsdOffsetLeft: this.NormalizeInteger(
+                this.GetProperty(settings, "KeystrokeOsdOffsetLeft",
+                    rawOffsetX < 0 ? -rawOffsetX : 0),
+                -1000, 1000, AppSettingsService.DefaultKeystrokeOsdOffsetLeft),
+            KeystrokeOsdOffsetRight: this.NormalizeInteger(
+                this.GetProperty(settings, "KeystrokeOsdOffsetRight",
+                    rawOffsetX > 0 ? rawOffsetX : 0),
+                -1000, 1000, AppSettingsService.DefaultKeystrokeOsdOffsetRight),
+            KeystrokeOsdFontSize: this.NormalizeInteger(
+                this.GetProperty(settings, "KeystrokeOsdFontSize",
+                    AppSettingsService.DefaultKeystrokeOsdFontSize),
+                8, 72, AppSettingsService.DefaultKeystrokeOsdFontSize),
+            KeystrokeOsdBgColor: this.NormalizeColor(
+                this.GetProperty(settings, "KeystrokeOsdBgColor",
+                    AppSettingsService.DefaultKeystrokeOsdBgColor),
+                AppSettingsService.DefaultKeystrokeOsdBgColor),
+            KeystrokeOsdTextColor: this.NormalizeColor(
+                this.GetProperty(settings, "KeystrokeOsdTextColor",
+                    AppSettingsService.DefaultKeystrokeOsdTextColor),
+                AppSettingsService.DefaultKeystrokeOsdTextColor),
+            KeystrokeOsdDisplayTimeMs: this.NormalizeInteger(
+                this.GetProperty(settings, "KeystrokeOsdDisplayTimeMs",
+                    AppSettingsService.DefaultKeystrokeOsdDisplayTimeMs),
+                200, 10000, AppSettingsService.DefaultKeystrokeOsdDisplayTimeMs)
         }
     }
 
@@ -240,7 +321,9 @@ class AppSettingsService {
             . "RunAsAdministrator="
                 . (settings.RunAsAdministrator ? 1 : 0) "`r`n"
             . "CheckUpdatesOnStartup="
-                . (settings.CheckUpdatesOnStartup ? 1 : 0) "`r`n`r`n"
+                . (settings.CheckUpdatesOnStartup ? 1 : 0) "`r`n"
+            . "EnableKeystrokeOsd="
+                . (settings.EnableKeystrokeOsd ? 1 : 0) "`r`n`r`n"
             . "[Interception]`r`n"
             . "CheckOnStartup="
                 . (settings.CheckInterceptionOnStartup ? 1 : 0) "`r`n`r`n"
@@ -261,7 +344,19 @@ class AppSettingsService {
             . "OptimizePromptEscaped="
                 . this.EncodeMultilineValue(settings.AIOptimizePrompt) "`r`n"
             . "SystemPromptEscaped="
-                . this.EncodeMultilineValue(settings.AISystemPrompt) "`r`n"
+                . this.EncodeMultilineValue(settings.AISystemPrompt) "`r`n`r`n"
+            . "[KeystrokeOsd]`r`n"
+            . "Position=" settings.KeystrokeOsdPosition "`r`n"
+            . "OffsetX=" settings.KeystrokeOsdOffsetX "`r`n"
+            . "OffsetY=" settings.KeystrokeOsdOffsetY "`r`n"
+            . "OffsetUp=" settings.KeystrokeOsdOffsetUp "`r`n"
+            . "OffsetDown=" settings.KeystrokeOsdOffsetDown "`r`n"
+            . "OffsetLeft=" settings.KeystrokeOsdOffsetLeft "`r`n"
+            . "OffsetRight=" settings.KeystrokeOsdOffsetRight "`r`n"
+            . "FontSize=" settings.KeystrokeOsdFontSize "`r`n"
+            . "BgColor=" settings.KeystrokeOsdBgColor "`r`n"
+            . "TextColor=" settings.KeystrokeOsdTextColor "`r`n"
+            . "DisplayTimeMs=" settings.KeystrokeOsdDisplayTimeMs "`r`n"
     }
 
     WriteSnapshot(snapshot, expectedSnapshot?) {
@@ -310,4 +405,37 @@ class AppSettingsService {
             throw Error("设置快照超过 UTF-8 字节上限。")
         return true
     }
+
+    NormalizeOsdPosition(value) {
+        static valid := Map(
+            "bottom-left", 1, "bottom-center", 1, "bottom-right", 1,
+            "center-left", 1, "center", 1, "center-right", 1,
+            "top-left", 1, "top-center", 1, "top-right", 1
+        )
+        norm := StrLower(Trim(String(value)))
+        return valid.Has(norm) ? norm : AppSettingsService.DefaultKeystrokeOsdPosition
+    }
+
+    NormalizeColor(value, fallback := "2e3032") => AppSettingsService.NormalizeColor(value, fallback)
+
+    NormalizeHexColor(value, fallback) => AppSettingsService.NormalizeColor(value, fallback)
+
+    static NormalizeColor(value, fallback := "2e3032") {
+        cleaned := Trim(String(value))
+        if RegExMatch(cleaned, "i)^(?:rgb\s*\(\s*)?(\d{1,3})\s*[, ]\s*(\d{1,3})\s*[, ]\s*(\d{1,3})\s*\)?$", &m) {
+            r := Integer(m[1]), g := Integer(m[2]), b := Integer(m[3])
+            if r >= 0 && r <= 255 && g >= 0 && g <= 255 && b >= 0 && b <= 255
+                return Format("{:02x}{:02x}{:02x}", r, g, b)
+        }
+        hexStr := RegExReplace(cleaned, "^#")
+        if RegExMatch(hexStr, "^[0-9a-fA-F]{6}$")
+            return StrLower(hexStr)
+        if RegExMatch(hexStr, "^[0-9a-fA-F]{3}$") {
+            c1 := SubStr(hexStr, 1, 1), c2 := SubStr(hexStr, 2, 1), c3 := SubStr(hexStr, 3, 1)
+            return StrLower(c1 . c1 . c2 . c2 . c3 . c3)
+        }
+        return StrLower(String(fallback))
+    }
+
+    static NormalizeHexColor(value, fallback) => AppSettingsService.NormalizeColor(value, fallback)
 }

@@ -423,14 +423,8 @@ class TraditionalTaiwanStrings {
             "啟動")
         catalog.Set("显示",
             "顯示")
-        catalog.Set("规则与事件",
-            "規則與事件")
         catalog.Set("关于",
             "關於")
-        catalog.Set("事件缓冲区容量（条）：",
-            "事件緩衝區容量（筆）：")
-        catalog.Set("事件查看自动跟随最新事件",
-            "事件檢視器自動跟隨最新事件")
         catalog.Set("让每一条键鼠映射都可录制、可审阅、可掌控",
             "讓每一筆鍵鼠映射都可錄製、可檢閱、可掌控")
         catalog.Set("当前版本",
@@ -441,8 +435,6 @@ class TraditionalTaiwanStrings {
             "開源位址")
         catalog.Set("“{1}”必须是 {2} 到 {3} 之间的整数。",
             "「{1}」必須是 {2} 到 {3} 之間的整數。")
-        catalog.Set("事件缓冲区容量",
-            "事件緩衝區容量")
         catalog.Set("未知版本",
             "未知版本")
         catalog.Set("{1}（EXE 版）",
@@ -451,8 +443,6 @@ class TraditionalTaiwanStrings {
             "{1}（原始碼版）")
         catalog.Set("设置已保存并已应用。",
             "設定已儲存並套用。")
-        catalog.Set("Esc 取消录制",
-            "Esc 取消錄製")
         catalog.Set("{1}（便携版）", "{1}（可攜版）")
         catalog.Set("快揭不开锅了（≥Д≤）",
             "快要揭不開鍋了（≥Д≤）")
@@ -657,6 +647,40 @@ class TraditionalTaiwanStrings {
         catalog.Set("当前等待时间：{1} 秒", "目前等待時間：{1} 秒")
         catalog.Set("界面缩放：", "介面縮放：")
         catalog.Set("界面缩放已保存，正在重新加载…", "介面縮放已儲存，正在重新載入…")
+        catalog.Set("按键实时可视化已开启。", "按鍵即時視覺化已開啟。")
+        catalog.Set("按键实时可视化已关闭。", "按鍵即時視覺化已關閉。")
+        catalog.Set("按键可视化", "按鍵視覺化")
+        catalog.Set("按键实时可视化已开启（点击关闭）", "按鍵即時視覺化已開啟（按一下以關閉）")
+        catalog.Set("按键实时可视化已关闭（点击开启）", "按鍵即時視覺化已關閉（按一下以開啟）")
+        catalog.Set("基准对齐", "基準對齊")
+        catalog.Set("X 轴偏移", "X 軸偏移")
+        catalog.Set("Y 轴偏移", "Y 軸偏移")
+        catalog.Set("左下角", "左下角")
+        catalog.Set("中下", "中下")
+        catalog.Set("右下角", "右下角")
+        catalog.Set("左中", "左中")
+        catalog.Set("右中", "右中")
+        catalog.Set("左上角", "左上角")
+        catalog.Set("中上", "中上")
+        catalog.Set("右上角", "右上角")
+        catalog.Set("屏幕中央", "螢幕中央")
+        catalog.Set("字体大小 (pt)：", "字型大小 (pt)：")
+        catalog.Set("字体大小", "字體大小")
+        catalog.Set("配色方案：", "配色方案：")
+        catalog.Set("深灰经典", "深灰經典")
+        catalog.Set("纯黑高亮", "純黑高亮")
+        catalog.Set("暗夜深蓝", "暗夜深藍")
+        catalog.Set("极简浅色", "極簡淺色")
+        catalog.Set("翠绿终端", "翠綠終端")
+        catalog.Set("自定义", "自訂")
+        catalog.Set("背景色：", "背景色：")
+        catalog.Set("文字色：", "文字色：")
+        catalog.Set("停留时长（秒）：", "停留時長（秒）：")
+        catalog.Set("停留时长（秒）", "停留時長（秒）")
+        catalog.Set("按键可视化效果预览", "按鍵視覺化效果預覽")
+        catalog.Set("背景色格式无效（支持 16 进制如 #2E3032 或 RGB 如 46,48,50）。", "背景色格式無效（支援 16 進位如 #2E3032 或 RGB 如 46,48,50）。")
+        catalog.Set("文字色格式无效（支持 16 进制如 #FFFFFF 或 RGB 如 255,255,255）。", "文字色格式無效（支援 16 進位如 #FFFFFF 或 RGB 如 255,255,255）。")
+        catalog.Set("“{1}”必须是 {2} 到 {3} 之间的数值。", "「{1}」必須是 {2} 到 {3} 之間的數值。")
         return catalog
     }
 }

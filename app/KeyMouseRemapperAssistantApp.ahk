@@ -7,6 +7,7 @@ class KeyMouseRemapperAssistantApp {
         this.Runtime := ""
         this.Window := ""
         this.SvgRenderer := ""
+        this.KeystrokeOsd := ""
         try {
         this.DataDirectory := A_AppData "\KeyMouseRemapperAssistant"
         this.RuntimeStatePath := this.DataDirectory "\runtime.ini"
@@ -54,6 +55,7 @@ class KeyMouseRemapperAssistantApp {
         this.RawInput := RawInputService(this.Window.Gui.Hwnd,
             ObjBindMethod(this, "OnRawInputEvent"))
         this.Capture := KeyCaptureSession(this)
+        this.KeystrokeOsd := KeystrokeOsdService(this)
 
         this.MappingCount := 0
         this.RuntimeReport := ""
@@ -157,6 +159,9 @@ class KeyMouseRemapperAssistantApp {
         if IsObject(this.SvgRenderer)
             this.RunConstructionCleanup(failures, "SVG 渲染器",
                 () => this.SvgRenderer.Shutdown())
+        if this.HasOwnProp("KeystrokeOsd") && IsObject(this.KeystrokeOsd)
+            this.RunConstructionCleanup(failures, "按键实时可视化",
+                () => this.KeystrokeOsd.Shutdown())
         return failures
     }
 
@@ -244,6 +249,10 @@ class KeyMouseRemapperAssistantApp {
             SetTimer(this.InterceptionDriverStartupTimer, -1000)
         if this.Settings.CheckUpdatesOnStartup
             SetTimer(this.StartupUpdateTimer, -2500)
+        if this.Settings.EnableKeystrokeOsd && IsObject(this.KeystrokeOsd)
+            try this.KeystrokeOsd.Start()
+        if IsObject(this.Window) && this.Window.HasMethod("RefreshKeystrokeOsdButton")
+            this.Window.RefreshKeystrokeOsdButton()
         return fatalError == ""
     }
 
@@ -251,6 +260,10 @@ class KeyMouseRemapperAssistantApp {
         A_TrayMenu.Delete()
         A_TrayMenu.Add(Tr("显示主界面"),
             ObjBindMethod(this, "ActivateMainWindowFromTray"))
+        A_TrayMenu.Add(Tr("按键可视化"),
+            ObjBindMethod(this, "ToggleKeystrokeOsdFromTray"))
+        if IsObject(this.KeystrokeOsd) && this.KeystrokeOsd.Active
+            A_TrayMenu.Check(Tr("按键可视化"))
         A_TrayMenu.Add(Tr("重新加载"), ObjBindMethod(this, "ReloadFromTray"))
         A_TrayMenu.Add(Tr("退出程序"), (*) => ExitApp())
         A_TrayMenu.Default := Tr("显示主界面")
@@ -263,6 +276,36 @@ class KeyMouseRemapperAssistantApp {
         if FileExist(iconPath)
             TraySetIcon(iconPath)
         return true
+    }
+
+    ToggleKeystrokeOsdFromTray(*) {
+        return this.ToggleKeystrokeOsd("tray")
+    }
+
+    ToggleKeystrokeOsd(source := "main_window") {
+        if this.ShuttingDown || !IsObject(this.KeystrokeOsd)
+            return false
+        newState := !this.KeystrokeOsd.Active
+        if newState {
+            this.KeystrokeOsd.Start()
+            try A_TrayMenu.Check(Tr("按键可视化"))
+        } else {
+            this.KeystrokeOsd.Stop()
+            try A_TrayMenu.Uncheck(Tr("按键可视化"))
+        }
+        candidateSettings := this.Settings.Clone()
+        candidateSettings.EnableKeystrokeOsd := newState
+        try this.Settings := this.SettingsService.Save(candidateSettings)
+        statusMsg := newState ? Tr("按键实时可视化已开启。")
+            : Tr("按键实时可视化已关闭。")
+        if IsObject(this.Window) {
+            this.Window.SetStatus(statusMsg)
+            if this.Window.HasMethod("RefreshKeystrokeOsdButton")
+                this.Window.RefreshKeystrokeOsdButton()
+        }
+        this.TraceEvent("tools", "keystroke_osd_toggled",
+            {Outcome: newState ? "enabled" : "disabled", Source: source})
+        return newState
     }
 
     ActivateMainWindowFromTray(*) {
@@ -1459,7 +1502,19 @@ class KeyMouseRemapperAssistantApp {
             UiThemeService.Configure(settings.Theme)
             this.ApplyOpenWindowAppearances()
         }
+        if this.HasOwnProp("KeystrokeOsd") && IsObject(this.KeystrokeOsd) {
+            enableOsd := settings.HasOwnProp("EnableKeystrokeOsd")
+                ? !!settings.EnableKeystrokeOsd : false
+            if enableOsd != this.KeystrokeOsd.Active {
+                if enableOsd
+                    this.KeystrokeOsd.Start()
+                else
+                    this.KeystrokeOsd.Stop()
+            }
+        }
         this.ConfigureTray()
+        if IsObject(this.Window) && this.Window.HasMethod("RefreshKeystrokeOsdButton")
+            this.Window.RefreshKeystrokeOsdButton()
         if IsObject(this.UpdateService)
             this.UpdateService.UiLanguage := LocalizationService.GetLanguage()
         capacityChanged := this.Trace.SetCapacity(settings.EventBufferCapacity)
@@ -2099,6 +2154,8 @@ class KeyMouseRemapperAssistantApp {
         try this.UpdateService.Shutdown()
         try this.AIService.Shutdown()
         try this.Capture.Stop(false, false, false)
+        if this.HasOwnProp("KeystrokeOsd") && IsObject(this.KeystrokeOsd)
+            try this.KeystrokeOsd.Shutdown()
         try this.RawInput.Shutdown()
         try this.Runtime.Shutdown()
         if this.HasOwnProp("Interception")

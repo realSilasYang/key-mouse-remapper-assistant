@@ -578,6 +578,7 @@ class RoundedButtonPainter {
         graphics := 0
         path := 0
         brush := 0
+        pen := 0
         if DllCall("gdiplus\GdipCreateFromHDC", "Ptr", hdc,
             "Ptr*", &graphics, "UInt") || !graphics
             return false
@@ -598,9 +599,22 @@ class RoundedButtonPainter {
             if DllCall("gdiplus\GdipCreateSolidFill",
                 "UInt", this.ColorToArgb(state.Current), "Ptr*", &brush, "UInt") || !brush
                 return false
-            return DllCall("gdiplus\GdipFillPath", "Ptr", graphics,
-                "Ptr", brush, "Ptr", path, "UInt") == 0
+            if DllCall("gdiplus\GdipFillPath", "Ptr", graphics,
+                "Ptr", brush, "Ptr", path, "UInt") != 0
+                return false
+            if state.HasOwnProp("BorderColor") && state.BorderColor != "" {
+                penWidth := state.HasOwnProp("BorderWidthDip")
+                    ? Max(1.0, state.BorderWidthDip * surfaceDpi / 96.0) : 1.5
+                if DllCall("gdiplus\GdipCreatePen1", "UInt",
+                    this.ColorToArgb(state.BorderColor), "Float", penWidth,
+                    "Int", 2, "Ptr*", &pen, "UInt") == 0 && pen {
+                    DllCall("gdiplus\GdipDrawPath", "Ptr", graphics, "Ptr", pen, "Ptr", path, "UInt")
+                }
+            }
+            return true
         } finally {
+            if pen
+                DllCall("gdiplus\GdipDeletePen", "Ptr", pen)
             if brush
                 DllCall("gdiplus\GdipDeleteBrush", "Ptr", brush)
             if path
@@ -956,6 +970,10 @@ class RoundedButtonPainter {
     }
 
     Draw(hdc, width, height, state) {
+        return this.DrawAt(hdc, 0, 0, width, height, state)
+    }
+
+    DrawAt(hdc, destX, destY, width, height, state, parentColor := "") {
         if !this.Ready || width <= 0 || height <= 0
             return false
         memoryDc := DllCall("gdi32\CreateCompatibleDC", "Ptr", hdc, "Ptr")
@@ -974,6 +992,9 @@ class RoundedButtonPainter {
             DllCall("gdi32\DeleteDC", "Ptr", memoryDc)
             return false
         }
+        previousParentColor := this.ParentColor
+        if parentColor != ""
+            this.ParentColor := String(parentColor)
         try {
             if state.Kind == "divider" {
                 if !this.DrawDashedDivider(memoryDc, width, height, state)
@@ -984,10 +1005,11 @@ class RoundedButtonPainter {
                 this.DrawText(memoryDc, width, height, state)
             }
             return !!DllCall("gdi32\BitBlt", "Ptr", hdc,
-                "Int", 0, "Int", 0, "Int", width, "Int", height,
+                "Int", destX, "Int", destY, "Int", width, "Int", height,
                 "Ptr", memoryDc, "Int", 0, "Int", 0,
                 "UInt", 0x00CC0020, "Int")
         } finally {
+            this.ParentColor := previousParentColor
             if previousBitmap
                 DllCall("gdi32\SelectObject", "Ptr", memoryDc,
                     "Ptr", previousBitmap, "Ptr")

@@ -357,7 +357,7 @@ RunMappingWindowVisualTests() {
         window.Gui.Hwnd, "Ptr", clientRect, "Int"),
         "Could not measure the main-window client area.")
     window.DeleteButton.GetPos(&leftToolbarX, , &leftToolbarWidth)
-    window.SettingsButton.GetPos(&rightToolbarX)
+    window.VisualizerButton.GetPos(&rightToolbarX)
     toolbarGapLeft := leftToolbarX + leftToolbarWidth
     MappingWindowVisualAssert(rightToolbarX - toolbarGapLeft >= 8,
         "The main toolbar has no uncovered background sample area.")
@@ -401,9 +401,10 @@ RunMappingWindowVisualTests() {
             Format("The first visible frame did not retain its title-bar theme. result={1}, value={2}.",
                 darkTitleResult, darkTitleValue))
     }
-    observedPixel := sampleOwner == window.Gui.Hwnd
-        ? backgroundPixel : clientPixel
-    sampleMode := sampleOwner == window.Gui.Hwnd ? "screen" : "window DC"
+    useScreenSample := sampleOwner == window.Gui.Hwnd
+        && backgroundPixel != 0xFFFFFFFF
+    observedPixel := useScreenSample ? backgroundPixel : clientPixel
+    sampleMode := useScreenSample ? "screen" : "window DC"
     MappingWindowVisualAssert(observedPixel == ColorRef(
         MappingWindow.Colors.Window),
         Format("The direct-launch first frame exposed background {1:06X}; expected {2:06X}.",
@@ -986,11 +987,40 @@ RunMappingWindowVisualTests() {
 
     window.List.Modify(0, "-Select")
     MappingWindowVisualAssert(window.RemoveMappingRow("visual-test")
-            && window.List.GetCount() == 1
+            && window.GetMappingRowCount() == 1
+            && window.List.GetCount() == 1 + MappingWindow.FooterRowCount
+            && window.IsFooterRow(2)
+            && window.IsFooterRow(3)
             && window.List.GetText(1, MappingWindow.NameColumn)
                 == "visual-test-2"
             && window.List.GetText(1, MappingWindow.SequenceColumn) == "1",
-        "Incremental deletion did not preserve the remaining row and order.")
+        "Incremental deletion did not preserve the remaining row, order, and footer row.")
+    footerRowIndex := window.GetFooterRowIndex()
+    footerRects := window.GetFooterButtonRects(footerRowIndex)
+    expectedFooterHeight := window.GetListRowHeightPixels()
+        * MappingWindow.FooterRowCount
+    MappingWindowVisualAssert(footerRowIndex == 2
+            && IsObject(footerRects)
+            && footerRects.Row.Bottom - footerRects.Row.Top
+                == expectedFooterHeight
+            && footerRects.Import.Height
+                > window.GetListRowHeightPixels() - 8
+            && footerRects.Import.Right < footerRects.Export.Left
+            && Abs((footerRects.Import.Left + footerRects.Export.Right) / 2
+                - (footerRects.Row.Left + footerRects.Row.Right) / 2) <= 1
+            && window.HitTestFooterRow(
+                Round((footerRects.Import.Left + footerRects.Import.Right) / 2),
+                Round((footerRects.Import.Top + footerRects.Import.Bottom) / 2)).Button
+                == "import"
+            && window.HitTestFooterRow(
+                Round((footerRects.Export.Left + footerRects.Export.Right) / 2),
+                Round((footerRects.Export.Top + footerRects.Export.Bottom) / 2)).Button
+                == "export"
+            && window.ChooseImportRulePackage()
+            && window.ChooseExportRulePackage()
+            && app.ImportRulePackageCount == 1
+            && app.ExportRulePackageCount == 1,
+        "The list footer row did not expose centered import/export package buttons.")
     window.SelectOnlyRow(1)
     window.RefreshSelectionState()
     MappingWindowVisualAssert(pauseState.Interactive
@@ -2160,6 +2190,10 @@ AssertMainCommandButtonGroups(window, clientWidth) {
             && aboutX - (supportX + supportWidth)
                 == MappingWindow.TopButtonGap,
         "A command-button group has inconsistent internal spacing.")
+    window.VisualizerButton.GetPos(&visualizerX, , &visualizerWidth)
+    MappingWindowVisualAssert(settingsX - (visualizerX + visualizerWidth)
+            == MappingWindow.TopButtonGap,
+        "The visualizer button has inconsistent spacing from settings.")
     MappingWindowVisualAssert(Abs(aboutX + aboutWidth
                 - (clientWidth - MappingWindow.ToolbarRightMargin)) <= 1,
         "The auxiliary command group lost its right-edge alignment.")
@@ -4532,8 +4566,9 @@ CaptureMappingWindowClientPixel(hwnd, x, y) {
 MappingWindowScreenPixelMatchesWhenVisible(hwnd, x, y, expectedColor) {
     if GetMappingWindowClientPointOwner(hwnd, x, y) != hwnd
         return true
-    return CaptureMappingWindowClientPixel(hwnd, x, y)
-        == ColorRef(expectedColor)
+    screenPixel := CaptureMappingWindowClientPixel(hwnd, x, y)
+    return screenPixel == 0xFFFFFFFF
+        || screenPixel == ColorRef(expectedColor)
 }
 
 GetMappingWindowClientPointOwner(hwnd, x, y) {
@@ -4874,6 +4909,9 @@ class MappingWindowVisualTestApp {
         this.Repository := MappingWindowVisualRepository()
         this.Runtime := MappingWindowVisualRuntimeProbe()
         this.AIService := MappingWindowVisualAiServiceProbe()
+        this.KeystrokeOsd := {Active: false}
+        this.ImportRulePackageCount := 0
+        this.ExportRulePackageCount := 0
         this.Window := ""
     }
 
@@ -4883,6 +4921,8 @@ class MappingWindowVisualTestApp {
     OpenAbout(*) => true
     UndoMappingChange(*) => true
     RedoMappingChange(*) => true
+    ChooseImportRulePackage(*) => (++this.ImportRulePackageCount > 0)
+    ChooseExportRulePackage(*) => (++this.ExportRulePackageCount > 0)
 
     GetRuleColor(mappingId) {
         return this.RuleColors.Has(mappingId)

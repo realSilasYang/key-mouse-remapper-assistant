@@ -68,6 +68,7 @@ class ListViewPseudoHeader {
         this.SortDisplayColumn := 0
         this.SortDescending := false
         this.OnBeforeSort := this.GetOption(options, "OnBeforeSort", "")
+        this.OnAfterSort := this.GetOption(options, "OnAfterSort", "")
         this.OnSortChanged := this.GetOption(options, "OnSortChanged", "")
         try this.RestoreColumn := Max(0, Integer(this.GetOption(options,
             "RestoreColumn", 0)))
@@ -254,7 +255,6 @@ class ListViewPseudoHeader {
             this.SortDisplayColumn := displayColumn
             this.SortDescending := previousDisplayColumn == displayColumn
                 ? true : this.Columns[displayColumn].SkipAscending
-            this.NotifyBeforeSort()
             if !this.ApplyCurrentSort()
                 throw Error("Unable to apply the pseudo-header sort")
         } catch {
@@ -275,8 +275,14 @@ class ListViewPseudoHeader {
     }
 
     NotifyBeforeSort() {
-        if this.HasActiveSort() && IsObject(this.OnBeforeSort)
+        if IsObject(this.OnBeforeSort)
             this.OnBeforeSort.Call(this, this.GetSortColumn(),
+                this.SortDescending)
+    }
+
+    NotifyAfterSort() {
+        if IsObject(this.OnAfterSort)
+            this.OnAfterSort.Call(this, this.GetSortColumn(),
                 this.SortDescending)
     }
 
@@ -285,8 +291,13 @@ class ListViewPseudoHeader {
             return false
         columnSpec := this.Columns[this.SortDisplayColumn]
         direction := this.SortDescending ? "SortDesc" : "Sort"
-        this.List.ModifyCol(columnSpec.Column,
-            Trim(columnSpec.SortOptions " " columnSpec.Align " " direction))
+        this.NotifyBeforeSort()
+        try {
+            this.List.ModifyCol(columnSpec.Column,
+                Trim(columnSpec.SortOptions " " columnSpec.Align " " direction))
+        } finally {
+            this.NotifyAfterSort()
+        }
         return true
     }
 
@@ -306,20 +317,24 @@ class ListViewPseudoHeader {
         previousDisplayColumn := this.SortDisplayColumn
         previousDescending := this.SortDescending
         this.NotifyBeforeSort()
-        if !this.ClearSort()
-            return false
-        if this.RestoreColumn {
-            try {
-                options := Trim(this.RestoreSortOptions " Sort")
-                this.List.ModifyCol(this.RestoreColumn, options)
-                this.List.ModifyCol(this.RestoreColumn, "NoSort")
-            } catch {
-                this.SortDisplayColumn := previousDisplayColumn
-                this.SortDescending := previousDescending
-                try this.ApplyCurrentSort()
-                this.RefreshLabels()
+        try {
+            if !this.ClearSort()
                 return false
+            if this.RestoreColumn {
+                try {
+                    options := Trim(this.RestoreSortOptions " Sort")
+                    this.List.ModifyCol(this.RestoreColumn, options)
+                    this.List.ModifyCol(this.RestoreColumn, "NoSort")
+                } catch {
+                    this.SortDisplayColumn := previousDisplayColumn
+                    this.SortDescending := previousDescending
+                    try this.ApplyCurrentSort()
+                    this.RefreshLabels()
+                    return false
+                }
             }
+        } finally {
+            this.NotifyAfterSort()
         }
         this.NotifySortChanged(0, false)
         return true
@@ -393,6 +408,7 @@ class ListViewPseudoHeader {
             this.Cells := []
             this.Columns := []
             this.OnBeforeSort := ""
+            this.OnAfterSort := ""
             this.OnSortChanged := ""
             this.CursorRegistrar := ""
             this.Background := ""

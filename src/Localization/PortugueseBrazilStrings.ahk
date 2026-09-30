@@ -424,14 +424,8 @@ class PortugueseBrazilStrings {
             "Inicialização")
         catalog.Set("显示",
             "Exibição")
-        catalog.Set("规则与事件",
-            "Regras e eventos")
         catalog.Set("关于",
             "Sobre")
-        catalog.Set("事件缓冲区容量（条）：",
-            "Capacidade do buffer de eventos:")
-        catalog.Set("事件查看自动跟随最新事件",
-            "Seguir automaticamente os eventos mais recentes")
         catalog.Set("让每一条键鼠映射都可录制、可审阅、可掌控",
             "Grave, revise e controle cada remapeamento de teclado e mouse")
         catalog.Set("当前版本",
@@ -442,8 +436,6 @@ class PortugueseBrazilStrings {
             "Repositório de código aberto")
         catalog.Set("“{1}”必须是 {2} 到 {3} 之间的整数。",
             "“{1}” deve ser um inteiro entre {2} e {3}.")
-        catalog.Set("事件缓冲区容量",
-            "Capacidade do buffer de eventos")
         catalog.Set("未知版本",
             "Versão desconhecida")
         catalog.Set("{1}（EXE 版）",
@@ -452,8 +444,6 @@ class PortugueseBrazilStrings {
             "{1} (versão de código-fonte)")
         catalog.Set("设置已保存并已应用。",
             "Configurações salvas e aplicadas.")
-        catalog.Set("Esc 取消录制",
-            "Esc cancela a gravação")
         catalog.Set("{1}（便携版）", "{1} (versão portátil)")
         catalog.Set("快揭不开锅了（≥Д≤）",
             "O orçamento está quase no fim（≥Д≤）")
@@ -658,6 +648,40 @@ class PortugueseBrazilStrings {
         catalog.Set("当前等待时间：{1} 秒", "Current wait time: {1} seconds")
         catalog.Set("界面缩放：", "Escala da interface:")
         catalog.Set("界面缩放已保存，正在重新加载…", "A escala da interface foi salva. Recarregando…")
+        catalog.Set("按键实时可视化已开启。", "Visualização de teclas em tempo real ativada.")
+        catalog.Set("按键实时可视化已关闭。", "Visualização de teclas em tempo real desativada.")
+        catalog.Set("按键可视化", "Visualizador de teclas")
+        catalog.Set("按键实时可视化已开启（点击关闭）", "Visualização de teclas em tempo real ativada (clique para desativar)")
+        catalog.Set("按键实时可视化已关闭（点击开启）", "Visualização de teclas em tempo real desativada (clique para ativar)")
+        catalog.Set("基准对齐", "Alinhamento base")
+        catalog.Set("X 轴偏移", "Deslocamento X")
+        catalog.Set("Y 轴偏移", "Deslocamento Y")
+        catalog.Set("左下角", "Inferior esquerdo")
+        catalog.Set("中下", "Inferior centro")
+        catalog.Set("右下角", "Inferior direito")
+        catalog.Set("左中", "Centro-esquerda")
+        catalog.Set("右中", "Centro-direita")
+        catalog.Set("左上角", "Superior esquerdo")
+        catalog.Set("中上", "Superior centro")
+        catalog.Set("右上角", "Superior direito")
+        catalog.Set("屏幕中央", "Centro da tela")
+        catalog.Set("字体大小 (pt)：", "Tamanho da fonte (pt):")
+        catalog.Set("字体大小", "Tamanho da fonte")
+        catalog.Set("配色方案：", "Esquema de cores:")
+        catalog.Set("深灰经典", "Cinza escuro clássico")
+        catalog.Set("纯黑高亮", "Preto puro de alto contraste")
+        catalog.Set("暗夜深蓝", "Azul meia-noite escuro")
+        catalog.Set("极简浅色", "Claro minimalista")
+        catalog.Set("翠绿终端", "Verde terminal")
+        catalog.Set("自定义", "Personalizado")
+        catalog.Set("背景色：", "Cor de fundo:")
+        catalog.Set("文字色：", "Cor do texto:")
+        catalog.Set("停留时长（秒）：", "Duração de exibição (segundos):")
+        catalog.Set("停留时长（秒）", "Duração de exibição (segundos)")
+        catalog.Set("按键可视化效果预览", "Visualização do efeito do visualizador de teclas")
+        catalog.Set("背景色格式无效（支持 16 进制如 #2E3032 或 RGB 如 46,48,50）。", "Formato de cor de fundo inválido (suporta hex ex.: #2E3032 ou RGB ex.: 46,48,50).")
+        catalog.Set("文字色格式无效（支持 16 进制如 #FFFFFF 或 RGB 如 255,255,255）。", "Formato de cor do texto inválido (suporta hex ex.: #FFFFFF ou RGB ex.: 255,255,255).")
+        catalog.Set("“{1}”必须是 {2} 到 {3} 之间的数值。", "“{1}” deve ser um número entre {2} e {3}.")
         return catalog
     }
 }

@@ -141,6 +141,49 @@ class MappingUiInteractions {
         return true
     }
 
+    RegisterContainerSurface(control, backgroundColor, borderColor := "",
+            borderWidthDip := 1.5, radiusDip := 6) {
+        hwnd := control.Hwnd
+        if !hwnd || !this.Painter.Ready
+            return false
+        try control.Opt("+Disabled")
+        state := {
+            Kind: "container", Control: control,
+            Normal: backgroundColor, Hover: backgroundColor,
+            Pressed: backgroundColor, Current: backgroundColor,
+            TextColor: "", TextInsetDip: 0,
+            Multiline: false, Interactive: false,
+            BorderColor: borderColor,
+            BorderWidthDip: borderWidthDip,
+            RadiusDip: radiusDip
+        }
+        this.Controls[hwnd] := state
+        if !this.Attach(hwnd) || !this.EnableOwnerDraw(control) {
+            this.Detach(hwnd)
+            this.Controls.Delete(hwnd)
+            return false
+        }
+        this.Redraw(hwnd)
+        return true
+    }
+
+    SetContainerAppearance(control, backgroundColor, borderColor := "") {
+        hwnd := control.Hwnd
+        if !this.Controls.Has(hwnd)
+            return false
+        state := this.Controls[hwnd]
+        if state.Kind != "container"
+            return false
+        state.Normal := backgroundColor
+        state.Current := backgroundColor
+        state.Hover := backgroundColor
+        state.Pressed := backgroundColor
+        if borderColor != ""
+            state.BorderColor := borderColor
+        this.Redraw(hwnd)
+        return true
+    }
+
     RegisterDashedDivider(control, backgroundColor, lineColor,
             dashWidthDip, dashGapDip, dashHeightDip) {
         hwnd := control.Hwnd
@@ -329,7 +372,7 @@ class MappingUiInteractions {
             return
         state := this.Controls[itemHwnd]
         if state.Kind != "button" && state.Kind != "icon"
-                && state.Kind != "divider"
+                && state.Kind != "container" && state.Kind != "divider"
             return
         hdcOffset := itemHwndOffset + A_PtrSize
         rectOffset := hdcOffset + A_PtrSize
@@ -393,7 +436,7 @@ class MappingUiInteractions {
                         this.MoveKeyboardFocus(state.TargetHwnd)
                         return 0
                     }
-                    if state.Kind == "icon"
+                    if state.Kind == "icon" || state.Kind == "container"
                         return 0
                     if state.Kind == "text" && state.HideCaret {
                         result := this.DefSubclassProc(hwnd, message,
@@ -475,7 +518,7 @@ class MappingUiInteractions {
                     if state.Kind == "header" || state.Kind == "focusRedirect"
                         return 0
                 case 0x0020:
-                    if state.Kind == "icon"
+                    if state.Kind == "icon" || state.Kind == "container"
                         return this.DefSubclassProc(hwnd, message,
                             wParam, lParam)
                     if DllCall("user32\IsWindowEnabled", "Ptr", hwnd, "Int")
@@ -1061,6 +1104,19 @@ class MappingUiInteractions {
         state.TextAlign := alignment
         state.TextInsetDip := insetDip
         state.RadiusDip := radiusDip
+        this.Redraw(hwnd)
+        return true
+    }
+
+    SetButtonBorder(control, borderColor := "", borderWidthDip := 1.5) {
+        hwnd := control.Hwnd
+        if !this.Controls.Has(hwnd)
+            return false
+        state := this.Controls[hwnd]
+        if state.Kind != "button" && state.Kind != "container" && state.Kind != "icon"
+            return false
+        state.BorderColor := borderColor
+        state.BorderWidthDip := borderWidthDip
         this.Redraw(hwnd)
         return true
     }

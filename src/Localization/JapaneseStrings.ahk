@@ -424,14 +424,8 @@ class JapaneseStrings {
             "起動")
         catalog.Set("显示",
             "表示")
-        catalog.Set("规则与事件",
-            "ルールとイベント")
         catalog.Set("关于",
             "バージョン情報")
-        catalog.Set("事件缓冲区容量（条）：",
-            "イベントバッファー容量（件）：")
-        catalog.Set("事件查看自动跟随最新事件",
-            "イベントビューアーで最新イベントを自動追尾")
         catalog.Set("让每一条键鼠映射都可录制、可审阅、可掌控",
             "すべてのキーボードとマウスのマッピングを記録・確認・管理")
         catalog.Set("当前版本",
@@ -442,8 +436,6 @@ class JapaneseStrings {
             "オープンソースリポジトリ")
         catalog.Set("“{1}”必须是 {2} 到 {3} 之间的整数。",
             "「{1}」は {2} から {3} までの整数で指定してください。")
-        catalog.Set("事件缓冲区容量",
-            "イベントバッファー容量")
         catalog.Set("未知版本",
             "不明なバージョン")
         catalog.Set("{1}（EXE 版）",
@@ -452,8 +444,6 @@ class JapaneseStrings {
             "{1}（ソース版）")
         catalog.Set("设置已保存并已应用。",
             "設定を保存して適用しました。")
-        catalog.Set("Esc 取消录制",
-            "Esc で記録をキャンセル")
         catalog.Set("{1}（便携版）", "{1}（ポータブル版）")
         catalog.Set("快揭不开锅了（≥Д≤）",
             "お財布がもう空っぽです（≥Д≤）")
@@ -658,6 +648,40 @@ class JapaneseStrings {
         catalog.Set("当前等待时间：{1} 秒", "Current wait time: {1} seconds")
         catalog.Set("界面缩放：", "UI の拡大率：")
         catalog.Set("界面缩放已保存，正在重新加载…", "UI の拡大率を保存しました。再読み込みしています…")
+        catalog.Set("按键实时可视化已开启。", "キー入力リアルタイム可視化を有効にしました。")
+        catalog.Set("按键实时可视化已关闭。", "キー入力リアルタイム可視化を無効にしました。")
+        catalog.Set("按键可视化", "キー入力可視化")
+        catalog.Set("按键实时可视化已开启（点击关闭）", "キー入力リアルタイム可視化が有効です（クリックして無効化）")
+        catalog.Set("按键实时可视化已关闭（点击开启）", "キー入力リアルタイム可視化が無効です（クリックして有効化）")
+        catalog.Set("基准对齐", "基準配置")
+        catalog.Set("X 轴偏移", "X 軸オフセット")
+        catalog.Set("Y 轴偏移", "Y 軸オフセット")
+        catalog.Set("左下角", "左下")
+        catalog.Set("中下", "中央下")
+        catalog.Set("右下角", "右下")
+        catalog.Set("左中", "左中央")
+        catalog.Set("右中", "右中央")
+        catalog.Set("左上角", "左上")
+        catalog.Set("中上", "中央上")
+        catalog.Set("右上角", "右上")
+        catalog.Set("屏幕中央", "画面中央")
+        catalog.Set("字体大小 (pt)：", "フォントサイズ (pt)：")
+        catalog.Set("字体大小", "フォントサイズ")
+        catalog.Set("配色方案：", "カラースキーム：")
+        catalog.Set("深灰经典", "クラシックダークグレー")
+        catalog.Set("纯黑高亮", "ピュアブラックハイコントラスト")
+        catalog.Set("暗夜深蓝", "ミッドナイトブルー")
+        catalog.Set("极简浅色", "ミニマルライト")
+        catalog.Set("翠绿终端", "ターミナルグリーン")
+        catalog.Set("自定义", "カスタム")
+        catalog.Set("背景色：", "背景色：")
+        catalog.Set("文字色：", "文字色：")
+        catalog.Set("停留时长（秒）：", "表示時間（秒）：")
+        catalog.Set("停留时长（秒）", "表示時間（秒）")
+        catalog.Set("按键可视化效果预览", "キー可視化効果プレビュー")
+        catalog.Set("背景色格式无效（支持 16 进制如 #2E3032 或 RGB 如 46,48,50）。", "背景色の形式が無効です（16進数 例: #2E3032 または RGB 例: 46,48,50 に対応）。")
+        catalog.Set("文字色格式无效（支持 16 进制如 #FFFFFF 或 RGB 如 255,255,255）。", "文字色の形式が無効です（16進数 例: #FFFFFF または RGB 例: 255,255,255 に対応）。")
+        catalog.Set("“{1}”必须是 {2} 到 {3} 之间的数值。", "「{1}」は {2} から {3} までの数値で指定してください。")
         return catalog
     }
 }

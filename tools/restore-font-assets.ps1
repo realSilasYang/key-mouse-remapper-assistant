@@ -96,13 +96,29 @@ $resolvedArchivePath = if ($ArchivePath) {
     Join-Path $cachePath 'fonts.zip'
 }
 
-function Get-ArchiveEntryHash {
+function Get-ArchiveEntry {
     param(
         [IO.Compression.ZipArchive]$Archive,
         [string]$RelativePath
     )
 
     $entry = $Archive.GetEntry($RelativePath)
+    if ($null -eq $entry) {
+        $entry = $Archive.GetEntry(($RelativePath -replace '/', '\'))
+    }
+    if ($null -eq $entry) {
+        $entry = $Archive.GetEntry(($RelativePath -replace '\\', '/'))
+    }
+    return $entry
+}
+
+function Get-ArchiveEntryHash {
+    param(
+        [IO.Compression.ZipArchive]$Archive,
+        [string]$RelativePath
+    )
+
+    $entry = Get-ArchiveEntry $Archive $RelativePath
     if ($null -eq $entry) { return "" }
     $stream = $entry.Open()
     $sha = [Security.Cryptography.SHA256]::Create()
@@ -188,7 +204,7 @@ try {
     $archive = [IO.Compression.ZipFile]::OpenRead($resolvedArchivePath)
     try {
         foreach ($record in $fontRecords) {
-            $entry = $archive.GetEntry($record.RelativePath)
+            $entry = Get-ArchiveEntry $archive $record.RelativePath
             if ($null -eq $entry) {
                 throw "Source archive omitted $($record.RelativePath)."
             }

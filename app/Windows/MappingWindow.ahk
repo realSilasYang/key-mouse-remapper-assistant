@@ -73,17 +73,22 @@ class MappingWindow {
     static DividerDashWidth := 14
     static DividerDashGap := 7
     static DividerDashHeight := 1
+    static FooterRowMarker := "footer"
+    static FooterRowCount := 2
+    static FooterButtonHeight := 38
+    static FooterButtonGap := 16
+    static FooterButtonMinWidth := 136
     static Colors := {
         Window: "1E1E1E", Surface: "252526", Input: "252526",
         Toolbar: "333333", Divider: "3A3A3A",
         Text: "FFFFFF",
         Muted: "B8BAB9", Hint: "AFAFAF", Primary: "0078D7",
-        Add: "3F6B5B", Delete: "6B4B4B", DeleteDisabled: "554B4B",
+        Add: "3F6B5B", Resume: "3F6B5B", Delete: "6B4B4B", DeleteDisabled: "554B4B",
         AI: "F2C14E", AIButton: "5A4610", AIButtonText: "FFFFFF",
         Success: "6ED7A0", Danger: "FF8A8A",
         Disabled: "554B4B",
         Pause: "6B6244", PauseDisabled: "555148",
-        ButtonText: "FFFFFF", DisabledButtonText: "D8D8D8",
+        ButtonText: "FFFFFF", ToolbarText: "D8D8D8", DisabledButtonText: "D8D8D8",
         CodeGutter: "202020", CodeLineNumber: "858585",
         CodeComment: "858585", CodeVariable: "D17A2A",
         CodeValue: "6A8754", CodeKeyword: "C586C0",
@@ -136,6 +141,17 @@ class MappingWindow {
         this.ListStatusIconIndices := Map()
         this.NameInputHeight := MappingWindow.NameInputInitialHeight
         this.NameInputMetrics := ""
+        this.VisualizerButton := ""
+        this.VisualizerButtonWidth := 100
+        this.ImportRulePackageButton := ""
+        this.ExportRulePackageButton := ""
+        this.FooterButtonWidth := MappingWindow.FooterButtonMinWidth
+        this.FooterHoveredButton := ""
+        this.FooterPressedButton := ""
+        this.FooterMouseLeaveTracking := false
+        this.PendingFooterButtonAction := ""
+        this.PendingFooterButtonTimer := ObjBindMethod(this,
+            "RunPendingFooterButtonAction")
         this.Disposed := false
         try {
         MappingWindow.Colors := UiThemeService.GetPalette()
@@ -252,6 +268,12 @@ class MappingWindow {
             selectionCommandPreflight)
         toolbarPositions := this.GetToolbarButtonPositions(
             this.MinClientWidth)
+        this.VisualizerButton := this.AddCommandButton(
+            toolbarPositions.Visualizer, 15,
+            this.VisualizerButtonWidth,
+            this.GetVisualizerButtonText(), colors.Toolbar,
+            ObjBindMethod(this, "ToggleKeystrokeOsdFromButton"), "",
+            MappingWindow.SettingsButtonHeight)
         this.SettingsButton := this.AddCommandButton(
             toolbarPositions.Settings, 15,
             this.SettingsButtonWidth,
@@ -268,6 +290,20 @@ class MappingWindow {
             Tr("关于"), colors.Toolbar,
             ObjBindMethod(this.App, "OpenAbout"), "",
             MappingWindow.SettingsButtonHeight)
+        this.ImportRulePackageButton := this.AddCommandButton(
+            -1000, -1000, this.FooterButtonWidth,
+            Tr("导入规则包"), colors.Toolbar,
+            ObjBindMethod(this, "ChooseImportRulePackage"),
+            colors.ToolbarText,
+            MappingWindow.FooterButtonHeight)
+        this.ImportRulePackageButton.Visible := false
+        this.ExportRulePackageButton := this.AddCommandButton(
+            -1000, -1000, this.FooterButtonWidth,
+            Tr("导出规则包"), colors.Toolbar,
+            ObjBindMethod(this, "ChooseExportRulePackage"),
+            colors.ToolbarText,
+            MappingWindow.FooterButtonHeight)
+        this.ExportRulePackageButton.Visible := false
         this.ApplyCommandIcons()
         this.UpdateCommandButtonGroupWidths()
         this.RefreshToolbarTooltips()
@@ -294,8 +330,9 @@ class MappingWindow {
             MappingWindow.NameColumn, MappingWindow.ScopeColumn,
             ObjBindMethod(this, "GetListCellTextAvailableWidth"))
         this.ListSelection := ListViewSelectionPresenter(this.List,
-            this.Interactions.Painter, ObjBindMethod(this,
-                "DrawListSubItem"))
+            this.Interactions.Painter,
+            ObjBindMethod(this, "DrawListSubItem"),
+            ObjBindMethod(this, "DrawListItemPrePaint"))
         this.ListHeader := ListViewPseudoHeader(this.Gui, this.List, [
             {Column: MappingWindow.SequenceColumn, Label: Tr("序号"),
                 Align: "Center", SortOptions: "Integer", SkipAscending: true},
@@ -321,8 +358,11 @@ class MappingWindow {
                 "RegisterHandCursor"),
             RestoreColumn: MappingWindow.SequenceColumn,
             RestoreSortOptions: "Integer Center",
+            OnBeforeSort: ObjBindMethod(this, "OnBeforeHeaderSort"),
+            OnAfterSort: ObjBindMethod(this, "OnAfterHeaderSort"),
             OnSortChanged: ObjBindMethod(this, "OnHeaderSortChanged")
         })
+        this.EnsureListFooterRow()
         this.Gui.SetFont("s10 c" colors.Text, this.FontName)
 
         this.SectionTopDivider := this.Gui.Add("Text",
@@ -495,12 +535,22 @@ class MappingWindow {
             {Button: this.SupportButton, Icon: "circle-question-mark.svg",
                 LightColor: colors.DisplayIcon},
             {Button: this.AboutButton, Icon: "circle-info.svg",
+                LightColor: colors.RulesEventIcon},
+            {Button: this.ImportRulePackageButton, Icon: "square-plus.svg",
+                LightColor: colors.DisplayIcon},
+            {Button: this.ExportRulePackageButton, Icon: "file-output.svg",
                 LightColor: colors.RulesEventIcon}
         ] {
+            if !IsObject(item.Button)
+                continue
             this.Interactions.SetButtonLucideIcon(item.Button,
                 item.Icon, 15, 6,
                 UiThemeService.ButtonIconColor(item.LightColor))
         }
+        if IsObject(this.ImportRulePackageButton)
+            this.ImportRulePackageButton.Visible := false
+        if IsObject(this.ExportRulePackageButton)
+            this.ExportRulePackageButton.Visible := false
     }
 
     RefreshToolbarTooltips() {
@@ -510,6 +560,38 @@ class MappingWindow {
             Tr("打开帮助`n可选择查看使用说明、运行日志或提交反馈"))
         this.Interactions.SetButtonTooltip(this.AboutButton,
             Tr("查看版本、运行环境和项目入口"))
+        this.RefreshKeystrokeOsdButton()
+    }
+
+    GetVisualizerButtonText() => Tr("按键可视化")
+
+    ToggleKeystrokeOsdFromButton(*) {
+        if IsObject(this.App) && this.App.HasMethod("ToggleKeystrokeOsd")
+            this.App.ToggleKeystrokeOsd("main_window")
+    }
+
+    RefreshKeystrokeOsdButton() {
+        if !IsObject(this.VisualizerButton)
+            return
+        colors := MappingWindow.Colors
+        isActive := IsObject(this.App) && this.App.HasOwnProp("KeystrokeOsd")
+            && IsObject(this.App.KeystrokeOsd) && this.App.KeystrokeOsd.Active
+        if isActive {
+            this.Interactions.SetButtonAppearance(this.VisualizerButton,
+                colors.Add, colors.ButtonText, true)
+            this.Interactions.SetButtonLucideIcon(this.VisualizerButton,
+                "captions.svg", 15, 6, "ffffff")
+            this.Interactions.SetButtonTooltip(this.VisualizerButton,
+                Tr("按键实时可视化已开启（点击关闭）"))
+        } else {
+            inactiveIconColor := UiThemeService.IsDark() ? "BABABC" : colors.Muted
+            this.Interactions.SetButtonAppearance(this.VisualizerButton,
+                colors.Toolbar, colors.ToolbarText, true)
+            this.Interactions.SetButtonLucideIcon(this.VisualizerButton,
+                "captions.svg", 15, 6, inactiveIconColor)
+            this.Interactions.SetButtonTooltip(this.VisualizerButton,
+                Tr("按键实时可视化已关闭（点击开启）"))
+        }
     }
 
     GetAddButtonText() => "➕ " Tr("新建")
@@ -531,7 +613,12 @@ class MappingWindow {
             - this.SupportButtonWidth
         settingsX := supportX - MappingWindow.TopButtonGap
             - this.SettingsButtonWidth
-        return {Settings: settingsX, Support: supportX, About: aboutX}
+        visualizerWidth := this.HasOwnProp("VisualizerButtonWidth")
+            ? this.VisualizerButtonWidth : 100
+        visualizerX := settingsX - MappingWindow.TopButtonGap
+            - visualizerWidth
+        return {Settings: settingsX, Support: supportX, About: aboutX,
+            Visualizer: visualizerX}
     }
 
     RegisterHistoryHotkeys() {
@@ -676,9 +763,100 @@ class MappingWindow {
             return 0
         }
         try {
-            if message == Win32.WM_LBUTTONDOWN
-                    && this.PendingListScrollLines
-                this.StopSmoothListScroll(true)
+            if message == 0x0020 && !this.Disposed
+                    && (lParam & 0xFFFF) == 1 { ; WM_SETCURSOR / HTCLIENT
+                point := Buffer(8, 0)
+                if DllCall("user32\GetCursorPos", "Ptr", point, "Int")
+                        && DllCall("user32\ScreenToClient", "Ptr", hwnd,
+                            "Ptr", point, "Int") {
+                    hit := this.HitTestFooterRow(NumGet(point, 0, "Int"),
+                        NumGet(point, 4, "Int"))
+                    if hit.Button != "" {
+                        this.Interactions.SetCursor("button")
+                        return 1
+                    }
+                }
+            }
+            if message == 0x0200 && !this.Disposed { ; WM_MOUSEMOVE
+                x := this.SignedWord(lParam)
+                y := this.SignedWord(lParam >> 16)
+                hit := this.HitTestFooterRow(x, y)
+                if hit.Button != "" && !this.FooterMouseLeaveTracking {
+                    this.Interactions.TrackMouseLeave(hwnd)
+                    this.FooterMouseLeaveTracking := true
+                }
+                if hit.Button != this.FooterHoveredButton {
+                    this.FooterHoveredButton := hit.Button
+                    this.RedrawFooterRow()
+                }
+            }
+            if message == 0x02A3 && !this.Disposed { ; WM_MOUSELEAVE
+                this.FooterMouseLeaveTracking := false
+                if this.FooterHoveredButton != "" {
+                    this.FooterHoveredButton := ""
+                    this.RedrawFooterRow()
+                }
+            }
+            if (message == Win32.WM_LBUTTONDOWN
+                    || message == Win32.WM_LBUTTONDBLCLK) && !this.Disposed {
+                if this.PendingListScrollLines
+                    this.StopSmoothListScroll(true)
+                x := this.SignedWord(lParam)
+                y := this.SignedWord(lParam >> 16)
+                hit := this.HitTestFooterRow(x, y)
+                if hit.InFooterRow {
+                    if IsObject(this.CellTooltip)
+                        this.CellTooltip.Hide()
+                    if IsObject(this.ContextPopup)
+                            && this.ContextPopup.IsVisible()
+                        this.ContextPopup.Hide()
+                    if hit.Button != "" {
+                        this.FooterPressedButton := hit.Button
+                        this.FooterHoveredButton := hit.Button
+                        this.Interactions.TrackMouseLeave(hwnd)
+                        this.FooterMouseLeaveTracking := true
+                        DllCall("user32\SetCapture", "Ptr", hwnd, "Ptr")
+                        this.RedrawFooterRow()
+                    } else {
+                        this.List.Modify(0, "-Select")
+                        this.RefreshSelectionState()
+                    }
+                    return 0
+                }
+            }
+            if message == 0x0202 && !this.Disposed
+                    && this.FooterPressedButton != "" { ; WM_LBUTTONUP
+                pressed := this.FooterPressedButton
+                this.FooterPressedButton := ""
+                if DllCall("user32\GetCapture", "Ptr") == hwnd
+                    DllCall("user32\ReleaseCapture", "Int")
+                x := this.SignedWord(lParam)
+                y := this.SignedWord(lParam >> 16)
+                hit := this.HitTestFooterRow(x, y)
+                this.FooterHoveredButton := hit.Button
+                this.RedrawFooterRow()
+                if hit.Button == pressed {
+                    this.PendingFooterButtonAction := pressed
+                    SetTimer(this.PendingFooterButtonTimer, -1)
+                }
+                return 0
+            }
+            if (message == 0x001F || message == 0x0215) && !this.Disposed
+                    && this.FooterPressedButton != "" {
+                this.FooterPressedButton := ""
+                if message == 0x001F
+                        && DllCall("user32\GetCapture", "Ptr") == hwnd
+                    DllCall("user32\ReleaseCapture", "Int")
+                this.RedrawFooterRow()
+            }
+            if (message == 0x0204 || message == 0x0205 || message == 0x0206)
+                    && !this.Disposed {
+                x := this.SignedWord(lParam)
+                y := this.SignedWord(lParam >> 16)
+                hit := this.HitTestFooterRow(x, y)
+                if hit.InFooterRow
+                    return 0
+            }
             if message == 0x0082 ; WM_NCDESTROY
                 this.ListWheelSubclassAttached := false
         } catch {
@@ -856,7 +1034,7 @@ class MappingWindow {
         if wParam == 113 && !ctrlDown && !shiftDown && !altDown {
             if !repeated {
                 row := this.List.GetNext(0, "Focused")
-                if row > 0
+                if row > 0 && !this.IsFooterRow(row)
                     this.OpenEditorForRow(row)
             }
             return 0
@@ -864,6 +1042,10 @@ class MappingWindow {
         if wParam == 65 && ctrlDown && !altDown {
             if !repeated {
                 this.List.Modify(0, "Select")
+                Loop this.List.GetCount() {
+                    if this.IsFooterRow(A_Index)
+                        this.List.Modify(A_Index, "-Select -Focus")
+                }
                 this.RefreshSelectionState()
             }
             return 0
@@ -958,6 +1140,12 @@ class MappingWindow {
             this.PendingCapturePointerAction := ""
         } catch as timerError
             cleanupFailures.Push("录制界面命令：" timerError.Message)
+        try {
+            SetTimer(this.PendingFooterButtonTimer, 0)
+            this.PendingFooterButtonTimer := ""
+            this.PendingFooterButtonAction := ""
+        } catch as timerError
+            cleanupFailures.Push("规则包末尾按钮命令：" timerError.Message)
         this.DisposeOwnedResource(cleanupFailures, "列表表头",
             "ListHeader")
         this.DisposeOwnedResource(cleanupFailures, "交互服务",
@@ -1019,9 +1207,139 @@ class MappingWindow {
         return message
     }
 
+    IsFooterRow(row) {
+        if row < 1 || !IsObject(this.List) || !this.List.Hwnd
+            return false
+        count := this.List.GetCount()
+        if row > count
+            return false
+        return this.List.GetText(row, MappingWindow.EnabledColumn)
+            == MappingWindow.FooterRowMarker
+    }
+
+    GetFooterRowIndex() {
+        if !IsObject(this.List) || !this.List.Hwnd
+            return 0
+        count := this.List.GetCount()
+        if !count
+            return 0
+        Loop count {
+            if this.List.GetText(A_Index, MappingWindow.EnabledColumn)
+                    == MappingWindow.FooterRowMarker
+                return A_Index
+        }
+        return 0
+    }
+
+    GetLastFooterRowIndex() {
+        if !IsObject(this.List) || !this.List.Hwnd
+            return 0
+        count := this.List.GetCount()
+        while count > 0 {
+            if this.List.GetText(count, MappingWindow.EnabledColumn)
+                    == MappingWindow.FooterRowMarker
+                return count
+            count--
+        }
+        return 0
+    }
+
+    GetMappingRowCount() {
+        if !IsObject(this.List) || !this.List.Hwnd
+            return 0
+        count := this.List.GetCount()
+        if !count
+            return 0
+        footerCount := 0
+        Loop count {
+            if this.IsFooterRow(A_Index)
+                footerCount++
+        }
+        return count - footerCount
+    }
+
+    EnsureListFooterRow() {
+        if this.Disposed || !IsObject(this.List) || !this.List.Hwnd
+            return 0
+        count := this.List.GetCount()
+        firstFooter := this.GetFooterRowIndex()
+        expectedFirstFooter := count - MappingWindow.FooterRowCount + 1
+        if firstFooter == expectedFirstFooter && firstFooter > 0 {
+            allValid := true
+            Loop MappingWindow.FooterRowCount {
+                checkRow := firstFooter + A_Index - 1
+                if !this.IsFooterRow(checkRow) {
+                    allValid := false
+                    break
+                }
+            }
+            if allValid
+                return firstFooter
+        }
+        this.RemoveListFooterRow()
+        firstRow := 0
+        Loop MappingWindow.FooterRowCount {
+            row := this.List.Add("", "", "", "", "", "", "",
+                MappingWindow.FooterRowMarker)
+            if !firstRow
+                firstRow := row
+            this.SetListSubItemIcon(row, MappingWindow.NameColumn, 0)
+            this.SetListSubItemIcon(row, MappingWindow.StatusColumn, 0)
+        }
+        return firstRow
+    }
+
+    RemoveListFooterRow() {
+        if this.Disposed || !IsObject(this.List) || !this.List.Hwnd
+            return false
+        removed := false
+        row := this.List.GetCount()
+        while row > 0 {
+            if this.IsFooterRow(row) {
+                this.List.Delete(row)
+                removed := true
+            }
+            row--
+        }
+        return removed
+    }
+
+    OnBeforeHeaderSort(*) {
+        this.RemoveListFooterRow()
+    }
+
+    OnAfterHeaderSort(*) {
+        this.EnsureListFooterRow()
+    }
+
+    ChooseImportRulePackage(*) {
+        if this.Disposed || !IsObject(this.App)
+            return false
+        return this.App.ChooseImportRulePackage(this)
+    }
+
+    ChooseExportRulePackage(*) {
+        if this.Disposed || !IsObject(this.App)
+            return false
+        return this.App.ChooseExportRulePackage()
+    }
+
+    RunPendingFooterButtonAction(*) {
+        if this.Disposed
+            return false
+        action := this.PendingFooterButtonAction
+        this.PendingFooterButtonAction := ""
+        if action == "import"
+            return this.ChooseImportRulePackage()
+        if action == "export"
+            return this.ChooseExportRulePackage()
+        return false
+    }
+
     LoadRows(mappings) {
         if IsObject(this.CellTooltip)
             this.CellTooltip.InvalidateMeasurements()
+        this.RemoveListFooterRow()
         for customOrder, mapping in mappings {
             enabled := !mapping.HasOwnProp("Enabled") || mapping.Enabled
             row := this.List.Add("", mapping.Id,
@@ -1030,6 +1348,7 @@ class MappingWindow {
                 this.GetScopeDisplay(mapping.Scope), enabled ? "1" : "0")
             this.SetMappingStatusIcon(row, enabled)
         }
+        this.EnsureListFooterRow()
         this.RefreshListColumnLayout()
     }
 
@@ -1062,12 +1381,14 @@ class MappingWindow {
 
     AddMappingRow(mapping, customOrder) {
         this.StopSmoothListScroll(true)
+        this.RemoveListFooterRow()
         enabled := !mapping.HasOwnProp("Enabled") || mapping.Enabled
         addedRow := this.List.Add("", mapping.Id,
             this.GetMappingStatusDisplay(enabled), mapping.Source,
             mapping.Target, customOrder,
             this.GetScopeDisplay(mapping.Scope), enabled ? "1" : "0")
         this.SetMappingStatusIcon(addedRow, enabled)
+        this.EnsureListFooterRow()
         this.RefreshListColumnLayout()
         if this.SortColumn
             this.ApplyCurrentSort()
@@ -1107,14 +1428,17 @@ class MappingWindow {
             MappingWindow.SequenceColumn))
         this.List.Delete(row)
         Loop this.List.GetCount() {
+            if this.IsFooterRow(A_Index)
+                continue
             order := Integer(this.List.GetText(A_Index,
                 MappingWindow.SequenceColumn))
             if order > removedOrder
                 this.List.Modify(A_Index, "Col" MappingWindow.SequenceColumn,
                     order - 1)
         }
+        this.EnsureListFooterRow()
         this.RefreshListColumnLayout()
-        this.UpdateSelectionButtons(this.List.GetNext())
+        this.UpdateSelectionButtons(this.GetSelectedRows())
         return true
     }
 
@@ -1167,6 +1491,7 @@ class MappingWindow {
         draggedRowOffset := A_PtrSize == 8 ? 24 : 12
         draggedRow := NumGet(notification, draggedRowOffset, "Int") + 1
         if draggedRow < 1 || draggedRow > this.List.GetCount()
+                || this.IsFooterRow(draggedRow)
             return
         draggedId := this.List.GetText(draggedRow,
             MappingWindow.NameColumn)
@@ -1262,7 +1587,7 @@ class MappingWindow {
         clientHeight := NumGet(clientRect, 12, "Int")
         if x < 0 || x >= clientWidth
             return false
-        count := this.List.GetCount()
+        count := this.GetMappingRowCount()
         if !count
             return false
         if y < 0
@@ -1274,7 +1599,7 @@ class MappingWindow {
         NumPut("Int", x, hitTest, 0)
         NumPut("Int", y, hitTest, 4)
         rawRow := SendMessage(0x1012, 0, hitTest.Ptr, , this.List.Hwnd)
-        if rawRow < 0 {
+        if rawRow < 0 || rawRow >= count {
             return {MarkRow: count - 1, After: true,
                 InsertIndex: count + 1}
         }
@@ -1301,7 +1626,11 @@ class MappingWindow {
     }
 
     FindMappingRow(mappingId) {
+        if mappingId == ""
+            return 0
         Loop this.List.GetCount() {
+            if this.IsFooterRow(A_Index)
+                continue
             if this.List.GetText(A_Index, MappingWindow.NameColumn)
                     == mappingId
                 return A_Index
@@ -1513,6 +1842,7 @@ class MappingWindow {
     RefreshVisibleRoundedButtons(*) {
         for button in [
                 this.AddButton, this.PauseResumeButton, this.DeleteButton,
+                this.VisualizerButton,
                 this.SettingsButton, this.SupportButton, this.AboutButton,
                 this.SourceButton, this.TargetButton,
                 this.SaveButton, this.ClearButton]
@@ -1554,17 +1884,26 @@ class MappingWindow {
                 this.CellTooltip.InvalidateTheme()
 
             for button in [this.AddButton, this.PauseResumeButton,
-                    this.DeleteButton, this.SettingsButton, this.SupportButton,
-                    this.AboutButton, this.SaveButton, this.ClearButton]
+                    this.DeleteButton, this.VisualizerButton,
+                    this.SettingsButton, this.SupportButton,
+                    this.AboutButton, this.ImportRulePackageButton,
+                    this.ExportRulePackageButton, this.SaveButton,
+                    this.ClearButton]
                 button.SetFont("s10 bold", this.SystemFontName)
             this.Interactions.SetTextNoErase(this.AddButton,
                 this.GetAddButtonText())
+            this.Interactions.SetTextNoErase(this.VisualizerButton,
+                this.GetVisualizerButtonText())
             this.Interactions.SetTextNoErase(this.SettingsButton,
                 Tr("设置"))
             this.Interactions.SetTextNoErase(this.SupportButton,
                 Tr("帮助"))
             this.Interactions.SetTextNoErase(this.AboutButton,
                 Tr("关于"))
+            this.Interactions.SetTextNoErase(this.ImportRulePackageButton,
+                Tr("导入规则包"))
+            this.Interactions.SetTextNoErase(this.ExportRulePackageButton,
+                Tr("导出规则包"))
             this.Interactions.SetTextNoErase(this.DeleteButton,
                 this.GetDeleteButtonText())
             this.Interactions.SetTextNoErase(this.SaveButton,
@@ -1577,6 +1916,10 @@ class MappingWindow {
             this.Interactions.SetButtonAppearance(this.SupportButton,
                 colors.Toolbar, colors.ToolbarText, true)
             this.Interactions.SetButtonAppearance(this.AboutButton,
+                colors.Toolbar, colors.ToolbarText, true)
+            this.Interactions.SetButtonAppearance(this.ImportRulePackageButton,
+                colors.Toolbar, colors.ToolbarText, true)
+            this.Interactions.SetButtonAppearance(this.ExportRulePackageButton,
                 colors.Toolbar, colors.ToolbarText, true)
             this.Interactions.SetButtonAppearance(this.SaveButton,
                 colors.Toolbar, colors.ToolbarText, true)
@@ -1665,9 +2008,10 @@ class MappingWindow {
                 ? colors.Error : colors.Muted), this.FontName)
             ApplyDarkControl(this.Status.Hwnd)
             UiScaleService.RefreshGuiFonts(this.Gui)
+            this.UpdateCommandButtonGroupWidths()
             this.RefreshNameInputMetrics(0, true)
             this.EnsureListRowMetrics("", true)
-            this.UpdateSelectionButtons(this.List.GetNext())
+            this.UpdateSelectionButtons(this.GetSelectedRows())
             this.ContextPopup.ApplyAppearance()
             if IsObject(this.BlockEditor)
                 this.BlockEditor.ApplyAppearance()
@@ -1768,7 +2112,7 @@ class MappingWindow {
         if this.ConsumeEscapeAfterCapture()
             return
         focusedHwnd := DllCall("user32\GetFocus", "Ptr")
-        if focusedHwnd == this.List.Hwnd && this.List.GetNext(0) > 0 {
+        if focusedHwnd == this.List.Hwnd && this.GetSelectedRows().Length > 0 {
             this.List.Modify(0, "-Select")
             this.SetTransientStatus(this.App.GetSummaryText())
             return
@@ -2026,8 +2370,10 @@ class MappingWindow {
     GetSelectedRows() {
         rows := []
         row := 0
-        while row := this.List.GetNext(row)
-            rows.Push(row)
+        while row := this.List.GetNext(row) {
+            if !this.IsFooterRow(row)
+                rows.Push(row)
+        }
         return rows
     }
 
@@ -2067,12 +2413,12 @@ class MappingWindow {
             this.CellTooltip.Hide()
         if IsObject(this.ContextPopup)
             this.ContextPopup.Hide()
-        if item > 0
+        if item > 0 && !this.IsFooterRow(item)
             this.OpenEditorForRow(item)
     }
 
     OnListContextMenu(control, item, isRightClick, x, y) {
-        if item <= 0
+        if item <= 0 || this.IsFooterRow(item)
             return
         mappingId := this.List.GetText(item, MappingWindow.NameColumn)
         if mappingId == ""
@@ -2097,6 +2443,8 @@ class MappingWindow {
     }
 
     SelectOnlyRow(row) {
+        if this.IsFooterRow(row)
+            return
         selectedRow := this.List.GetNext()
         hasAdditionalSelection := selectedRow
             && this.List.GetNext(selectedRow) > 0
@@ -2111,7 +2459,7 @@ class MappingWindow {
     }
 
     OpenEditorForRow(row) {
-        if row <= 0 || row > this.List.GetCount()
+        if row <= 0 || row > this.List.GetCount() || this.IsFooterRow(row)
             return
         mappingId := this.List.GetText(row, MappingWindow.NameColumn)
         if mappingId != ""
@@ -2170,11 +2518,17 @@ class MappingWindow {
         if this.Disposed || control != this.List || !lParam
             return
         stateOffset := A_PtrSize == 8 ? 24 : 12
+        row := NumGet(lParam, stateOffset, "Int") + 1
         newState := NumGet(lParam, stateOffset + 8, "UInt")
         oldState := NumGet(lParam, stateOffset + 12, "UInt")
         changedFields := NumGet(lParam, stateOffset + 16, "UInt")
         if !(changedFields & 0x0008) || !((newState ^ oldState) & 0x0003)
             return
+        if row > 0 && this.IsFooterRow(row) && (newState & 0x0003) {
+            this.List.Modify(row, "-Select -Focus")
+            this.QueueSelectionRefresh()
+            return
+        }
         this.QueueSelectionRefresh()
     }
 
@@ -2213,6 +2567,8 @@ class MappingWindow {
     }
 
     RefreshSelectionState(*) {
+        if IsObject(this.SelectionTimer)
+            SetTimer(this.SelectionTimer, 0)
         if this.Disposed
             return false
         if IsObject(this.ContextPopup) && this.ContextPopup.IsVisible()
@@ -2313,6 +2669,9 @@ class MappingWindow {
         this.SettingsButtonWidth := toolbarButtonWidth
         this.SupportButtonWidth := toolbarButtonWidth
         this.AboutButtonWidth := toolbarButtonWidth
+        this.VisualizerButtonWidth := LocalizationService.IsChinese()
+            ? 100
+            : MappingWindow.ExpandedToolbarButtonMinWidth
         this.SaveButtonWidth := compact ? MappingWindow.SaveButtonWidth
             : MappingWindow.ExpandedSaveButtonWidth
         actionButtonWidth := LocalizationService.IsChinese()
@@ -2338,10 +2697,34 @@ class MappingWindow {
             this.SupportButtonWidth := toolbarButtonWidth
             this.AboutButtonWidth := toolbarButtonWidth
         }
+        if IsObject(this.VisualizerButton) {
+            visualizerText := this.GetVisualizerButtonText()
+            requiredWidth := this.MeasureControlTextWidth(this.VisualizerButton,
+                visualizerText)
+                + MappingWindow.ToolbarIconWidth
+                + MappingWindow.ToolbarIconGap
+                + MappingWindow.ButtonContentPadding
+            this.VisualizerButtonWidth := Ceil(requiredWidth / 4) * 4
+        }
+        if IsObject(this.ImportRulePackageButton)
+                && IsObject(this.ExportRulePackageButton) {
+            footerWidth := MappingWindow.FooterButtonMinWidth
+            for button in [this.ImportRulePackageButton,
+                    this.ExportRulePackageButton] {
+                requiredWidth := this.MeasureControlTextWidth(button,
+                    button.Text)
+                    + MappingWindow.ToolbarIconWidth
+                    + MappingWindow.ToolbarIconGap
+                    + MappingWindow.ButtonContentPadding + 8
+                footerWidth := Max(footerWidth, requiredWidth)
+            }
+            this.FooterButtonWidth := Ceil(footerWidth / 4) * 4
+        }
         this.UpdateActionButtonPositions()
         requiredToolbarWidth := this.AddButtonWidth * 3
             + this.SettingsButtonWidth * 3
-            + MappingWindow.TopButtonGap * 4
+            + this.VisualizerButtonWidth
+            + MappingWindow.TopButtonGap * 5
             + 40
         this.MinClientWidth := Max(this.MinClientWidth,
             requiredToolbarWidth)
@@ -3314,6 +3697,175 @@ class MappingWindow {
         }
     }
 
+    DrawListItemPrePaint(listView, notification) {
+        itemSpecOffset := A_PtrSize == 8 ? 56 : 36
+        row := NumGet(notification, itemSpecOffset, "UPtr") + 1
+        if !this.IsFooterRow(row)
+            return ""
+        return this.DrawFooterRow(listView, notification, row)
+    }
+
+    DrawFooterRow(listView, notification, row) {
+        hdcOffset := A_PtrSize == 8 ? 32 : 16
+        hdc := NumGet(notification, hdcOffset, "Ptr")
+        if !hdc
+            return Win32.CDRF_SKIPDEFAULT
+        rects := this.GetFooterButtonRects(row)
+        if !IsObject(rects)
+            return Win32.CDRF_SKIPDEFAULT
+        itemRect := Buffer(16, 0)
+        NumPut("Int", Win32.LVIR_BOUNDS, itemRect, 0)
+        if !SendMessage(Win32.LVM_GETITEMRECT, row - 1, itemRect.Ptr, ,
+                listView.Hwnd)
+            return Win32.CDRF_SKIPDEFAULT
+        itemTop := NumGet(itemRect, 4, "Int")
+        itemBottom := NumGet(itemRect, 12, "Int")
+        savedDc := DllCall("gdi32\SaveDC", "Ptr", hdc, "Int")
+        try {
+            DllCall("gdi32\IntersectClipRect", "Ptr", hdc,
+                "Int", 0, "Int", itemTop,
+                "Int", rects.Row.Right, "Int", itemBottom, "Int")
+            fillRect := Buffer(16, 0)
+            NumPut("Int", 0, fillRect, 0)
+            NumPut("Int", itemTop, fillRect, 4)
+            NumPut("Int", rects.Row.Right, fillRect, 8)
+            NumPut("Int", itemBottom, fillRect, 12)
+            surfaceBrush := DllCall("gdi32\CreateSolidBrush", "UInt",
+                ColorRef(MappingWindow.Colors.Surface), "Ptr")
+            if surfaceBrush {
+                try DllCall("user32\FillRect", "Ptr", hdc,
+                    "Ptr", fillRect.Ptr, "Ptr", surfaceBrush, "Int")
+                finally DllCall("gdi32\DeleteObject", "Ptr", surfaceBrush)
+            }
+            this.DrawFooterButtonInRow(hdc, this.ImportRulePackageButton,
+                "import", rects.Import)
+            this.DrawFooterButtonInRow(hdc, this.ExportRulePackageButton,
+                "export", rects.Export)
+        } finally {
+            if savedDc
+                DllCall("gdi32\RestoreDC", "Ptr", hdc, "Int", savedDc)
+        }
+        return Win32.CDRF_SKIPDEFAULT
+    }
+
+    DrawFooterButtonInRow(hdc, buttonControl, buttonKey, rect) {
+        if !IsObject(buttonControl) || !buttonControl.Hwnd
+                || !this.Interactions.Controls.Has(buttonControl.Hwnd)
+            return false
+        state := this.Interactions.Controls[buttonControl.Hwnd]
+        previousCurrent := state.Current
+        try {
+            if this.FooterPressedButton == buttonKey
+                state.Current := this.FooterHoveredButton == buttonKey
+                    ? state.Pressed : state.Normal
+            else if this.FooterHoveredButton == buttonKey
+                state.Current := state.Hover
+            else
+                state.Current := state.Normal
+            return this.Interactions.Painter.DrawAt(hdc,
+                rect.Left, rect.Top, rect.Width, rect.Height,
+                state, MappingWindow.Colors.Surface)
+        } finally {
+            state.Current := previousCurrent
+        }
+    }
+
+    GetFooterButtonRects(row := 0) {
+        firstRow := this.GetFooterRowIndex()
+        lastRow := this.GetLastFooterRowIndex()
+        if !firstRow || !lastRow || !IsObject(this.List) || !this.List.Hwnd
+            return ""
+        firstItemRect := Buffer(16, 0)
+        NumPut("Int", Win32.LVIR_BOUNDS, firstItemRect, 0)
+        if !SendMessage(Win32.LVM_GETITEMRECT, firstRow - 1, firstItemRect.Ptr, ,
+                this.List.Hwnd)
+            return ""
+        lastItemRect := Buffer(16, 0)
+        NumPut("Int", Win32.LVIR_BOUNDS, lastItemRect, 0)
+        if !SendMessage(Win32.LVM_GETITEMRECT, lastRow - 1, lastItemRect.Ptr, ,
+                this.List.Hwnd)
+            return ""
+        clientRect := Buffer(16, 0)
+        if !DllCall("user32\GetClientRect", "Ptr", this.List.Hwnd,
+                "Ptr", clientRect, "Int")
+            return ""
+        rowTop := NumGet(firstItemRect, 4, "Int")
+        rowBottom := NumGet(lastItemRect, 12, "Int")
+        if rowBottom <= rowTop {
+            rowHeightPixels := this.GetListRowHeightPixels()
+            rowBottom := rowTop + rowHeightPixels * MappingWindow.FooterRowCount
+        }
+        rowHeight := rowBottom - rowTop
+        clientWidth := NumGet(clientRect, 8, "Int")
+            - NumGet(clientRect, 0, "Int")
+        if rowHeight <= 0 || clientWidth <= 0
+            return ""
+        dpi := this.GetListDpi()
+        scale := dpi / 96
+        btnWidth := Max(60, Round(this.FooterButtonWidth * scale))
+        btnHeight := Min(Max(18, rowHeight - 8),
+            Max(20, Round(MappingWindow.FooterButtonHeight * scale)))
+        gap := Max(8, Round(MappingWindow.FooterButtonGap * scale))
+        totalWidth := btnWidth * 2 + gap
+        startX := Max(4, Floor((clientWidth - totalWidth) / 2))
+        btnY := rowTop + Floor((rowHeight - btnHeight) / 2)
+        return {
+            FirstRowIndex: firstRow,
+            LastRowIndex: lastRow,
+            RowIndex: row ? row : firstRow,
+            Row: {
+                Left: 0,
+                Top: rowTop,
+                Right: clientWidth,
+                Bottom: rowBottom
+            },
+            Import: {
+                Left: startX,
+                Top: btnY,
+                Right: startX + btnWidth,
+                Bottom: btnY + btnHeight,
+                Width: btnWidth,
+                Height: btnHeight
+            },
+            Export: {
+                Left: startX + btnWidth + gap,
+                Top: btnY,
+                Right: startX + btnWidth + gap + btnWidth,
+                Bottom: btnY + btnHeight,
+                Width: btnWidth,
+                Height: btnHeight
+            }
+        }
+    }
+
+    HitTestFooterRow(x, y) {
+        rects := this.GetFooterButtonRects()
+        if !IsObject(rects)
+            return {InFooterRow: false, Button: ""}
+        inRow := x >= rects.Row.Left && x < rects.Row.Right
+            && y >= rects.Row.Top && y < rects.Row.Bottom
+        if !inRow
+            return {InFooterRow: false, Button: ""}
+        if x >= rects.Import.Left && x < rects.Import.Right
+                && y >= rects.Import.Top && y < rects.Import.Bottom
+            return {InFooterRow: true, Button: "import"}
+        if x >= rects.Export.Left && x < rects.Export.Right
+                && y >= rects.Export.Top && y < rects.Export.Bottom
+            return {InFooterRow: true, Button: "export"}
+        return {InFooterRow: true, Button: ""}
+    }
+
+    RedrawFooterRow() {
+        firstRow := this.GetFooterRowIndex()
+        lastRow := this.GetLastFooterRowIndex()
+        if !firstRow || !lastRow || !IsObject(this.List) || !this.List.Hwnd
+            return false
+        SendMessage(Win32.LVM_REDRAWITEMS, firstRow - 1, lastRow - 1, ,
+            this.List.Hwnd)
+        DllCall("user32\UpdateWindow", "Ptr", this.List.Hwnd, "Int")
+        return true
+    }
+
     DrawListSubItem(listView, notification) {
         subItemOffset := A_PtrSize == 8 ? 88 : 56
         column := NumGet(notification, subItemOffset, "Int") + 1
@@ -3566,6 +4118,11 @@ class MappingWindow {
             return 0
         refreshed := 0
         Loop this.List.GetCount() {
+            if this.IsFooterRow(A_Index) {
+                this.SetListSubItemIcon(A_Index, MappingWindow.NameColumn, 0)
+                this.SetListSubItemIcon(A_Index, MappingWindow.StatusColumn, 0)
+                continue
+            }
             enabled := this.List.GetText(A_Index,
                 MappingWindow.EnabledColumn) == "1"
             if this.SetMappingStatusIcon(A_Index, enabled)
@@ -3784,6 +4341,9 @@ class MappingWindow {
             {Control: this.DeleteButton, X: this.DeleteButtonX, Y: 15,
                 Width: this.DeleteButtonWidth,
                 Height: MappingWindow.CommandButtonHeight},
+            {Control: this.VisualizerButton, X: toolbarPositions.Visualizer,
+                Y: 15, Width: this.VisualizerButtonWidth,
+                Height: MappingWindow.SettingsButtonHeight},
             {Control: this.SettingsButton, X: toolbarPositions.Settings,
                 Y: 15, Width: this.SettingsButtonWidth,
                 Height: MappingWindow.SettingsButtonHeight},

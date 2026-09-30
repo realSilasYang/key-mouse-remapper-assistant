@@ -424,14 +424,8 @@ class VietnameseStrings {
             "Khởi động")
         catalog.Set("显示",
             "Hiển thị")
-        catalog.Set("规则与事件",
-            "Quy tắc và sự kiện")
         catalog.Set("关于",
             "Giới thiệu")
-        catalog.Set("事件缓冲区容量（条）：",
-            "Dung lượng bộ đệm sự kiện:")
-        catalog.Set("事件查看自动跟随最新事件",
-            "Tự động theo dõi sự kiện mới nhất")
         catalog.Set("让每一条键鼠映射都可录制、可审阅、可掌控",
             "Ghi, xem xét và kiểm soát mọi ánh xạ bàn phím và chuột")
         catalog.Set("当前版本",
@@ -442,8 +436,6 @@ class VietnameseStrings {
             "Kho mã nguồn mở")
         catalog.Set("“{1}”必须是 {2} 到 {3} 之间的整数。",
             "“{1}” phải là số nguyên từ {2} đến {3}.")
-        catalog.Set("事件缓冲区容量",
-            "Dung lượng bộ đệm sự kiện")
         catalog.Set("未知版本",
             "Phiên bản không xác định")
         catalog.Set("{1}（EXE 版）",
@@ -452,8 +444,6 @@ class VietnameseStrings {
             "{1} (bản mã nguồn)")
         catalog.Set("设置已保存并已应用。",
             "Đã lưu và áp dụng cài đặt.")
-        catalog.Set("Esc 取消录制",
-            "Esc hủy ghi")
         catalog.Set("{1}（便携版）", "{1} (bản di động)")
         catalog.Set("快揭不开锅了（≥Д≤）",
             "Sắp cạn kinh phí rồi（≥Д≤）")
@@ -658,6 +648,40 @@ class VietnameseStrings {
         catalog.Set("当前等待时间：{1} 秒", "Current wait time: {1} seconds")
         catalog.Set("界面缩放：", "Tỷ lệ giao diện:")
         catalog.Set("界面缩放已保存，正在重新加载…", "Đã lưu tỷ lệ giao diện. Đang tải lại…")
+        catalog.Set("按键实时可视化已开启。", "Đã bật trực quan hóa phím theo thời gian thực.")
+        catalog.Set("按键实时可视化已关闭。", "Đã tắt trực quan hóa phím theo thời gian thực.")
+        catalog.Set("按键可视化", "Trực quan hóa phím")
+        catalog.Set("按键实时可视化已开启（点击关闭）", "Trực quan hóa phím theo thời gian thực đang bật (nhấp để tắt)")
+        catalog.Set("按键实时可视化已关闭（点击开启）", "Trực quan hóa phím theo thời gian thực đang tắt (nhấp để bật)")
+        catalog.Set("基准对齐", "Căn chỉnh gốc")
+        catalog.Set("X 轴偏移", "Độ lệch trục X")
+        catalog.Set("Y 轴偏移", "Độ lệch trục Y")
+        catalog.Set("左下角", "Dưới cùng bên trái")
+        catalog.Set("中下", "Dưới cùng ở giữa")
+        catalog.Set("右下角", "Dưới cùng bên phải")
+        catalog.Set("左中", "Giữa bên trái")
+        catalog.Set("右中", "Giữa bên phải")
+        catalog.Set("左上角", "Trên cùng bên trái")
+        catalog.Set("中上", "Trên cùng ở giữa")
+        catalog.Set("右上角", "Trên cùng bên phải")
+        catalog.Set("屏幕中央", "Giữa màn hình")
+        catalog.Set("字体大小 (pt)：", "Cỡ chữ (pt):")
+        catalog.Set("字体大小", "Cỡ chữ")
+        catalog.Set("配色方案：", "Bảng phối màu:")
+        catalog.Set("深灰经典", "Xám đậm cổ điển")
+        catalog.Set("纯黑高亮", "Đen tuyền tương phản cao")
+        catalog.Set("暗夜深蓝", "Xanh đen nửa đêm")
+        catalog.Set("极简浅色", "Sáng tối giản")
+        catalog.Set("翠绿终端", "Xanh lá terminal")
+        catalog.Set("自定义", "Tùy chỉnh")
+        catalog.Set("背景色：", "Màu nền:")
+        catalog.Set("文字色：", "Màu chữ:")
+        catalog.Set("停留时长（秒）：", "Thời gian hiển thị (giây):")
+        catalog.Set("停留时长（秒）", "Thời gian hiển thị (giây)")
+        catalog.Set("按键可视化效果预览", "Xem trước hiệu ứng trực quan hóa phím")
+        catalog.Set("背景色格式无效（支持 16 进制如 #2E3032 或 RGB 如 46,48,50）。", "Định dạng màu nền không hợp lệ (hỗ trợ hex ví dụ #2E3032 hoặc RGB ví dụ 46,48,50).")
+        catalog.Set("文字色格式无效（支持 16 进制如 #FFFFFF 或 RGB 如 255,255,255）。", "Định dạng màu chữ không hợp lệ (hỗ trợ hex ví dụ #FFFFFF hoặc RGB ví dụ 255,255,255).")
+        catalog.Set("“{1}”必须是 {2} 到 {3} 之间的数值。", "“{1}” phải là số từ {2} đến {3}.")
         return catalog
     }
 }

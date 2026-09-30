@@ -5,11 +5,14 @@ class ListViewSelectionPresenter {
     static VerticalInsetDip := 2
     static RadiusDip := 7
 
-    __New(listView, painter, subItemDrawCallback := "") {
+    __New(listView, painter, subItemDrawCallback := "",
+            itemPrePaintCallback := "") {
         this.ListView := listView
         this.Painter := painter
         this.SubItemDrawCallback := IsObject(subItemDrawCallback)
             ? subItemDrawCallback : ""
+        this.ItemPrePaintCallback := IsObject(itemPrePaintCallback)
+            ? itemPrePaintCallback : ""
         this.NotifyCallback := ObjBindMethod(this, "HandleCustomDraw")
         this.Attached := false
         if IsObject(listView) && listView.Hwnd && IsObject(painter) {
@@ -27,6 +30,7 @@ class ListViewSelectionPresenter {
         this.ListView := ""
         this.Painter := ""
         this.SubItemDrawCallback := ""
+        this.ItemPrePaintCallback := ""
         this.NotifyCallback := ""
         return true
     }
@@ -81,6 +85,11 @@ class ListViewSelectionPresenter {
         }
         selected := this.IsSelected(listView, lParam, itemState)
         if stage == Win32.CDDS_ITEMPREPAINT {
+            if IsObject(this.ItemPrePaintCallback) {
+                result := this.ItemPrePaintCallback.Call(listView, lParam)
+                if result != ""
+                    return result
+            }
             flags := IsObject(this.SubItemDrawCallback)
                 ? Win32.CDRF_NOTIFYITEMDRAW : Win32.CDRF_DODEFAULT
             return selected && !IsObject(this.SubItemDrawCallback)

@@ -130,8 +130,7 @@ class MappingContextPopupWindow {
             "Hide NoActivate w" this.WindowWidth " h" this.WindowHeight))
         this.ApplyRoundedRegion()
         point := Buffer(8, 0)
-        if !DllCall("user32\GetCursorPos", "Ptr", point, "Int")
-            return false
+        DllCall("user32\GetCursorPos", "Ptr", point, "Int")
         x := NumGet(point, 0, "Int")
         y := NumGet(point, 4, "Int") + Round(4
             * UiScaleService.GetEffectiveDpi(this.Gui.Hwnd) / 96)

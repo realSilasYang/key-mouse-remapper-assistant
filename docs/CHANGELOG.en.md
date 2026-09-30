@@ -7,6 +7,39 @@ categories based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## 🚧 [Unreleased]
 
+## 🎉 Version [1.2.0] - 2026-09-30
+
+### 📦 Release Assets
+
+- **`fonts.zip` (optional font package):** Provides Noto fallback UI fonts for installation into Windows; it is not required to run the application.
+- **`key-mouse-remapper-assistant-1.2.0-source.zip` (complete source package):** Includes runnable AHK source, application modules, assets other than fonts, all thirteen README languages, bilingual changelogs, tests, and build tools; requires AutoHotkey v2 x64.
+- **`key-mouse-remapper-assistant-1.2.0-windows-x64.zip` (complete portable package, recommended):** Includes the compiled EXE, editable mapping source, all thirteen README languages, bilingual changelogs, licenses, application modules, UI assets other than fonts, fixed AutoHotkey v2.0.26 x64 runtime, and matching source archive; requires no separate AutoHotkey installation after full extraction.
+
+---
+
+### ✨ Added
+
+- **Real-time Key Visualizer (Keystroke OSD):** Added a floating on-screen display with smooth fade animations for pressed keys and key combinations; automatically detects and sorts standard keys, navigation and functional keys, and multi-key chords while filtering out standard typing letters, numbers, and solitary punctuation marks.
+- **Visual styling and positioning customization:** Added a 3x3 anchor grid selector along with continuous X and Y axis offset stepper tracks; supports custom font sizes and display durations, five curated color presets plus custom hex and RGB background/text colors, and an in-dialog live preview button.
+- **Quick-access controls:** Added a visualizer toolbar button with keyboard iconography in the main window, and synchronized real-time toggling from the system tray context menu.
+
+---
+
+### 🚀 Improvements
+
+- **Settings layout and 3x3 grid interactions:** Redesigned the visualizer settings tab with clear hierarchy, slider-driven offset controls, and balanced spacing tuned for dark mode and high-DPI scaling.
+- **Compact preview button:** Automatically calculates a compact, text-fitting button width with balanced horizontal padding and column centering, removing redundant whitespace.
+- **Window and lifecycle recovery robustness:** Strengthened UI redraw and state recovery when restoring from minimized state or handling lifecycle events.
+
+---
+
+### 🐛 Fixed
+
+- **3x3 grid cell hover stability:** Fixed an issue where cell text or active selection dots disappeared upon mouse hover during redraws.
+- **Localization catalog alignment:** Pruned deprecated translation keys across all 12 localization catalogs to ensure strict synchronization.
+
+---
+
 ## 🎉 Version [1.1.0] - 2026-09-25
 
 ### 📦 Release Assets
@@ -194,7 +227,8 @@ categories based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Product and data location:** Standardized product identifiers and `%APPDATA%\KeyMouseRemapperAssistant`.
 - **Release compatibility:** Locked AutoHotkey and build tools and aligned UTF-8 behavior across Windows PowerShell 5.1 and PowerShell 7.
 
-[Unreleased]: https://github.com/realSilasYang/key-mouse-remapper-assistant/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/realSilasYang/key-mouse-remapper-assistant/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/realSilasYang/key-mouse-remapper-assistant/releases/tag/v1.2.0
 [1.1.0]: https://github.com/realSilasYang/key-mouse-remapper-assistant/releases/tag/v1.1.0
 [1.0.2]: https://github.com/realSilasYang/key-mouse-remapper-assistant/releases/tag/v1.0.2
 [1.0.1]: https://github.com/realSilasYang/key-mouse-remapper-assistant/releases/tag/v1.0.1

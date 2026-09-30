@@ -425,14 +425,8 @@ class EnglishStrings {
             "Startup")
         catalog.Set("显示",
             "Display")
-        catalog.Set("规则与事件",
-            "Rules and events")
         catalog.Set("关于",
             "About")
-        catalog.Set("事件缓冲区容量（条）：",
-            "Event buffer capacity:")
-        catalog.Set("事件查看自动跟随最新事件",
-            "Automatically follow the latest events")
         catalog.Set("让每一条键鼠映射都可录制、可审阅、可掌控",
             "Record, review, and control every keyboard and mouse mapping")
         catalog.Set("当前版本",
@@ -443,8 +437,6 @@ class EnglishStrings {
             "Open-source repository")
         catalog.Set("“{1}”必须是 {2} 到 {3} 之间的整数。",
             "“{1}” must be an integer from {2} to {3}.")
-        catalog.Set("事件缓冲区容量",
-            "Event buffer capacity")
         catalog.Set("未知版本",
             "Unknown version")
         catalog.Set("{1}（EXE 版）",
@@ -453,8 +445,6 @@ class EnglishStrings {
             "{1} (source build)")
         catalog.Set("设置已保存并已应用。",
             "Settings saved and applied.")
-        catalog.Set("Esc 取消录制",
-            "Esc cancels recording")
         catalog.Set("{1}（便携版）", "{1} (portable build)")
         catalog.Set("快揭不开锅了（≥Д≤）",
             "The budget's almost gone（≥Д≤）")
@@ -659,6 +649,40 @@ class EnglishStrings {
         catalog.Set("当前等待时间：{1} 秒", "Current wait time: {1} seconds")
         catalog.Set("界面缩放：", "Interface scaling:")
         catalog.Set("界面缩放已保存，正在重新加载…", "Interface scaling was saved. Reloading…")
+        catalog.Set("按键实时可视化已开启。", "Real-time Key Visualizer enabled.")
+        catalog.Set("按键实时可视化已关闭。", "Real-time Key Visualizer disabled.")
+        catalog.Set("按键可视化", "Key Visualizer")
+        catalog.Set("按键实时可视化已开启（点击关闭）", "Real-time Key Visualizer is enabled (click to disable)")
+        catalog.Set("按键实时可视化已关闭（点击开启）", "Real-time Key Visualizer is disabled (click to enable)")
+        catalog.Set("基准对齐", "Anchor")
+        catalog.Set("X 轴偏移", "X offset")
+        catalog.Set("Y 轴偏移", "Y offset")
+        catalog.Set("左下角", "Bottom-left")
+        catalog.Set("中下", "Bottom-center")
+        catalog.Set("右下角", "Bottom-right")
+        catalog.Set("左中", "Center-left")
+        catalog.Set("右中", "Center-right")
+        catalog.Set("左上角", "Top-left")
+        catalog.Set("中上", "Top-center")
+        catalog.Set("右上角", "Top-right")
+        catalog.Set("屏幕中央", "Center")
+        catalog.Set("字体大小 (pt)：", "Font size (pt):")
+        catalog.Set("字体大小", "Font size")
+        catalog.Set("配色方案：", "Color scheme:")
+        catalog.Set("深灰经典", "Classic dark gray")
+        catalog.Set("纯黑高亮", "Pure black high-contrast")
+        catalog.Set("暗夜深蓝", "Midnight dark blue")
+        catalog.Set("极简浅色", "Minimalist light")
+        catalog.Set("翠绿终端", "Terminal green")
+        catalog.Set("自定义", "Custom")
+        catalog.Set("背景色：", "Background color:")
+        catalog.Set("文字色：", "Text color:")
+        catalog.Set("停留时长（秒）：", "Display duration (seconds):")
+        catalog.Set("停留时长（秒）", "Display duration (seconds)")
+        catalog.Set("按键可视化效果预览", "Key Visualizer Preview")
+        catalog.Set("背景色格式无效（支持 16 进制如 #2E3032 或 RGB 如 46,48,50）。", "Invalid background color format (supports hex e.g. #2E3032 or RGB e.g. 46,48,50).")
+        catalog.Set("文字色格式无效（支持 16 进制如 #FFFFFF 或 RGB 如 255,255,255）。", "Invalid text color format (supports hex e.g. #FFFFFF or RGB e.g. 255,255,255).")
+        catalog.Set("“{1}”必须是 {2} 到 {3} 之间的数值。", "“{1}” must be a number from {2} to {3}.")
         return catalog
     }
 }

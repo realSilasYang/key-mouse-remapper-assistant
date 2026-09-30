@@ -51,10 +51,9 @@ if ($builtInRuleEndCount -ne $builtInRuleCount -or
 }
 $customKeyboardWindowsKeyRule = [regex]::Match($entry,
     '(?ms)^; @mapping-begin\r?\n(?:(?!^; @mapping-end\r?$).)*' +
-    '@名称=屏蔽外接键盘 Win 键' +
+    '"backend": "interception"' +
     '(?:(?!^; @mapping-end\r?$).)*^; @mapping-end\r?$')
 $requiredInterceptionRuleParts = @(
-    '@类型=规则块',
     '"block": true',
     '"backend": "interception"',
     '"number": 3',

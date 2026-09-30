@@ -84,9 +84,9 @@ class SettingsWindow {
         this.Gui.SetFont("norm s10 c"
             UiThemeService.Color("TabText"), fontName)
         tabLabels := [Tr("显示"), Tr("启动"), Tr("AI 设置"),
-            Tr("设备过滤驱动"), Tr("规则与事件")]
+            Tr("设备过滤驱动"), Tr("按键可视化")]
         tabIcons := ["monitor.svg", "power.svg",
-            "pencil-sparkles.svg", "keyboard.svg", "file-output.svg"]
+            "pencil-sparkles.svg", "keyboard.svg", "captions.svg"]
         tabGap := 8
         this.Gui.SetFont("s10 bold",
             LocalizationService.GetLanguageSystemUiFontName())
@@ -417,57 +417,309 @@ class SettingsWindow {
         this.TabBuilt[pageIndex] := true
     }
 
-    BuildRulesAndEventTab() {
+    BuildKeystrokeOsdTab() {
+        pageIndex := 5
         layout := this.Layout
         colors := UiThemeService.GetPalette()
         this.Gui.SetFont("norm s10 c" colors.Text, layout.FontName)
-        buttonWidth := layout.IsCompact ? 150 : 190
-        groupX := Floor((layout.WindowWidth - buttonWidth) / 2)
-        this.ImportRulePackageButton := this.AddTabControl(5,
-            this.AddActionButton(groupX, 68, Tr("导入规则包"),
-                colors.Primary, colors.ButtonText,
-                ObjBindMethod(this, "ChooseImportRulePackage"),
-                buttonWidth, 34))
-        this.ExportRulePackageButton := this.AddTabControl(5,
-            this.AddActionButton(groupX, 108, Tr("导出规则包"),
-                colors.Toolbar, colors.ToolbarText,
-                ObjBindMethod(this, "ChooseExportRulePackage"),
-                buttonWidth, 34))
-        this.Interactions.SetButtonLucideIcon(this.ImportRulePackageButton,
-            "square-plus.svg", 15, 6,
-            UiThemeService.ButtonIconColor(colors.ButtonText))
-        this.Interactions.SetButtonLucideIcon(this.ExportRulePackageButton,
-            "file-output.svg", 15, 6, colors.RulesEventIcon)
-        this.RuleEventDivider := this.AddTabControl(5,
-            this.Gui.Add("Text", "x" layout.ContentX " y162 w"
-                layout.ContentWidth " h1 Background" colors.Divider))
-        inputWidth := 96
-        this.EventCapacityLabel := this.AddMenuLabel(5, 182,
-            Tr("事件缓冲区容量（条）："))
-        this.EventCapacityInput := this.AddSettingsEdit(5, 0, 206, inputWidth,
-            this.Original.EventBufferCapacity, "Number")
-        this.EscapeCancelCheck := this.AddTabControl(5,
-            this.Gui.Add("CheckBox", "x0 y242 h26 c" colors.Text,
-                Tr("Esc 取消录制")))
-        this.EscapeCancelCheck.Value :=
-            this.Original.EscapeCancelsRecording ? 1 : 0
-        this.EventAutoScrollCheck := this.AddTabControl(5,
-            this.Gui.Add("CheckBox", "x0 y274 h26 c" colors.Text,
-                Tr("事件查看自动跟随最新事件")))
-        this.EventAutoScrollCheck.Value :=
-            this.Original.EventViewerAutoScroll ? 1 : 0
-        this.AlignEventTabControls()
-        ApplyDarkControl(this.EventCapacityInput.Edit.Hwnd)
-        for checkControl in [this.EscapeCancelCheck,
-                this.EventAutoScrollCheck] {
-            ApplyDarkControl(checkControl.Hwnd)
-            this.Interactions.RegisterHandCursor(checkControl)
+
+        ; Row 1: 基准对齐 (3x3 Grid) & X/Y 轴偏移
+        this.OsdGridHeaderLabel := this.AddMenuLabel(pageIndex, 62, Tr("基准对齐"))
+        gridBorderColor := UiThemeService.IsDark() ? "3E4756" : "CBD5E1"
+        this.OsdGridContainer := this.Gui.Add("Text", "x0 y0 w86 h86 +0x04000000 +Disabled Background" colors.Window)
+        this.AddTabControl(pageIndex, this.OsdGridContainer)
+        this.Interactions.RegisterContainerSurface(this.OsdGridContainer, colors.Window, gridBorderColor, 1.5, 6)
+
+        this.OsdGridPositions := [
+            ["top-left", "top-center", "top-right"],
+            ["center-left", "center", "center-right"],
+            ["bottom-left", "bottom-center", "bottom-right"]
+        ]
+        this.OsdPositionValues := ["bottom-left", "bottom-center", "bottom-right",
+            "center-left", "center", "center-right",
+            "top-left", "top-center", "top-right"]
+        currentPos := this.Original.HasOwnProp("KeystrokeOsdPosition")
+            ? this.Original.KeystrokeOsdPosition : "bottom-left"
+        this.SelectedOsdPosition := currentPos
+        this.OsdGridButtons := []
+        this.OsdGridCells := Map()
+
+        for rowIdx, row in this.OsdGridPositions {
+            for colIdx, pos in row {
+                btn := this.Gui.Add("Text", "x0 y0 w24 h24 +0x04000000 Center 0x200", "")
+                this.AddTabControl(pageIndex, btn)
+                this.Interactions.RegisterButton(btn, colors.Window,
+                    ObjBindMethod(this, "OnOsdCellClick", pos))
+                this.Interactions.SetButtonTextLayout(btn, "center", 0, 4)
+                this.OsdGridButtons.Push(btn)
+                this.OsdGridCells[pos] := btn
+            }
         }
-        if !this.Interactions.RegisterTextInput(this.EventCapacityInput.Edit,
-                this.EventCapacityInput.Background)
-            throw Error("无法注册事件设置输入框交互。")
-        this.ApplySparseMenuTopSpacing(5)
-        this.TabBuilt[5] := true
+
+        ; Place container behind buttons (HWND_BOTTOM = 1) and buttons in front (HWND_TOP = 0)
+        DllCall("user32\SetWindowPos", "Ptr", this.OsdGridContainer.Hwnd, "Ptr", 1, "Int", 0, "Int", 0, "Int", 0, "Int", 0, "UInt", 0x0013)
+        for btn in this.OsdGridButtons
+            DllCall("user32\SetWindowPos", "Ptr", btn.Hwnd, "Ptr", 0, "Int", 0, "Int", 0, "Int", 0, "Int", 0, "UInt", 0x0013)
+
+        this.UpdateOsdGridAppearance()
+
+        curOffsetX := this.Original.HasOwnProp("KeystrokeOsdOffsetX")
+            ? this.Original.KeystrokeOsdOffsetX
+            : (this.Original.HasOwnProp("KeystrokeOsdOffsetRight")
+                ? this.Original.KeystrokeOsdOffsetRight - (this.Original.HasOwnProp("KeystrokeOsdOffsetLeft") ? this.Original.KeystrokeOsdOffsetLeft : 0) : 0)
+        curOffsetY := this.Original.HasOwnProp("KeystrokeOsdOffsetY")
+            ? this.Original.KeystrokeOsdOffsetY
+            : (this.Original.HasOwnProp("KeystrokeOsdOffsetDown")
+                ? this.Original.KeystrokeOsdOffsetDown - (this.Original.HasOwnProp("KeystrokeOsdOffsetUp") ? this.Original.KeystrokeOsdOffsetUp : 0) : 0)
+
+        this.OsdOffsetXLabel := this.AddMenuLabel(pageIndex, 56, Tr("X 轴偏移"))
+        this.OsdOffsetXStepper := SettingsWindow.OsdStepperControl(this,
+            pageIndex, 0, 74, 198, curOffsetX,
+            ObjBindMethod(this, "OnOsdOffsetChange"))
+
+        this.OsdOffsetYLabel := this.AddMenuLabel(pageIndex, 106, Tr("Y 轴偏移"))
+        this.OsdOffsetYStepper := SettingsWindow.OsdStepperControl(this,
+            pageIndex, 0, 126, 198, curOffsetY,
+            ObjBindMethod(this, "OnOsdOffsetChange"))
+
+        ; Compatibility aliases
+        this.OsdPositionDropDown := this.OsdGridContainer
+        this.OsdPositionPresetLabel := this.OsdGridHeaderLabel
+        this.OsdOffsetHeaderLabel := this.OsdOffsetXLabel
+        this.OsdOffsetUpLabel := this.OsdOffsetYLabel
+        this.OsdOffsetDownLabel := this.OsdOffsetYLabel
+        this.OsdOffsetLeftLabel := this.OsdOffsetXLabel
+        this.OsdOffsetRightLabel := this.OsdOffsetXLabel
+        this.OsdOffsetUpInput := this.OsdOffsetYStepper
+        this.OsdOffsetDownInput := this.OsdOffsetYStepper
+        this.OsdOffsetLeftInput := this.OsdOffsetXStepper
+        this.OsdOffsetRightInput := this.OsdOffsetXStepper
+
+        ; Row 2: 字体大小 & 停留时长（秒）
+        this.OsdFontSizeLabel := this.AddMenuLabel(pageIndex, 172, Tr("字体大小 (pt)："))
+        currentFontSize := this.Original.HasOwnProp("KeystrokeOsdFontSize")
+            ? this.Original.KeystrokeOsdFontSize : 12
+        this.OsdFontSizeInput := this.AddSettingsEdit(pageIndex,
+            0, 192, 142, String(currentFontSize), , 26)
+        ApplyDarkControl(this.OsdFontSizeInput.Edit.Hwnd)
+        if !this.Interactions.RegisterTextInput(this.OsdFontSizeInput.Edit,
+                this.OsdFontSizeInput.Background)
+            throw Error("无法注册按键可视化字体大小输入框交互。")
+
+        this.OsdDisplayTimeLabel := this.AddMenuLabel(pageIndex, 172, Tr("停留时长（秒）："))
+        currentTime := this.Original.HasOwnProp("KeystrokeOsdDisplayTimeMs")
+            ? this.Original.KeystrokeOsdDisplayTimeMs : 1000
+        currentTimeSec := (currentTime == 1000) ? "1.0"
+            : String(Round(currentTime / 1000, 1))
+        this.OsdDisplayTimeInput := this.AddSettingsEdit(pageIndex,
+            0, 192, 142, currentTimeSec, , 26)
+        ApplyDarkControl(this.OsdDisplayTimeInput.Edit.Hwnd)
+        if !this.Interactions.RegisterTextInput(this.OsdDisplayTimeInput.Edit,
+                this.OsdDisplayTimeInput.Background)
+            throw Error("无法注册按键可视化停留时长输入框交互。")
+
+        ; Row 3: 配色方案
+        this.OsdColorPresetLabel := this.AddMenuLabel(pageIndex, 228, Tr("配色方案："))
+        this.OsdColorPresets := [
+            {Name: Tr("深灰经典"), Bg: "2e3032", Text: "b3aea8"},
+            {Name: Tr("纯黑高亮"), Bg: "000000", Text: "ffffff"},
+            {Name: Tr("暗夜深蓝"), Bg: "1a1b26", Text: "7aa2f7"},
+            {Name: Tr("极简浅色"), Bg: "e2e8f0", Text: "0f172a"},
+            {Name: Tr("翠绿终端"), Bg: "0d1117", Text: "39d353"},
+            {Name: Tr("自定义"), Bg: "", Text: ""}
+        ]
+        presetLabels := []
+        for p in this.OsdColorPresets
+            presetLabels.Push(p.Name)
+        currentBg := this.Original.HasOwnProp("KeystrokeOsdBgColor")
+            ? StrLower(this.Original.KeystrokeOsdBgColor) : "2e3032"
+        currentText := this.Original.HasOwnProp("KeystrokeOsdTextColor")
+            ? StrLower(this.Original.KeystrokeOsdTextColor) : "b3aea8"
+        selectedPresetIndex := this.OsdColorPresets.Length
+        Loop this.OsdColorPresets.Length - 1 {
+            p := this.OsdColorPresets[A_Index]
+            if StrLower(p.Bg) == currentBg && StrLower(p.Text) == currentText {
+                selectedPresetIndex := A_Index
+                break
+            }
+        }
+        this.OsdColorPresetDropDown := this.AddTabControl(pageIndex,
+            this.AddDropDown(0, 248, 300, presetLabels, selectedPresetIndex))
+        this.OsdColorPresetDropDown.OnEvent("Change",
+            ObjBindMethod(this, "OnOsdColorPresetChange"))
+
+        ; Row 4: 背景色 & 文字色
+        this.OsdBgColorLabel := this.AddMenuLabel(pageIndex, 284, Tr("背景色："))
+        this.OsdBgColorInput := this.AddSettingsEdit(pageIndex,
+            0, 304, 142, currentBg, , 26)
+        this.OsdTextColorLabel := this.AddMenuLabel(pageIndex, 284, Tr("文字色："))
+        this.OsdTextColorInput := this.AddSettingsEdit(pageIndex,
+            0, 304, 142, currentText, , 26)
+        this.OsdUpdatingColors := false
+        this.OsdBgColorInput.Edit.OnEvent("Change",
+            ObjBindMethod(this, "OnOsdCustomColorChange"))
+        this.OsdTextColorInput.Edit.OnEvent("Change",
+            ObjBindMethod(this, "OnOsdCustomColorChange"))
+        for input in [this.OsdBgColorInput, this.OsdTextColorInput] {
+            ApplyDarkControl(input.Edit.Hwnd)
+            if !this.Interactions.RegisterTextInput(input.Edit, input.Background)
+                throw Error("无法注册按键可视化颜色输入框交互。")
+        }
+
+        ; Row 5: 按键可视化效果预览
+        this.OsdPreviewButton := this.AddTabControl(pageIndex,
+            this.AddActionButton(0, 340, Tr("按键可视化效果预览"), colors.Toolbar,
+                colors.ToolbarText, ObjBindMethod(this, "PreviewKeystrokeOsd"),
+                300, 26))
+
+        this.AlignKeystrokeOsdTabControls()
+        this.ApplySparseMenuTopSpacing(pageIndex)
+        this.TabBuilt[pageIndex] := true
+    }
+
+    GetOsdPositionDisplayName(pos) {
+        switch pos {
+            case "top-left": return Tr("左上角")
+            case "top-center": return Tr("中上")
+            case "top-right": return Tr("右上角")
+            case "center-left": return Tr("左中")
+            case "center": return Tr("屏幕中央")
+            case "center-right": return Tr("右中")
+            case "bottom-left": return Tr("左下角")
+            case "bottom-center": return Tr("中下")
+            case "bottom-right": return Tr("右下角")
+            default: return Tr("左下角")
+        }
+    }
+
+    OnOsdCellClick(pos, *) {
+        if this.Disposed
+            return
+        this.SelectedOsdPosition := pos
+        this.UpdateOsdGridAppearance()
+    }
+
+    OnOsdOffsetChange(val := 0, *) {
+    }
+
+    UpdateOsdGridAppearance() {
+        if this.Disposed || !this.HasOwnProp("OsdGridCells")
+            return
+        isDark := UiThemeService.IsDark()
+        colors := UiThemeService.GetPalette()
+        activeCol := isDark ? "3B82F6" : "0F6CBD"
+        activeBg := isDark ? "202E42" : "DBEAFE"
+        normalBg := isDark ? "354152" : "CBD5E1"
+        mutedTextCol := isDark ? "8B9BB0" : "64748B"
+        gridBorderColor := isDark ? "3E4756" : "CBD5E1"
+
+        for row in this.OsdGridPositions {
+            for pos in row {
+                if !this.OsdGridCells.Has(pos)
+                    continue
+                btn := this.OsdGridCells[pos]
+                if pos == this.SelectedOsdPosition {
+                    btn.Text := "●"
+                    btn.SetFont("s11 bold")
+                    this.Interactions.SetButtonAppearance(btn, activeBg, activeCol)
+                    this.Interactions.SetButtonBorder(btn, activeCol, 1.5)
+                } else {
+                    btn.Text := ""
+                    btn.SetFont("s11 norm")
+                    this.Interactions.SetButtonAppearance(btn, normalBg, mutedTextCol)
+                    this.Interactions.SetButtonBorder(btn, "", 0)
+                }
+                this.Interactions.Redraw(btn.Hwnd)
+            }
+        }
+    }
+
+    OnOsdColorPresetChange(*) {
+        if this.Disposed || !this.HasOwnProp("OsdColorPresets")
+            return
+        idx := this.OsdColorPresetDropDown.Value
+        if idx < 1 || idx >= this.OsdColorPresets.Length
+            return
+        preset := this.OsdColorPresets[idx]
+        this.OsdUpdatingColors := true
+        try {
+            this.OsdBgColorInput.Edit.Value := preset.Bg
+            this.OsdTextColorInput.Edit.Value := preset.Text
+        } finally this.OsdUpdatingColors := false
+    }
+
+    OnOsdCustomColorChange(*) {
+        if this.Disposed || (this.HasOwnProp("OsdUpdatingColors") && this.OsdUpdatingColors)
+            return
+        curBg := AppSettingsService.NormalizeColor(this.OsdBgColorInput.Edit.Value, "")
+        curText := AppSettingsService.NormalizeColor(this.OsdTextColorInput.Edit.Value, "")
+        matchedIndex := this.OsdColorPresets.Length
+        Loop this.OsdColorPresets.Length - 1 {
+            preset := this.OsdColorPresets[A_Index]
+            if StrLower(preset.Bg) == curBg && StrLower(preset.Text) == curText {
+                matchedIndex := A_Index
+                break
+            }
+        }
+        if this.OsdColorPresetDropDown.Value != matchedIndex
+            this.OsdColorPresetDropDown.Value := matchedIndex
+    }
+
+    ParseDisplayTimeMs(value) {
+        text := RegExReplace(Trim(String(value)), "(?i)\s*(?:s|sec|秒|ms|毫秒)?$")
+        if !RegExMatch(text, "^\d+(?:\.\d+)?$")
+            throw ValueError(Tr("“{1}”必须是 {2} 到 {3} 之间的数值。",
+                Tr("停留时长（秒）"), "0.2", "10.0"))
+        try num := Float(text)
+        catch
+            throw ValueError(Tr("“{1}”必须是 {2} 到 {3} 之间的数值。",
+                Tr("停留时长（秒）"), "0.2", "10.0"))
+        ms := (num > 30) ? Round(num) : Round(num * 1000)
+        if ms < 200 || ms > 10000
+            throw ValueError(Tr("“{1}”必须是 {2} 到 {3} 之间的数值。",
+                Tr("停留时长（秒）"), "0.2", "10.0"))
+        return ms
+    }
+
+    ParseOffsetInteger(value, fieldName) {
+        text := Trim(String(value))
+        if text == ""
+            return 0
+        return this.ParseRangedInteger(text, fieldName, -1000, 1000)
+    }
+
+    PreviewKeystrokeOsd(*) {
+        if this.Disposed
+            return false
+        position := this.SelectedOsdPosition
+        offsetX := this.OsdOffsetXStepper.Value
+        offsetY := this.OsdOffsetYStepper.Value
+
+        rawFont := RegExReplace(Trim(this.OsdFontSizeInput.Edit.Value), "(?i)\s*pt$")
+        fontSize := RegExMatch(rawFont, "^\d+$") ? Integer(rawFont) : 12
+        if fontSize < 8 || fontSize > 72
+            fontSize := 12
+        normBg := AppSettingsService.NormalizeColor(this.OsdBgColorInput.Edit.Value, "2e3032")
+        normText := AppSettingsService.NormalizeColor(this.OsdTextColorInput.Edit.Value, "b3aea8")
+        try displayTimeMs := this.ParseDisplayTimeMs(this.OsdDisplayTimeInput.Edit.Value)
+        catch
+            displayTimeMs := 1000
+        previewConfig := {
+            Position: position,
+            OffsetX: offsetX,
+            OffsetY: offsetY,
+            OffsetUp: offsetY < 0 ? -offsetY : 0,
+            OffsetDown: offsetY > 0 ? offsetY : 0,
+            OffsetLeft: offsetX < 0 ? -offsetX : 0,
+            OffsetRight: offsetX > 0 ? offsetX : 0,
+            FontSize: fontSize,
+            BgColor: normBg,
+            TextColor: normText,
+            DisplayTimeMs: displayTimeMs
+        }
+        if IsObject(this.App.KeystrokeOsd)
+            this.App.KeystrokeOsd.Preview(previewConfig)
+        return true
     }
 
     BuildAITab() {
@@ -556,16 +808,22 @@ class SettingsWindow {
         return true
     }
 
-    MoveSettingsInput(input, x, width := 0) {
+    MoveSettingsInput(input, x, width := 0, y := "", height := 0) {
         UiScaleService.GetControlDesignPos(input.Background, , &inputY,
             &currentWidth, &inputHeight)
         if width <= 0
             width := currentWidth
+        if y == ""
+            y := inputY
+        if height <= 0
+            height := inputHeight
         UiScaleService.GetControlDesignPos(input.Edit, , , , &editHeight)
-        UiScaleService.MoveControl(input.Background, x, inputY, width,
-            inputHeight)
+        if height != inputHeight
+            editHeight := GetCenteredSingleLineEditHeight(height)
+        UiScaleService.MoveControl(input.Background, x, y, width,
+            height)
         UiScaleService.MoveControl(input.Edit, x,
-            inputY + Floor((inputHeight - editHeight) / 2),
+            y + Floor((height - editHeight) / 2),
             width, editHeight)
         return true
     }
@@ -616,20 +874,77 @@ class SettingsWindow {
         return true
     }
 
-    AlignEventTabControls() {
-        if !this.HasOwnProp("EventCapacityLabel")
+    AlignKeystrokeOsdTabControls() {
+        if !this.HasOwnProp("OsdGridHeaderLabel")
             return false
-        UiScaleService.GetControlDesignPos(this.EventCapacityInput.Background,
-            , , &inputWidth)
-        UiScaleService.GetControlDesignPos(this.EscapeCancelCheck, , ,
-            &escapeWidth)
-        UiScaleService.GetControlDesignPos(this.EventAutoScrollCheck, , ,
-            &autoScrollWidth)
-        layout := this.AlignMenuColumn([this.EventCapacityLabel],
-            [inputWidth, escapeWidth, autoScrollWidth])
-        this.MoveSettingsInput(this.EventCapacityInput, layout.X, inputWidth)
-        UiScaleService.MoveControl(this.EscapeCancelCheck, layout.X)
-        UiScaleService.MoveControl(this.EventAutoScrollCheck, layout.X)
+        clientWidth := this.GetActualClientWidth()
+        columnWidth := 300
+        columnX := Max(this.Layout.ContentX, Floor((clientWidth - columnWidth) / 2))
+
+        ; Row 1: 基准对齐 (3x3 Grid) & X/Y 轴偏移
+        gridWidth := 86
+        gridHeight := 86
+        gapCol := 16
+        steppersX := columnX + gridWidth + gapCol
+        steppersWidth := columnWidth - gridWidth - gapCol ; 198
+
+        UiScaleService.MoveControl(this.OsdGridHeaderLabel, columnX, 56, gridWidth, 16)
+        UiScaleService.MoveControl(this.OsdGridContainer, columnX, 74, gridWidth, gridHeight)
+
+        cellSize := 24
+        cellGap := 3
+        pad := 4
+        DllCall("user32\SetWindowPos", "Ptr", this.OsdGridContainer.Hwnd, "Ptr", 1, "Int", 0, "Int", 0, "Int", 0, "Int", 0, "UInt", 0x0013)
+        for rowIdx, row in this.OsdGridPositions {
+            for colIdx, pos in row {
+                if this.OsdGridCells.Has(pos) {
+                    btn := this.OsdGridCells[pos]
+                    cellX := columnX + pad + (colIdx - 1) * (cellSize + cellGap)
+                    cellY := 74 + pad + (rowIdx - 1) * (cellSize + cellGap)
+                    UiScaleService.MoveControl(btn, cellX, cellY, cellSize, cellSize)
+                    DllCall("user32\SetWindowPos", "Ptr", btn.Hwnd, "Ptr", 0, "Int", 0, "Int", 0, "Int", 0, "Int", 0, "UInt", 0x0013)
+                }
+            }
+        }
+
+        UiScaleService.MoveControl(this.OsdOffsetXLabel, steppersX, 56, steppersWidth, 16)
+        this.OsdOffsetXStepper.Move(steppersX, 74, steppersWidth, 26)
+
+        UiScaleService.MoveControl(this.OsdOffsetYLabel, steppersX, 106, steppersWidth, 16)
+        this.OsdOffsetYStepper.Move(steppersX, 126, steppersWidth, 26)
+
+        ; Row 2: 字体大小 (pt) & 停留时长（秒）
+        gap2 := 16
+        halfWidth := Floor((columnWidth - gap2) / 2) ; 142
+        xRightHalf := columnX + halfWidth + gap2
+
+        UiScaleService.MoveControl(this.OsdFontSizeLabel, columnX, 172, halfWidth, 16)
+        this.MoveSettingsInput(this.OsdFontSizeInput, columnX, halfWidth, 192, 26)
+
+        UiScaleService.MoveControl(this.OsdDisplayTimeLabel, xRightHalf, 172, halfWidth, 16)
+        this.MoveSettingsInput(this.OsdDisplayTimeInput, xRightHalf, halfWidth, 192, 26)
+
+        ; Row 3: 配色方案
+        UiScaleService.MoveControl(this.OsdColorPresetLabel, columnX, 228,
+            this.GetSelectableTextWidth(this.OsdColorPresetLabel), 16)
+        UiScaleService.MoveControl(this.OsdColorPresetDropDown, columnX, 248, columnWidth)
+
+        ; Row 4: 背景色 & 文字色
+        UiScaleService.MoveControl(this.OsdBgColorLabel, columnX, 284, halfWidth, 16)
+        this.MoveSettingsInput(this.OsdBgColorInput, columnX, halfWidth, 304, 26)
+
+        UiScaleService.MoveControl(this.OsdTextColorLabel, xRightHalf, 284, halfWidth, 16)
+        this.MoveSettingsInput(this.OsdTextColorInput, xRightHalf, halfWidth, 304, 26)
+
+        ; Row 5: 按键可视化效果预览
+        previewText := Tr("按键可视化效果预览")
+        buttonPadding := 28
+        previewButtonWidth := Min(columnWidth,
+            this.MeasureControlTextWidth(this.OsdPreviewButton, previewText) + buttonPadding)
+        previewButtonX := columnX + Floor((columnWidth - previewButtonWidth) / 2)
+        UiScaleService.MoveControl(this.OsdPreviewButton, previewButtonX, 340, previewButtonWidth, 26)
+
+        this.UpdateOsdGridAppearance()
         return true
     }
 
@@ -945,7 +1260,7 @@ class SettingsWindow {
             case 2: return "power.svg"
             case 3: return "pencil-sparkles.svg"
             case 4: return "keyboard.svg"
-            case 5: return "file-output.svg"
+            case 5: return "captions.svg"
         }
         return ""
     }
@@ -958,7 +1273,7 @@ class SettingsWindow {
             case 2: return UiThemeService.Color("StartupIcon")
             case 3: return UiThemeService.Color("AI")
             case 4: return UiThemeService.Color("CodeType")
-            case 5: return UiThemeService.Color("RulesEventIcon")
+            case 5: return UiThemeService.Color("KeystrokeOsdIcon")
         }
         return UiThemeService.Color("TabText")
     }
@@ -986,9 +1301,9 @@ class SettingsWindow {
         return control
     }
 
-    AddMenuLabel(index, y, text) {
+    AddMenuLabel(index, y, text, alignment := "Left") {
         text := RegExReplace(RTrim(String(text)), "[:：]$")
-        return this.AddSelectableMenuText(index, 0, y, text)
+        return this.AddSelectableMenuText(index, 0, y, text, 1, 20, alignment)
     }
 
     AddSelectableMenuText(index, x, y, text, width := 1, height := 20,
@@ -1061,9 +1376,9 @@ class SettingsWindow {
         return dropDown
     }
 
-    AddSettingsEdit(index, x, y, width, value, extraOptions := "") {
+    AddSettingsEdit(index, x, y, width, value, extraOptions := "", height := 30) {
         colors := UiThemeService.GetPalette()
-        input := AddCenteredSingleLineEdit(this.Gui, x, y, width, 30,
+        input := AddCenteredSingleLineEdit(this.Gui, x, y, width, height,
             colors.Input, colors.Text, value)
         if extraOptions != ""
             input.Edit.Opt(extraOptions)
@@ -1131,7 +1446,7 @@ class SettingsWindow {
             case 2: this.BuildStartupTab()
             case 3: this.BuildAITab()
             case 4: this.BuildInterceptionTab()
-            case 5: this.BuildRulesAndEventTab()
+            case 5: this.BuildKeystrokeOsdTab()
             default: return false
         }
         if UiScaleService.IsPrepared(this.Gui)
@@ -1202,7 +1517,7 @@ class SettingsWindow {
             else if index == 3
                 this.AlignAITabControls()
             else if index == 5
-                this.AlignEventTabControls()
+                this.AlignKeystrokeOsdTabControls()
             else if index == 4
                 this.RefreshInterceptionStatus()
             if index == 2
@@ -1229,7 +1544,7 @@ class SettingsWindow {
         this.AlignAppearanceTabControls()
         this.AlignAITabControls()
         if this.TabBuilt[5]
-            this.AlignEventTabControls()
+            this.AlignKeystrokeOsdTabControls()
         return true
     }
 
@@ -1382,19 +1697,14 @@ class SettingsWindow {
                     && this.AIConnectionStatus
                 this.LayoutAIConnectionStatus(this.AIConnectionStatus.Text)
             for dropDownName in ["LanguageDropDown", "FontDropDown",
-                    "ThemeDropDown", "ScaleDropDown"] {
+                    "ThemeDropDown", "ScaleDropDown",
+                    "OsdColorPresetDropDown"] {
                 if this.HasOwnProp(dropDownName) && this.%dropDownName%
                     this.%dropDownName%.Opt("Background" colors.Input
                         " c" colors.Text)
             }
-            if this.TabBuilt[5] && IsObject(this.EventCapacityInput) {
-                this.EventCapacityInput.Background.Opt(
-                    "Background" colors.Input)
-                this.EventCapacityInput.Edit.Opt("Background" colors.Input
-                    " c" colors.Text)
-            }
             for inputName in ["AIAddressInput", "AIKeyInput", "AIModelInput",
-                    "AITimeoutInput"] {
+                    "AITimeoutInput", "OsdOffsetUpInput", "OsdOffsetDownInput", "OsdOffsetLeftInput", "OsdOffsetRightInput", "OsdFontSizeInput", "OsdBgColorInput", "OsdTextColorInput", "OsdDisplayTimeInput"] {
                 if this.HasOwnProp(inputName) && IsObject(this.%inputName%) {
                     this.%inputName%.Background.Opt("Background" colors.Input)
                     this.%inputName%.Edit.Opt("Background" colors.Input
@@ -1419,9 +1729,7 @@ class SettingsWindow {
                 {Name: "StartupTaskButton", Color: colors.Toolbar,
                     TextColor: colors.ToolbarText,
                     Interactive: this.StartupTaskButtonReady},
-                {Name: "ImportRulePackageButton", Color: colors.Primary,
-                    TextColor: colors.ButtonText, Interactive: true},
-                {Name: "ExportRulePackageButton", Color: colors.Toolbar,
+                {Name: "OsdPreviewButton", Color: colors.Toolbar,
                     TextColor: colors.ToolbarText, Interactive: true},
                 {Name: "AIPromptsButton", Color: colors.Toolbar,
                     TextColor: colors.ToolbarText, Interactive: true},
@@ -1451,21 +1759,17 @@ class SettingsWindow {
                     spec.TextColor, spec.Interactive)
                 button.SetFont("s10 bold", systemFont)
             }
-            if this.HasOwnProp("ImportRulePackageButton")
-                    && this.ImportRulePackageButton
-                this.Interactions.SetButtonLucideIcon(
-                    this.ImportRulePackageButton, "square-plus.svg", 15, 6,
-                    UiThemeService.ButtonIconColor(colors.ButtonText))
-            if this.HasOwnProp("ExportRulePackageButton")
-                    && this.ExportRulePackageButton
-                this.Interactions.SetButtonLucideIcon(
-                    this.ExportRulePackageButton, "file-output.svg", 15, 6,
-                    colors.RulesEventIcon)
+
             UiScaleService.RefreshGuiFonts(this.Gui)
             this.AlignAppearanceTabControls()
             this.AlignAITabControls()
-            if this.TabBuilt[5]
-                this.AlignEventTabControls()
+            if this.TabBuilt[5] {
+                gridBorderColor := UiThemeService.IsDark() ? "3E4756" : "CBD5E1"
+                if this.HasOwnProp("OsdGridContainer") && this.OsdGridContainer
+                    this.Interactions.SetContainerAppearance(this.OsdGridContainer, colors.Window, gridBorderColor)
+                this.AlignKeystrokeOsdTabControls()
+                this.UpdateOsdGridAppearance()
+            }
             if this.TabBuilt[4]
                 this.RefreshInterceptionStatus()
             this.ApplyNativeThemes()
@@ -1476,7 +1780,8 @@ class SettingsWindow {
 
     ApplyComboBoxThemes() {
         for dropDownName in ["LanguageDropDown", "FontDropDown",
-                "ThemeDropDown", "ScaleDropDown"] {
+                "ThemeDropDown", "ScaleDropDown",
+                "OsdColorPresetDropDown"] {
             if this.HasOwnProp(dropDownName) && this.%dropDownName%
                 ApplyDarkComboBoxTheme(this.%dropDownName%.Hwnd)
         }
@@ -1592,12 +1897,60 @@ class SettingsWindow {
         if this.TabBuilt[4]
             checkInterceptionOnStartup :=
                 this.InterceptionReminderCheck.Value != 0
-        eventCapacity := this.Original.EventBufferCapacity
-        if this.TabBuilt[5]
-            eventCapacity := this.ParseRangedInteger(
-                this.EventCapacityInput.Edit.Value, Tr("事件缓冲区容量"),
-                AppSettingsService.MinimumEventBufferCapacity,
-                AppSettingsService.MaximumEventBufferCapacity)
+        keystrokeOsdPosition := this.Original.HasOwnProp("KeystrokeOsdPosition")
+            ? this.Original.KeystrokeOsdPosition
+            : AppSettingsService.DefaultKeystrokeOsdPosition
+        keystrokeOsdOffsetX := this.Original.HasOwnProp("KeystrokeOsdOffsetX")
+            ? this.Original.KeystrokeOsdOffsetX
+            : AppSettingsService.DefaultKeystrokeOsdOffsetX
+        keystrokeOsdOffsetY := this.Original.HasOwnProp("KeystrokeOsdOffsetY")
+            ? this.Original.KeystrokeOsdOffsetY
+            : AppSettingsService.DefaultKeystrokeOsdOffsetY
+        keystrokeOsdOffsetUp := this.Original.HasOwnProp("KeystrokeOsdOffsetUp")
+            ? this.Original.KeystrokeOsdOffsetUp
+            : AppSettingsService.DefaultKeystrokeOsdOffsetUp
+        keystrokeOsdOffsetDown := this.Original.HasOwnProp("KeystrokeOsdOffsetDown")
+            ? this.Original.KeystrokeOsdOffsetDown
+            : AppSettingsService.DefaultKeystrokeOsdOffsetDown
+        keystrokeOsdOffsetLeft := this.Original.HasOwnProp("KeystrokeOsdOffsetLeft")
+            ? this.Original.KeystrokeOsdOffsetLeft
+            : AppSettingsService.DefaultKeystrokeOsdOffsetLeft
+        keystrokeOsdOffsetRight := this.Original.HasOwnProp("KeystrokeOsdOffsetRight")
+            ? this.Original.KeystrokeOsdOffsetRight
+            : AppSettingsService.DefaultKeystrokeOsdOffsetRight
+        keystrokeOsdFontSize := this.Original.HasOwnProp("KeystrokeOsdFontSize")
+            ? this.Original.KeystrokeOsdFontSize
+            : AppSettingsService.DefaultKeystrokeOsdFontSize
+        keystrokeOsdBgColor := this.Original.HasOwnProp("KeystrokeOsdBgColor")
+            ? this.Original.KeystrokeOsdBgColor
+            : AppSettingsService.DefaultKeystrokeOsdBgColor
+        keystrokeOsdTextColor := this.Original.HasOwnProp("KeystrokeOsdTextColor")
+            ? this.Original.KeystrokeOsdTextColor
+            : AppSettingsService.DefaultKeystrokeOsdTextColor
+        keystrokeOsdDisplayTimeMs := this.Original.HasOwnProp("KeystrokeOsdDisplayTimeMs")
+            ? this.Original.KeystrokeOsdDisplayTimeMs
+            : AppSettingsService.DefaultKeystrokeOsdDisplayTimeMs
+
+        if this.TabBuilt[5] {
+            keystrokeOsdPosition := this.SelectedOsdPosition
+            keystrokeOsdOffsetX := this.ParseOffsetInteger(this.OsdOffsetXStepper.Edit.Value, Tr("X 轴偏移"))
+            keystrokeOsdOffsetY := this.ParseOffsetInteger(this.OsdOffsetYStepper.Edit.Value, Tr("Y 轴偏移"))
+            keystrokeOsdOffsetUp := keystrokeOsdOffsetY < 0 ? -keystrokeOsdOffsetY : 0
+            keystrokeOsdOffsetDown := keystrokeOsdOffsetY > 0 ? keystrokeOsdOffsetY : 0
+            keystrokeOsdOffsetLeft := keystrokeOsdOffsetX < 0 ? -keystrokeOsdOffsetX : 0
+            keystrokeOsdOffsetRight := keystrokeOsdOffsetX > 0 ? keystrokeOsdOffsetX : 0
+            rawFont := RegExReplace(Trim(this.OsdFontSizeInput.Edit.Value), "(?i)\s*pt$")
+            keystrokeOsdFontSize := this.ParseRangedInteger(rawFont, Tr("字体大小"), 8, 72)
+            normBg := AppSettingsService.NormalizeColor(this.OsdBgColorInput.Edit.Value, "")
+            if normBg == ""
+                throw ValueError(Tr("背景色格式无效（支持 16 进制如 #2E3032 或 RGB 如 46,48,50）。"))
+            normText := AppSettingsService.NormalizeColor(this.OsdTextColorInput.Edit.Value, "")
+            if normText == ""
+                throw ValueError(Tr("文字色格式无效（支持 16 进制如 #FFFFFF 或 RGB 如 255,255,255）。"))
+            keystrokeOsdBgColor := normBg
+            keystrokeOsdTextColor := normText
+            keystrokeOsdDisplayTimeMs := this.ParseDisplayTimeMs(this.OsdDisplayTimeInput.Edit.Value)
+        }
         aiAddress := this.Original.AIAddress
         aiKey := this.Original.AIKey
         aiModel := this.Original.AIModel
@@ -1616,13 +1969,20 @@ class SettingsWindow {
             RunAsAdministrator: runAsAdministrator,
             CheckUpdatesOnStartup: checkUpdatesOnStartup,
             CheckInterceptionOnStartup: checkInterceptionOnStartup,
-            EscapeCancelsRecording: this.TabBuilt[5]
-                ? this.EscapeCancelCheck.Value != 0
-                : this.Original.EscapeCancelsRecording,
-            EventBufferCapacity: eventCapacity,
-            EventViewerAutoScroll: this.TabBuilt[5]
-                ? this.EventAutoScrollCheck.Value != 0
-                : this.Original.EventViewerAutoScroll,
+            EscapeCancelsRecording: this.Original.EscapeCancelsRecording,
+            EventBufferCapacity: this.Original.EventBufferCapacity,
+            EventViewerAutoScroll: this.Original.EventViewerAutoScroll,
+            KeystrokeOsdPosition: keystrokeOsdPosition,
+            KeystrokeOsdOffsetX: keystrokeOsdOffsetX,
+            KeystrokeOsdOffsetY: keystrokeOsdOffsetY,
+            KeystrokeOsdOffsetUp: keystrokeOsdOffsetUp,
+            KeystrokeOsdOffsetDown: keystrokeOsdOffsetDown,
+            KeystrokeOsdOffsetLeft: keystrokeOsdOffsetLeft,
+            KeystrokeOsdOffsetRight: keystrokeOsdOffsetRight,
+            KeystrokeOsdFontSize: keystrokeOsdFontSize,
+            KeystrokeOsdBgColor: keystrokeOsdBgColor,
+            KeystrokeOsdTextColor: keystrokeOsdTextColor,
+            KeystrokeOsdDisplayTimeMs: keystrokeOsdDisplayTimeMs,
             AIAddress: aiAddress, AIKey: aiKey, AIModel: aiModel,
             AITimeoutS: aiTimeout, AIPrompt: this.AIPromptDraft,
             AIOptimizePrompt: this.AIOptimizePromptDraft,
@@ -1736,21 +2096,6 @@ class SettingsWindow {
         return true
     }
 
-    ChooseImportRulePackage(*) {
-        if this.Disposed
-            return false
-        return this.OwnerWindow.App.ChooseImportRulePackage(this)
-    }
-
-    ChooseExportRulePackage(*) {
-        if this.Disposed
-            return false
-        return this.OwnerWindow.App.ChooseExportRulePackage()
-    }
-
-    OnRulePackageImportClosed(previewWindow) {
-        return this.OwnerWindow.OnRulePackageImportClosed(previewWindow)
-    }
 
     RequestClose(*) {
         this.Dispose()
@@ -1785,7 +2130,8 @@ class SettingsWindow {
                 this.FontDropDownCommandRegistered := false
         }
         for dropDownName in ["LanguageDropDown", "FontDropDown",
-                "ThemeDropDown", "ScaleDropDown"] {
+                "ThemeDropDown", "ScaleDropDown",
+                "OsdColorPresetDropDown"] {
             if this.HasOwnProp(dropDownName) && this.%dropDownName% {
                 dropDown := this.%dropDownName%
                 cleanup.Run("注销下拉框主题",
@@ -1825,6 +2171,28 @@ class SettingsWindow {
         this.CheckUpdatesOnStartupCheck := ""
         this.ShowAtStartupCheck := ""
         this.EscapeCancelCheck := ""
+        this.OsdPositionPresetLabel := ""
+        this.OsdPositionDropDown := ""
+        this.OsdOffsetHeaderLabel := ""
+        this.OsdOffsetUpLabel := ""
+        this.OsdOffsetUpInput := ""
+        this.OsdOffsetDownLabel := ""
+        this.OsdOffsetDownInput := ""
+        this.OsdOffsetLeftLabel := ""
+        this.OsdOffsetLeftInput := ""
+        this.OsdOffsetRightLabel := ""
+        this.OsdOffsetRightInput := ""
+        this.OsdFontSizeLabel := ""
+        this.OsdFontSizeInput := ""
+        this.OsdColorPresetLabel := ""
+        this.OsdColorPresetDropDown := ""
+        this.OsdBgColorLabel := ""
+        this.OsdBgColorInput := ""
+        this.OsdTextColorLabel := ""
+        this.OsdTextColorInput := ""
+        this.OsdDisplayTimeLabel := ""
+        this.OsdDisplayTimeInput := ""
+        this.OsdPreviewButton := ""
         this.LanguageIcon := ""
         this.FontIcon := ""
         this.ThemeIcon := ""
@@ -1837,6 +2205,150 @@ class SettingsWindow {
                 WindowHierarchy.CompleteClose(closeContext))
         cleanup.Complete()
         return true
+    }
+
+    class OsdStepperControl {
+        __New(settingsWindow, pageIndex, x, y, width, initialValue, onValueChange, minVal := -200, maxVal := 200) {
+            this.SettingsWindow := settingsWindow
+            this.OnValueChange := onValueChange
+            this.MinVal := minVal
+            this.MaxVal := maxVal
+            this.Value := Integer(initialValue)
+            this.Updating := false
+
+            colors := UiThemeService.GetPalette()
+            isDark := UiThemeService.IsDark()
+            h := 26
+            btnW := 24
+            padX := 6
+
+            ; 1. Outer container background
+            this.Background := settingsWindow.Gui.Add("Text", "x" x " y" y " w" width " h" h " +0x04000000 +Disabled Background" colors.Input)
+            settingsWindow.AddTabControl(pageIndex, this.Background)
+            borderColor := isDark ? "3A414E" : "CBD5E1"
+            settingsWindow.Interactions.RegisterContainerSurface(this.Background, colors.Input, borderColor, 1, 13)
+
+            ; 2. Minus button
+            this.BtnMinus := settingsWindow.Gui.Add("Text", "x" (x + 2) " y" (y + 2) " w" btnW " h" (h - 4) " Center 0x200 Background" colors.Input " c" colors.Text, "—")
+            this.BtnMinus.SetFont("s10 bold")
+            settingsWindow.AddTabControl(pageIndex, this.BtnMinus)
+            settingsWindow.Interactions.RegisterButton(this.BtnMinus, colors.Input, ObjBindMethod(this, "OnMinusClick"))
+            settingsWindow.Interactions.SetButtonTextLayout(this.BtnMinus, "center", 0, 10)
+
+            ; 3. Plus button
+            this.BtnPlus := settingsWindow.Gui.Add("Text", "x" (x + width - btnW - 2) " y" (y + 2) " w" btnW " h" (h - 4) " Center 0x200 Background" colors.Input " c" colors.Text, "+")
+            this.BtnPlus.SetFont("s10 bold")
+            settingsWindow.AddTabControl(pageIndex, this.BtnPlus)
+            settingsWindow.Interactions.RegisterButton(this.BtnPlus, colors.Input, ObjBindMethod(this, "OnPlusClick"))
+            settingsWindow.Interactions.SetButtonTextLayout(this.BtnPlus, "center", 0, 10)
+
+            ; 4. Center Edit
+            editX := x + btnW + padX
+            editW := width - (btnW + padX) * 2
+            editH := 18
+            editY := y + Floor((h - editH) / 2) - 2
+            this.Edit := settingsWindow.Gui.Add("Edit", "x" editX " y" editY " w" editW " h" editH " Center Background" colors.Input " c" colors.Text " -Border -E0x200", String(this.Value))
+            settingsWindow.AddTabControl(pageIndex, this.Edit)
+            ApplyDarkControl(this.Edit.Hwnd)
+            settingsWindow.Interactions.RegisterTextInput(this.Edit, this.Background)
+            this.Edit.OnEvent("Change", ObjBindMethod(this, "OnEditChange"))
+            this.Edit.OnEvent("LoseFocus", ObjBindMethod(this, "OnEditLoseFocus"))
+
+            ; 5. Track bar
+            trackX := x + btnW + 4
+            trackW := width - (btnW + 4) * 2
+            trackY := y + h - 5
+            trackBgColor := isDark ? "3A414E" : "CBD5E1"
+            trackFillColor := isDark ? "3B82F6" : "0F6CBD"
+
+            this.TrackBg := settingsWindow.Gui.Add("Text", "x" trackX " y" trackY " w" trackW " h2 Background" trackBgColor)
+            settingsWindow.AddTabControl(pageIndex, this.TrackBg)
+
+            this.TrackFill := settingsWindow.Gui.Add("Text", "x" trackX " y" trackY " w1 h2 Background" trackFillColor)
+            settingsWindow.AddTabControl(pageIndex, this.TrackFill)
+
+            this.TrackX := trackX
+            this.TrackY := trackY
+            this.TrackW := trackW
+
+            this.UpdateTrack()
+        }
+
+        OnMinusClick(*) {
+            step := GetKeyState("Shift", "P") ? 5 : 1
+            this.SetValue(this.Value - step)
+        }
+
+        OnPlusClick(*) {
+            step := GetKeyState("Shift", "P") ? 5 : 1
+            this.SetValue(this.Value + step)
+        }
+
+        SetValue(val) {
+            val := Max(-1000, Min(Integer(val), 1000))
+            this.Value := val
+            this.Updating := true
+            try this.Edit.Value := String(val)
+            finally this.Updating := false
+            this.UpdateTrack()
+            if IsObject(this.OnValueChange)
+                this.OnValueChange(val)
+        }
+
+        OnEditChange(*) {
+            if this.Updating
+                return
+            text := Trim(this.Edit.Value)
+            if text == "" || text == "-" || text == "+"
+                return
+            if RegExMatch(text, "^[+-]?\d+$") {
+                val := Integer(text)
+                this.Value := Max(-1000, Min(val, 1000))
+                this.UpdateTrack()
+                if IsObject(this.OnValueChange)
+                    this.OnValueChange(this.Value)
+            }
+        }
+
+        OnEditLoseFocus(*) {
+            text := Trim(this.Edit.Value)
+            if !RegExMatch(text, "^[+-]?\d+$")
+                this.Edit.Value := String(this.Value)
+        }
+
+        UpdateTrack() {
+            val := this.Value
+            minVal := this.MinVal
+            maxVal := this.MaxVal
+            clamped := Max(minVal, Min(val, maxVal))
+            ratio := (clamped - minVal) / (maxVal - minVal)
+            fillW := Max(1, Round(this.TrackW * ratio))
+            UiScaleService.MoveControl(this.TrackFill, this.TrackX, this.TrackY, fillW, 2)
+        }
+
+        Move(x, y, width, h := 26) {
+            btnW := 24
+            padX := 6
+            UiScaleService.MoveControl(this.Background, x, y, width, h)
+            UiScaleService.MoveControl(this.BtnMinus, x + 2, y + 2, btnW, h - 4)
+            UiScaleService.MoveControl(this.BtnPlus, x + width - btnW - 2, y + 2, btnW, h - 4)
+
+            editX := x + btnW + padX
+            editW := width - (btnW + padX) * 2
+            editH := 18
+            editY := y + Floor((h - editH) / 2) - 1
+            UiScaleService.MoveControl(this.Edit, editX, editY, editW, editH)
+
+            trackX := x + btnW + 4
+            trackW := width - (btnW + 4) * 2
+            trackY := y + h - 5
+            this.TrackX := trackX
+            this.TrackY := trackY
+            this.TrackW := trackW
+
+            UiScaleService.MoveControl(this.TrackBg, trackX, trackY, trackW, 2)
+            this.UpdateTrack()
+        }
     }
 }
 

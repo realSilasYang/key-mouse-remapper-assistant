@@ -425,14 +425,8 @@ class GermanStrings {
             "Start")
         catalog.Set("显示",
             "Anzeige")
-        catalog.Set("规则与事件",
-            "Regeln und Ereignisse")
         catalog.Set("关于",
             "Info")
-        catalog.Set("事件缓冲区容量（条）：",
-            "Ereignispufferkapazität:")
-        catalog.Set("事件查看自动跟随最新事件",
-            "Automatisch den neuesten Ereignissen folgen")
         catalog.Set("让每一条键鼠映射都可录制、可审阅、可掌控",
             "Jede Tastatur- und Mauszuordnung aufzeichnen, prüfen und steuern")
         catalog.Set("当前版本",
@@ -443,8 +437,6 @@ class GermanStrings {
             "Open-Source-Repository")
         catalog.Set("“{1}”必须是 {2} 到 {3} 之间的整数。",
             "„{1}“ muss eine Ganzzahl zwischen {2} und {3} sein.")
-        catalog.Set("事件缓冲区容量",
-            "Ereignispufferkapazität")
         catalog.Set("未知版本",
             "Unbekannte Version")
         catalog.Set("{1}（EXE 版）",
@@ -453,8 +445,6 @@ class GermanStrings {
             "{1} (Quellcodeversion)")
         catalog.Set("设置已保存并已应用。",
             "Einstellungen gespeichert und angewendet.")
-        catalog.Set("Esc 取消录制",
-            "Esc bricht die Aufnahme ab")
         catalog.Set("{1}（便携版）", "{1} (portable Version)")
         catalog.Set("快揭不开锅了（≥Д≤）",
             "Die Kasse ist fast leer（≥Д≤）")
@@ -659,6 +649,40 @@ class GermanStrings {
         catalog.Set("当前等待时间：{1} 秒", "Current wait time: {1} seconds")
         catalog.Set("界面缩放：", "Oberflächenskalierung:")
         catalog.Set("界面缩放已保存，正在重新加载…", "Die Oberflächenskalierung wurde gespeichert. Neu laden…")
+        catalog.Set("按键实时可视化已开启。", "Echtzeit-Tastenvisualisierung aktiviert.")
+        catalog.Set("按键实时可视化已关闭。", "Echtzeit-Tastenvisualisierung deaktiviert.")
+        catalog.Set("按键可视化", "Tasten-Visualisierer")
+        catalog.Set("按键实时可视化已开启（点击关闭）", "Echtzeit-Tastenvisualisierung aktiviert (zum Deaktivieren klicken)")
+        catalog.Set("按键实时可视化已关闭（点击开启）", "Echtzeit-Tastenvisualisierung deaktiviert (zum Aktivieren klicken)")
+        catalog.Set("基准对齐", "Basisausrichtung")
+        catalog.Set("X 轴偏移", "X-Versatz")
+        catalog.Set("Y 轴偏移", "Y-Versatz")
+        catalog.Set("左下角", "Unten links")
+        catalog.Set("中下", "Unten Mitte")
+        catalog.Set("右下角", "Unten rechts")
+        catalog.Set("左中", "Mitte links")
+        catalog.Set("右中", "Mitte rechts")
+        catalog.Set("左上角", "Oben links")
+        catalog.Set("中上", "Oben Mitte")
+        catalog.Set("右上角", "Oben rechts")
+        catalog.Set("屏幕中央", "Bildschirmmitte")
+        catalog.Set("字体大小 (pt)：", "Schriftgröße (pt):")
+        catalog.Set("字体大小", "Schriftgröße")
+        catalog.Set("配色方案：", "Farbschema:")
+        catalog.Set("深灰经典", "Klassisches Dunkelgrau")
+        catalog.Set("纯黑高亮", "Echtes Schwarz kontrastreich")
+        catalog.Set("暗夜深蓝", "Mitternachtsblau")
+        catalog.Set("极简浅色", "Minimalistisches Hell")
+        catalog.Set("翠绿终端", "Terminal-Grün")
+        catalog.Set("自定义", "Benutzerdefiniert")
+        catalog.Set("背景色：", "Hintergrundfarbe:")
+        catalog.Set("文字色：", "Textfarbe:")
+        catalog.Set("停留时长（秒）：", "Anzeigedauer (Sekunden):")
+        catalog.Set("停留时长（秒）", "Anzeigedauer (Sekunden)")
+        catalog.Set("按键可视化效果预览", "Vorschau des Tasten-Visualisierers")
+        catalog.Set("背景色格式无效（支持 16 进制如 #2E3032 或 RGB 如 46,48,50）。", "Ungültiges Hintergrundfarbformat (unterstützt Hex z. B. #2E3032 oder RGB z. B. 46,48,50).")
+        catalog.Set("文字色格式无效（支持 16 进制如 #FFFFFF 或 RGB 如 255,255,255）。", "Ungültiges Textfarbformat (unterstützt Hex z. B. #FFFFFF oder RGB z. B. 255,255,255).")
+        catalog.Set("“{1}”必须是 {2} 到 {3} 之间的数值。", "„{1}“ muss eine Zahl zwischen {2} und {3} sein.")
         return catalog
     }
 }

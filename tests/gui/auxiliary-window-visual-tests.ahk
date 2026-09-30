@@ -273,7 +273,7 @@ RunAuxiliaryWindowVisualTests() {
             settingsVisualDialog.TabButtons[3].Hwnd]
         interceptionTabState := settingsVisualDialog.Interactions.Controls[
             settingsVisualDialog.TabButtons[4].Hwnd]
-        rulesEventTabState := settingsVisualDialog.Interactions.Controls[
+        keystrokeOsdTabState := settingsVisualDialog.Interactions.Controls[
             settingsVisualDialog.TabButtons[5].Hwnd]
         AuxiliaryVisualAssert(appearanceTabState.TextInsetDip
                 == SettingsWindow.TabHorizontalPadding
@@ -300,28 +300,33 @@ RunAuxiliaryWindowVisualTests() {
                     "keyboard.svg")
                 && interceptionTabState.ButtonImage.TintColor
                     == settingsVisualDialog.GetTabIconColor(4)
-                && rulesEventTabState.HasOwnProp("ButtonImage")
-                && InStr(rulesEventTabState.ButtonImage.SourcePath,
-                    "file-output.svg")
-                && rulesEventTabState.ButtonImage.TintColor
+                && keystrokeOsdTabState.HasOwnProp("ButtonImage")
+                && InStr(keystrokeOsdTabState.ButtonImage.SourcePath,
+                    "captions.svg")
+                && keystrokeOsdTabState.ButtonImage.TintColor
                     == settingsVisualDialog.GetTabIconColor(5)
                 && settingsVisualDialog.Interactions.Controls[
                     settingsVisualDialog.TabButtons[4].Hwnd]
                     .ButtonImage.TintColor
-                    == settingsVisualDialog.GetTabIconColor(4),
-            "The Appearance or AI tab icon lacks its semantic color.")
+                    == settingsVisualDialog.GetTabIconColor(4)
+                && settingsVisualDialog.Interactions.Controls[
+                    settingsVisualDialog.TabButtons[5].Hwnd]
+                    .ButtonImage.TintColor
+                    == settingsVisualDialog.GetTabIconColor(5),
+            "The Appearance, AI, Interception, or Keystroke OSD tab icon lacks its semantic color.")
         AuxiliaryVisualAssert(settingsVisualDialog.TabButtons[1].Text
                 == Tr("显示")
             && settingsVisualDialog.TabButtons[2].Text == Tr("启动"),
             "Appearance and Startup tabs are not in the requested order.")
         tabLabels := [Tr("显示"), Tr("启动"), Tr("AI 设置"),
-            Tr("设备过滤驱动"), Tr("规则与事件")]
+            Tr("设备过滤驱动"), Tr("按键可视化")]
         AssertSettingsTabTextFits(settingsVisualDialog, tabLabels)
-        AuxiliaryVisualAssert(settingsVisualDialog.TabButtons[4].Text
-                == Tr("设备过滤驱动")
+        AuxiliaryVisualAssert(settingsVisualDialog.TabButtons.Length == 5
+                && settingsVisualDialog.TabButtons[4].Text
+                    == Tr("设备过滤驱动")
                 && settingsVisualDialog.TabButtons[5].Text
-                    == Tr("规则与事件"),
-            "The Interception tab is not in the requested penultimate position.")
+                    == Tr("按键可视化"),
+            "The Keystroke OSD tab is not in the requested position.")
         tabGroupLeft := 0
         tabGroupRight := 0
         Loop tabLabels.Length {
@@ -336,9 +341,10 @@ RunAuxiliaryWindowVisualTests() {
                 && Abs(tabGroupLeft - (settingsVisualDialog.WindowWidth
                     - tabGroupRight)) <= 1,
             "Settings tab group is not centered within the window.")
-        AuxiliaryVisualAssert(settingsVisualDialog.TabButtonPages[4] == 4
+        AuxiliaryVisualAssert(settingsVisualDialog.TabButtonPages.Length == 5
+                && settingsVisualDialog.TabButtonPages[4] == 4
                 && settingsVisualDialog.TabButtonPages[5] == 5,
-            "The Interception tab is not in the requested position.")
+            "The Keystroke OSD tab is not in the requested position.")
         AuxiliaryVisualAssert(settingsVisualDialog.AIPromptsButton.Text
                 == Tr("编辑")
                 && !settingsVisualDialog.HasOwnProp("AISystemPromptButton")
@@ -727,6 +733,90 @@ RunAuxiliaryWindowVisualTests() {
             ValidateAuxiliaryWindow(settingsVisualDialog.Gui,
                 "settings tab " A_Index)
         }
+        AuxiliaryVisualAssert(settingsVisualDialog.SwitchTab(5)
+                && settingsVisualDialog.HasOwnProp("OsdGridHeaderLabel")
+                && settingsVisualDialog.HasOwnProp("OsdGridContainer")
+                && settingsVisualDialog.HasOwnProp("OsdGridButtons")
+                && settingsVisualDialog.OsdGridButtons.Length == 9
+                && settingsVisualDialog.HasOwnProp("OsdOffsetXLabel")
+                && settingsVisualDialog.HasOwnProp("OsdOffsetYLabel")
+                && settingsVisualDialog.HasOwnProp("OsdOffsetXStepper")
+                && settingsVisualDialog.HasOwnProp("OsdOffsetYStepper")
+                && settingsVisualDialog.HasOwnProp("OsdFontSizeInput")
+                && settingsVisualDialog.HasOwnProp("OsdColorPresetDropDown")
+                && settingsVisualDialog.HasOwnProp("OsdBgColorInput")
+                && settingsVisualDialog.HasOwnProp("OsdTextColorInput")
+                && settingsVisualDialog.HasOwnProp("OsdDisplayTimeInput")
+                && settingsVisualDialog.HasOwnProp("OsdPreviewButton"),
+            "The Keystroke OSD settings tab did not expose all expected controls.")
+        settingsVisualDialog.OsdGridContainer.GetPos(&gridX, &gridY, &gridW, &gridH)
+        settingsVisualDialog.OsdOffsetXStepper.Background.GetPos(&stepperX, &stepperY, &stepperW, &stepperH)
+        settingsVisualDialog.OsdOffsetYStepper.Background.GetPos(&stepperY2X, &stepperY2Y, &stepperY2W, &stepperY2H)
+        settingsVisualDialog.OsdGridHeaderLabel.GetPos(&gridHdrX, &gridHdrY)
+        settingsVisualDialog.OsdOffsetXLabel.GetPos(&offsetHdrX, &offsetHdrY)
+        AuxiliaryVisualAssert(gridHdrY >= 55 && offsetHdrY >= 55,
+            "The Keystroke OSD headers should be shifted down below the tab divider line.")
+        AuxiliaryVisualAssert(gridHdrY < gridY && offsetHdrY < stepperY,
+            "The Keystroke OSD grid header and offset header should be placed above their controls.")
+        gridContainerState := settingsVisualDialog.Interactions.Controls[settingsVisualDialog.OsdGridContainer.Hwnd]
+        AuxiliaryVisualAssert(gridContainerState.Kind == "container" && !gridContainerState.Interactive,
+            "The 3x3 grid container should be registered as a non-interactive container.")
+        AuxiliaryVisualAssert(stepperX > gridX + gridW,
+            "The Keystroke OSD steppers should be placed to the right of the 3x3 grid.")
+        containerHwnd := settingsVisualDialog.OsdGridContainer.Hwnd
+        button1Hwnd := settingsVisualDialog.OsdGridButtons[1].Hwnd
+        currHwnd := DllCall("user32\GetWindow", "Ptr", settingsVisualDialog.Gui.Hwnd, "UInt", 5, "Ptr") ; GW_CHILD
+        foundButtonFirst := false
+        while currHwnd {
+            if currHwnd == button1Hwnd
+                foundButtonFirst := true
+            else if currHwnd == containerHwnd {
+                AuxiliaryVisualAssert(foundButtonFirst,
+                    "The 3x3 grid container must be behind the grid buttons in Z-order.")
+                break
+            }
+            currHwnd := DllCall("user32\GetWindow", "Ptr", currHwnd, "UInt", 2, "Ptr") ; GW_HWNDNEXT
+        }
+        AuxiliaryVisualAssert(settingsVisualDialog.OsdGridButtons[5].Text == "",
+            "The center cell of the 3x3 grid should have empty text when unselected.")
+        AuxiliaryVisualAssert(settingsVisualDialog.OsdGridButtons[7].Text == "●",
+            "The selected cell (bottom-left) of the 3x3 grid should display the active dot.")
+        settingsVisualDialog.Interactions.UpdateHover(settingsVisualDialog.OsdGridButtons[5].Hwnd)
+        AuxiliaryVisualAssert(settingsVisualDialog.OsdGridButtons[5].Text == "" && settingsVisualDialog.OsdGridButtons[7].Text == "●",
+            "The 3x3 grid button text must remain visible after hover interaction.")
+        settingsVisualDialog.Interactions.HandleMouseLeave(settingsVisualDialog.OsdGridButtons[5].Hwnd)
+        AuxiliaryVisualAssert(InStr(settingsVisualDialog.OsdFontSizeLabel.Text, "pt"),
+            "The Keystroke OSD font size label should include pt unit.")
+        settingsVisualDialog.OsdDisplayTimeInput.Background.GetPos(&osdTimeX, &osdTimeInputY, &osdTimeWidth, &osdTimeInputHeight)
+        settingsVisualDialog.OsdTextColorInput.Background.GetPos(&osdTextColorX, &osdTextColorY, &osdTextColorWidth, &osdTextColorHeight)
+        settingsVisualDialog.OsdBgColorInput.Background.GetPos(&osdBgInputX, &osdBgInputY, &osdBgColorWidth, &osdBgInputHeight)
+        settingsVisualDialog.OsdBgColorLabel.GetPos(&osdBgLabelX, &osdBgLabelY, , &osdBgLabelHeight)
+        settingsVisualDialog.OsdPreviewButton.GetPos(&osdPreviewX, &osdPreviewY, &osdPreviewWidth, &osdPreviewHeight)
+        osdColumnRight := osdTextColorX + osdTextColorWidth
+        AuxiliaryVisualAssert(Abs(gridX - osdBgInputX) <= 2,
+            "The 3x3 grid left edge should align with the column boundary.")
+        AuxiliaryVisualAssert(Abs(osdColumnRight - (stepperX + stepperW)) <= 2,
+            "The Keystroke OSD steppers right edge should align with the column boundary.")
+        AuxiliaryVisualAssert(Abs(osdColumnRight - (osdTimeX + osdTimeWidth)) <= 1,
+            "The Keystroke OSD display time input right edge is not aligned with the column boundary.")
+        AuxiliaryVisualAssert(Abs(osdColumnRight - (osdTextColorX + osdTextColorWidth)) <= 1,
+            "The Keystroke OSD text color input right edge is not aligned with the column boundary.")
+        AuxiliaryVisualAssert(Abs(osdBgInputX - gridX) <= 1,
+            "The Keystroke OSD background input left edge is not aligned with the column boundary.")
+        AuxiliaryVisualAssert(osdPreviewX >= gridX && osdPreviewX + osdPreviewWidth <= osdColumnRight,
+            "The Keystroke OSD preview button should be contained within the column boundary.")
+        AuxiliaryVisualAssert(osdPreviewWidth < (osdColumnRight - gridX),
+            "The Keystroke OSD preview button should be compact rather than spanning the full column width.")
+        previewLeftSpace := osdPreviewX - gridX
+        previewRightSpace := osdColumnRight - (osdPreviewX + osdPreviewWidth)
+        AuxiliaryVisualAssert(Abs(previewLeftSpace - previewRightSpace) <= 2,
+            "The Keystroke OSD preview button should be horizontally centered within the column.")
+        AuxiliaryVisualAssert(osdBgColorWidth == osdTextColorWidth,
+            "The Keystroke OSD color input boxes are not equal in width.")
+        AuxiliaryVisualAssert(osdBgLabelX == osdBgInputX && osdBgLabelY < osdBgInputY,
+            "The Keystroke OSD background color label is not placed above the input box.")
+        AuxiliaryVisualAssert(osdPreviewY > osdTextColorY + osdTextColorHeight,
+            "The Keystroke OSD preview button is not below the background/text color row.")
         AuxiliaryVisualAssert(settingsVisualDialog.InterceptionStatus.Value
                 == Tr("不可用")
                 && !settingsVisualDialog.InterceptionInstallButton.Enabled
@@ -771,28 +861,6 @@ RunAuxiliaryWindowVisualTests() {
                 && interceptionStatusY < interceptionDetectY
                 && interceptionDetectWidth <= 132,
             "Interception settings controls do not follow the shared content alignment and action-row layout.")
-        settingsVisualDialog.ImportRulePackageButton.GetPos(&importPackageX,
-            &importPackageY, &importPackageWidth, &importPackageHeight)
-        settingsVisualDialog.ExportRulePackageButton.GetPos(&exportPackageX,
-            &exportPackageY, &exportPackageWidth)
-        settingsVisualDialog.RuleEventDivider.GetPos(, &ruleDividerY)
-        settingsVisualDialog.EventCapacityLabel.GetPos(, &eventLabelY)
-        settingsVisualDialog.EventCapacityInput.Background.GetPos(,
-            &eventInputY, , &eventInputHeight)
-        settingsVisualDialog.EscapeCancelCheck.GetPos(, &escapeCancelY, ,
-            &escapeCancelHeight)
-        settingsVisualDialog.EventAutoScrollCheck.GetPos(, &eventAutoScrollY)
-        AssertSelectableSettingsText(settingsVisualDialog.EventCapacityLabel,
-            "Event settings label")
-        AuxiliaryVisualAssert(importPackageX == exportPackageX
-                && importPackageWidth == exportPackageWidth
-                && importPackageY == 68
-                && exportPackageY - importPackageY - importPackageHeight == 6
-                && ruleDividerY - exportPackageY - importPackageHeight == 20
-                && eventLabelY - ruleDividerY == 20
-                && escapeCancelY - eventInputY - eventInputHeight == 6
-                && eventAutoScrollY - escapeCancelY - escapeCancelHeight == 6,
-            "The rule/event page top spacing or event gaps are inconsistent.")
         appearanceFields := [
             {Label: settingsVisualDialog.LanguageLabel,
                 Control: settingsVisualDialog.LanguageDropDown},
@@ -803,20 +871,12 @@ RunAuxiliaryWindowVisualTests() {
             {Label: settingsVisualDialog.ScaleLabel,
                 Control: settingsVisualDialog.ScaleDropDown}
         ]
-        eventFields := [
-            {Label: settingsVisualDialog.EventCapacityLabel,
-                Control: settingsVisualDialog.EventCapacityInput.Background}
-        ]
         AssertStackedMenuColumn(settingsVisualDialog, appearanceFields,
             settingsClientWidth, "Appearance settings",
             [settingsVisualDialog.LanguageIcon,
                 settingsVisualDialog.FontIcon,
                 settingsVisualDialog.ThemeIcon,
                 settingsVisualDialog.ScaleIcon], 28)
-        AssertStackedMenuColumn(settingsVisualDialog, eventFields,
-            settingsClientWidth, "Event settings",
-            [settingsVisualDialog.EscapeCancelCheck,
-                settingsVisualDialog.EventAutoScrollCheck])
         ValidateSettingsFontDropDown(settingsVisualDialog)
         settingsVisualDialog.SwitchTab(3)
         promptsEditorDialog := AIPromptsEditor(settingsVisualDialog,
@@ -914,14 +974,14 @@ RunAuxiliaryWindowVisualTests() {
                     == lightSettingsColors.StartupIcon
                 && aiTabState.ButtonImage.TintColor
                     == UiThemeService.Color("TabActiveText")
-                && rulesEventTabState.ButtonImage.TintColor
-                    == lightSettingsColors.RulesEventIcon
                 && languageIconState.ButtonImage.TintColor
                     == lightSettingsColors.LanguageIcon
                 && fontIconState.ButtonImage.TintColor
                     == lightSettingsColors.FontIcon
                 && themeIconState.ButtonImage.TintColor
-                    == lightSettingsColors.ThemeIcon,
+                    == lightSettingsColors.ThemeIcon
+                && keystrokeOsdTabState.ButtonImage.TintColor
+                    == lightSettingsColors.KeystrokeOsdIcon,
             "The light settings theme retained dark-theme category icon colors.")
         AssertAuxiliaryWindowBackground(settingsVisualDialog.Gui,
             "light settings")
@@ -1863,7 +1923,7 @@ VerifySettingsTabLanguagesAndScales(ownerWindow) {
             try {
                 window.Show()
                 labels := [Tr("显示"), Tr("启动"), Tr("AI 设置"),
-                    Tr("设备过滤驱动"), Tr("规则与事件")]
+                    Tr("设备过滤驱动"), Tr("按键可视化")]
                 try AssertSettingsTabTextFits(window, labels)
                 catch as layoutError
                     throw Error(choice.Code ": " layoutError.Message)
@@ -1876,7 +1936,7 @@ VerifySettingsTabLanguagesAndScales(ownerWindow) {
             try {
                 window.Show()
                 labels := [Tr("显示"), Tr("启动"), Tr("AI 设置"),
-                    Tr("设备过滤驱动"), Tr("规则与事件")]
+                    Tr("设备过滤驱动"), Tr("按键可视化")]
                 try AssertSettingsTabTextFits(window, labels)
                 catch as layoutError
                     throw Error(scale "%: " layoutError.Message)
@@ -1925,7 +1985,7 @@ class AuxiliaryVisualApp {
             CheckUpdatesOnStartup: true,
             CheckInterceptionOnStartup: true,
             EscapeCancelsRecording: true, EventBufferCapacity: 1000,
-            EventViewerAutoScroll: true,
+            EventViewerAutoScroll: false,
             AIAddress: "", AIKey: "", AIModel: "", AITimeoutS: 600,
             AIPrompt: "生成符合要求的完整键鼠重映射持久化规则块。",
             AIOptimizePrompt: "优化当前键鼠重映射规则。",

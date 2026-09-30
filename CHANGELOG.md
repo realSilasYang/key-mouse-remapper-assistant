@@ -7,6 +7,39 @@
 
 ## 🚧 [未发布]
 
+## 🎉 版本 [1.2.0] - 2026-09-30
+
+### 📦 发布物说明
+
+- **`fonts.zip`（可选字体包）**：提供 Noto 回退界面字体，需先安装到 Windows；它不是程序运行必需。
+- **`key-mouse-remapper-assistant-1.2.0-source.zip`（完整源码版）**：包含可运行 AHK 源码、应用模块、除字体外的资源、13 语 README、双语更新日志、测试和构建工具，适合审阅、开发或从源码运行；本机需要 AutoHotkey v2 x64。
+- **`key-mouse-remapper-assistant-1.2.0-windows-x64.zip`（完整便携版，推荐）**：包含编译 EXE、可编辑映射源码、13 语 README、双语更新日志、许可证、应用模块、除字体外的界面资源、固定 AutoHotkey v2.0.26 x64 运行时及对应源码归档；无需另行安装 AutoHotkey，适合完整解压后长期使用。
+
+---
+
+### ✨ 新增
+
+- **按键实时可视化 (Keystroke OSD)**：新增屏幕按键与组合键悬浮可视化卡片，平滑淡出展示操作按键；支持常规单键、功能按键与多键组合并自动排序，智能过滤打字过程中单独输入的常规字符与单标点。
+- **自定义视觉与位置**：支持 9 宫格预设基准方位与 X/Y 轴连续滑动微调轨道；支持自定义字体大小、停留时长，提供 5 种预设配色及十六进制/RGB 自定义背景色与文字色，并在设置窗口提供实时紧凑的预览按键。
+- **快捷控制入口**：主窗口工具栏新增“按键可视化”控制按键与图标，托盘右键菜单同步支持实时开启与关闭。
+
+---
+
+### 🚀 优化
+
+- **设置界面交互与九宫格布局**：重构“按键可视化”选项卡视觉层级，采用九宫格对齐选择器配合 X/Y 轴滑动轨道，改善各控件纵向间距与深色模式表现。
+- **紧凑预览按钮**：根据多语言文本长度自适应紧凑按钮宽度与内边距并在列内居中，消除两端冗余留白。
+- **窗口与生命周期恢复稳定性**：增强主界面在恢复、最小化唤醒及生命周期重置时的重绘与状态维护。
+
+---
+
+### 🐛 修复
+
+- **九宫格悬停状态**：修复九宫格单元格在鼠标悬停时因重绘导致内容或状态圆点消失的问题。
+- **多语言字典对齐**：全面清理旧版冗余字段，确保 12 种界面语言均包含统一、准确的按键可视化翻译。
+
+---
+
 ## 🎉 版本 [1.1.0] - 2026-09-25
 
 ### 📦 发布物说明
@@ -194,7 +227,8 @@
 - **产品与数据目录**：统一中英文产品标识和 `%APPDATA%\KeyMouseRemapperAssistant` 数据位置。
 - **发行与兼容性**：锁定 AutoHotkey 和构建工具，统一 UTF-8 输出与 Windows PowerShell 5.1／PowerShell 7 行为。
 
-[未发布]: https://github.com/realSilasYang/key-mouse-remapper-assistant/compare/v1.1.0...HEAD
+[未发布]: https://github.com/realSilasYang/key-mouse-remapper-assistant/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/realSilasYang/key-mouse-remapper-assistant/releases/tag/v1.2.0
 [1.1.0]: https://github.com/realSilasYang/key-mouse-remapper-assistant/releases/tag/v1.1.0
 [1.0.2]: https://github.com/realSilasYang/key-mouse-remapper-assistant/releases/tag/v1.0.2
 [1.0.1]: https://github.com/realSilasYang/key-mouse-remapper-assistant/releases/tag/v1.0.1
