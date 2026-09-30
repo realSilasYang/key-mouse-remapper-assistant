@@ -1841,8 +1841,8 @@ ValidateMainWindowResponsiveLayout(window) {
             && saveButtonState.TextColor == clearButtonState.TextColor
             && saveButtonState.RadiusDip == clearButtonState.RadiusDip,
         "The save command does not share the clear command's visual style.")
-    window.AboutButton.GetPos(&oldAboutX, &oldAboutY, &oldAboutWidth,
-        &oldAboutHeight)
+    window.SettingsButton.GetPos(&oldSettingsX, &oldSettingsY,
+        &oldSettingsWidth, &oldSettingsHeight)
     baseColumns := ReadMappingWindowColumnWidths(window)
     MappingWindowVisualAssert(baseColumns.Source == baseColumns.Target,
         "The source and target list columns do not start with equal widths.")
@@ -2058,8 +2058,8 @@ ValidateMainWindowResponsiveLayout(window) {
     MappingWindowVisualAssert(Abs(wideColumns.Total - expectedColumnWidth) <= 2,
         "The visible ListView columns did not consume the available width.")
 
-    staleSampleX := Round(oldAboutX + oldAboutWidth / 2)
-    staleSampleY := Round(oldAboutY + oldAboutHeight / 2)
+    staleSampleX := Round(oldSettingsX + oldSettingsWidth / 2)
+    staleSampleY := Round(oldSettingsY + oldSettingsHeight / 2)
     MappingWindowVisualAssert(CaptureMappingWindowOwnDcPixel(window.Gui.Hwnd,
             staleSampleX, staleSampleY)
             == ColorRef(MappingWindow.Colors.Window)
@@ -2071,6 +2071,7 @@ ValidateMainWindowResponsiveLayout(window) {
     MappingWindowVisualCheckpoint(window, "wide")
 
     toolbarSignatures := [
+        CaptureMappingWindowControlSignature(window.VisualizerButton),
         CaptureMappingWindowControlSignature(window.SettingsButton),
         CaptureMappingWindowControlSignature(window.SupportButton),
         CaptureMappingWindowControlSignature(window.AboutButton)
@@ -2097,12 +2098,14 @@ ValidateMainWindowResponsiveLayout(window) {
             && captureNameHeight == wideNameHeight,
         "Starting capture after a width change triggered a second layout.")
     MappingWindowVisualAssert(
-            CaptureMappingWindowControlSignature(window.SettingsButton)
+            CaptureMappingWindowControlSignature(window.VisualizerButton)
                 == toolbarSignatures[1]
-            && CaptureMappingWindowControlSignature(window.SupportButton)
+            && CaptureMappingWindowControlSignature(window.SettingsButton)
                 == toolbarSignatures[2]
-            && CaptureMappingWindowControlSignature(window.AboutButton)
+            && CaptureMappingWindowControlSignature(window.SupportButton)
                 == toolbarSignatures[3]
+            && CaptureMappingWindowControlSignature(window.AboutButton)
+                == toolbarSignatures[4]
             && MappingWindowScreenPixelMatchesWhenVisible(window.Gui.Hwnd,
                 staleSampleX, staleSampleY, MappingWindow.Colors.Window),
         "Starting capture after resizing corrupted or duplicated toolbar painting.")
@@ -2110,12 +2113,14 @@ ValidateMainWindowResponsiveLayout(window) {
     window.App.Capture.Cancel()
     Sleep(50)
     MappingWindowVisualAssert(
-            CaptureMappingWindowControlSignature(window.SettingsButton)
+            CaptureMappingWindowControlSignature(window.VisualizerButton)
                 == toolbarSignatures[1]
-            && CaptureMappingWindowControlSignature(window.SupportButton)
+            && CaptureMappingWindowControlSignature(window.SettingsButton)
                 == toolbarSignatures[2]
+            && CaptureMappingWindowControlSignature(window.SupportButton)
+                == toolbarSignatures[3]
             && CaptureMappingWindowControlSignature(window.AboutButton)
-                == toolbarSignatures[3],
+                == toolbarSignatures[4],
         "Ending capture after resizing corrupted toolbar painting.")
     MappingWindowVisualCheckpoint(window, "capture-ended")
 
