@@ -50,7 +50,7 @@ if ($actualAhkVersion -cne $requiredAhkVersion) {
 }
 
 function Invoke-AhkFile {
-    param([string]$Path, [string[]]$Arguments = @())
+    param([string]$Path, [string[]]$Arguments = @(), [switch]$FailOnWarning)
     $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
     $startInfo.FileName = $ahkPath
     $startInfo.UseShellExecute = $false
@@ -73,7 +73,9 @@ function Invoke-AhkFile {
     $stderr = $stderrTask.GetAwaiter().GetResult()
     $stdoutHasAhkError = $stdout -match
         '(?m)^.+\(\d+\)\s*:\s*==>(?![ \t]*Warning:)[ \t]*'
-    if ($process.ExitCode -ne 0 -or $stderr -or $stdoutHasAhkError) {
+    $stdoutHasWarning = $FailOnWarning -and ($stdout -match
+        '(?m)^.+\(\d+\)\s*:\s*==>[ \t]*Warning:')
+    if ($process.ExitCode -ne 0 -or $stderr -or $stdoutHasAhkError -or $stdoutHasWarning) {
         throw "AutoHotkey test failed: $Path`n$stderr`n$stdout"
     }
     Write-Host "PASS $([System.IO.Path]::GetFileName($Path))"
@@ -130,7 +132,7 @@ foreach ($entryPath in $entryPaths) {
         [System.IO.File]::WriteAllText($syntaxProbeMarker, [string]$PID,
             [System.Text.UTF8Encoding]::new($false))
         Copy-Item -LiteralPath $entryPath -Destination $syntaxProbePath
-        Invoke-AhkFile $syntaxProbePath @('--syntax-check')
+        Invoke-AhkFile $syntaxProbePath @('--syntax-check') -FailOnWarning
     } finally {
         if (Test-Path -LiteralPath $syntaxProbePath) {
             Remove-Item -LiteralPath $syntaxProbePath -Force
@@ -141,7 +143,7 @@ foreach ($entryPath in $entryPaths) {
     }
 }
 Invoke-AhkFile (Join-Path $projectRoot 'src\Input\CaptureInputGuardWorker.ahk') `
-    @('--syntax-check')
+    @('--syntax-check') -FailOnWarning
 
 $desktopInputTests = @(
     'capture-input-guard-integration-tests.ahk',

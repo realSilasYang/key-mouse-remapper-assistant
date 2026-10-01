@@ -73,6 +73,7 @@
 #Include src\UI\SvgRenderLibrary.ahk
 #Include src\UI\RoundedButtonPainter.ahk
 #Include src\UI\ControlAccessibilityService.ahk
+#Include src\UI\KeystrokeOsdService.ahk
 #Include app\Windows\DarkTooltipWindow.ahk
 #Include src\UI\MappingUiInteractions.ahk
 #Include app\UI\DarkMessageBox.ahk
