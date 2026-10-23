@@ -223,6 +223,12 @@ RunMappingWindowVisualTests() {
     AssertCenteredMappingStatusContent(window, 1, statusCellRect)
     AssertUniformMappingListTextInsets(window, 1)
     AssertMappingNameStartsAfterSequence(window, 1)
+    ValidateMappingListScrollbarRepaint(window, [
+        {Id: "visual-test", Source: "F24", Target: "F23",
+            Scope: "全局", Enabled: true},
+        {Id: "visual-test-2", Source: "F22", Target: "F21",
+            Scope: "全局", Enabled: true}
+    ])
     window.List.Modify(1, "Select Focus Vis")
     window.ListSelection.RefreshItem(1)
     Sleep(20)
@@ -4542,6 +4548,71 @@ MappingWindowVisualAssert(value, message) {
         throw Error(message)
 }
 
+ValidateMappingListScrollbarRepaint(window, restoreMappings) {
+    mappings := []
+    Loop 24
+        mappings.Push({Id: "scroll-visual-" A_Index, Source: "F24",
+            Target: "F23", Scope: "全局", Enabled: true})
+    try {
+        window.List.Delete()
+        window.LoadRows(mappings)
+        window.List.Modify(0, "-Select")
+        SendMessage(Win32.LVM_SCROLL, 0, 100000, , window.List.Hwnd)
+        DllCall("user32\UpdateWindow", "Ptr", window.List.Hwnd, "Int")
+
+        window.ScrollRegressionRefreshCount := 0
+        window.ScrollRegressionSubItemDrawCount := 0
+        window.ScrollRegressionFooterDrawCount := 0
+        SendMessage(Win32.WM_VSCROLL,
+            Win32.SB_THUMBTRACK | 0x7FFF0000, 0, , window.List.Hwnd)
+        Sleep(30)
+        topIndex := SendMessage(Win32.LVM_GETTOPINDEX, 0, 0, ,
+            window.List.Hwnd)
+        MappingWindowVisualAssert(
+            window.ScrollRegressionRefreshCount == 1
+                && window.ScrollRegressionSubItemDrawCount > 0
+                && topIndex > 0
+                && topIndex < window.GetMappingRowCount(),
+            Format("List-view thumb-track notification did not repaint the scrolled custom-drawn rows: refresh={1}, subitems={2}, topIndex={3}, rows={4}, pending={5}.",
+                window.ScrollRegressionRefreshCount,
+                window.ScrollRegressionSubItemDrawCount, topIndex,
+                window.GetMappingRowCount(),
+                window.ListCustomDrawRefreshPending))
+
+        SendMessage(Win32.LVM_SCROLL, 0, 100000, , window.List.Hwnd)
+        DllCall("user32\UpdateWindow", "Ptr", window.List.Hwnd, "Int")
+        footerRects := window.GetFooterButtonRects()
+        listClientRect := Buffer(16, 0)
+        MappingWindowVisualAssert(IsObject(footerRects)
+                && DllCall("user32\GetClientRect", "Ptr",
+                    window.List.Hwnd, "Ptr", listClientRect, "Int")
+                && footerRects.Row.Top
+                    < NumGet(listClientRect, 12, "Int")
+                && footerRects.Row.Bottom > 0,
+            "The scrollbar repaint probe could not bring the footer buttons into view.")
+        window.ScrollRegressionRefreshCount := 0
+        window.ScrollRegressionSubItemDrawCount := 0
+        window.ScrollRegressionFooterDrawCount := 0
+        SendMessage(Win32.WM_VSCROLL, Win32.SB_ENDSCROLL, 0, ,
+            window.List.Hwnd)
+        Sleep(30)
+        MappingWindowVisualAssert(
+            window.ScrollRegressionRefreshCount == 1
+                && window.ScrollRegressionFooterDrawCount
+                    >= MappingWindow.FooterRowCount,
+            Format("Ending a thumb drag did not repaint both rule-package buttons: refresh={1}, footerItems={2}, pending={3}.",
+                window.ScrollRegressionRefreshCount,
+                window.ScrollRegressionFooterDrawCount,
+                window.ListCustomDrawRefreshPending))
+    } finally {
+        window.List.Delete()
+        window.LoadRows(restoreMappings)
+        window.ScrollRegressionRefreshCount := 0
+        window.ScrollRegressionSubItemDrawCount := 0
+        window.ScrollRegressionFooterDrawCount := 0
+    }
+}
+
 MappingWindowVisualJoin(values, separator) {
     result := ""
     for index, value in values
@@ -4712,6 +4783,28 @@ MappingWindowVisualCheckpoint(window, stage) {
 }
 
 class MappingWindowVisualProbe extends MappingWindow {
+    RefreshCustomDrawAfterVerticalScroll(scrollCode) {
+        if this.HasOwnProp("ScrollRegressionRefreshCount")
+            this.ScrollRegressionRefreshCount++
+        return super.RefreshCustomDrawAfterVerticalScroll(scrollCode)
+    }
+
+    DrawListSubItem(listView, notification) {
+        if this.HasOwnProp("ScrollRegressionSubItemDrawCount")
+            this.ScrollRegressionSubItemDrawCount++
+        return super.DrawListSubItem(listView, notification)
+    }
+
+    DrawListItemPrePaint(listView, notification) {
+        if this.HasOwnProp("ScrollRegressionFooterDrawCount") {
+            itemSpecOffset := A_PtrSize == 8 ? 56 : 36
+            row := NumGet(notification, itemSpecOffset, "UPtr") + 1
+            if this.IsFooterRow(row)
+                this.ScrollRegressionFooterDrawCount++
+        }
+        return super.DrawListItemPrePaint(listView, notification)
+    }
+
     Show(*) {
         if this.HasOwnProp("ShowCallCount")
             this.ShowCallCount++

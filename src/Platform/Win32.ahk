@@ -42,6 +42,10 @@ class Win32 {
     static WM_MOUSELEAVE := 0x02A3
     static WM_MOUSEWHEEL := 0x020A
     static WM_MOUSEHWHEEL := 0x020E
+    static WM_VSCROLL := 0x0115
+    static SB_THUMBPOSITION := 4
+    static SB_THUMBTRACK := 5
+    static SB_ENDSCROLL := 8
     static IDC_ARROW := 32512
     static IDC_IBEAM := 32513
     static HTCLIENT := 1
@@ -104,6 +108,9 @@ class Win32 {
     static DWMWA_CLOAK := 13
     static DWMWA_CLOAKED := 14
     static RDW_BUTTON_REFRESH := 0x0121
+    static RDW_INVALIDATE := 0x0001
+    static RDW_NOERASE := 0x0020
+    static RDW_UPDATENOW := 0x0100
     static RDW_LAYOUT_REFRESH := 0x0185
     static RDW_CONTROL_REFRESH := 0x0105
 }

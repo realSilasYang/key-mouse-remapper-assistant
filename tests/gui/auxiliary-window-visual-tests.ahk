@@ -1078,8 +1078,6 @@ RunAuxiliaryWindowVisualTests() {
         supportVisualDialog.Show()
         Sleep(30)
         ValidateAuxiliaryWindow(supportVisualDialog.Gui, "support")
-        ValidateMinimizableChildTaskbarRestore(supportVisualDialog.Gui,
-            ownerWindow, "support")
         feedbackState := supportVisualDialog.Interactions.Controls[
             supportVisualDialog.FeedbackButton.Hwnd]
         AuxiliaryVisualAssert(supportVisualDialog.Gui.Title == Tr("帮助")

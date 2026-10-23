@@ -370,10 +370,12 @@ class KeyMouseRemapperAssistantApp {
 
     DeleteMapping(mappingId) {
         try {
-            mapping := this.RunMappingMutation(
-                ObjBindMethod(this.Repository, "Remove", mappingId),
-                {Kind: "delete", Id: mappingId})
-            this.ForgetRuleColors([mapping.Id])
+            mapping := ""
+            this.RunMappingMutation(() => (
+                mapping := this.Repository.Remove(mappingId),
+                this.ForgetRuleColors([mapping.Id]),
+                mapping
+            ), {Kind: "delete", Id: mappingId})
             this.Window.RemoveMappingRow(mapping.Id)
             this.Window.SetStatus(Tr(
                 "已从脚本删除：{1} -> {2}；已应用。",
@@ -388,14 +390,13 @@ class KeyMouseRemapperAssistantApp {
 
     DeleteMappings(mappingIds) {
         try {
-            removedMappings := this.RunMappingMutation(
-                ObjBindMethod(this.Repository, "RemoveMany", mappingIds),
-                {Kind: "delete-many", Id: mappingIds[1],
+            removedMappings := []
+            this.RunMappingMutation(() => (
+                removedMappings := this.Repository.RemoveMany(mappingIds),
+                this.ForgetRemovedRuleColors(removedMappings),
+                removedMappings
+            ), {Kind: "delete-many", Id: mappingIds[1],
                     Ids: mappingIds.Clone()})
-            removedIds := []
-            for mapping in removedMappings
-                removedIds.Push(mapping.Id)
-            this.ForgetRuleColors(removedIds)
             for mapping in removedMappings
                 this.Window.RemoveMappingRow(mapping.Id)
             this.Window.SetStatus(this.GetSummaryText())
@@ -517,6 +518,39 @@ class KeyMouseRemapperAssistantApp {
         return result
     }
 
+    SnapshotRuleColors() {
+        if !this.HasOwnProp("RuleColors") || Type(this.RuleColors) != "Map"
+            return Map()
+        return this.RuleColors.Clone()
+    }
+
+    RestoreRuleColors(colors) {
+        if Type(colors) != "Map"
+            return false
+        if this.HasOwnProp("RuleAppearanceService")
+                && IsObject(this.RuleAppearanceService) {
+            try this.RuleColors := this.RuleAppearanceService.Save(colors)
+            catch {
+                this.RuleColors := colors.Clone()
+                return false
+            }
+        } else {
+            this.RuleColors := colors.Clone()
+        }
+        return true
+    }
+
+    ForgetRemovedRuleColors(removedMappings) {
+        if Type(removedMappings) != "Array" || !removedMappings.Length
+            return true
+        removedIds := []
+        for mapping in removedMappings {
+            if IsObject(mapping) && mapping.HasOwnProp("Id")
+                removedIds.Push(mapping.Id)
+        }
+        return this.ForgetRuleColors(removedIds)
+    }
+
     MigrateRuleColor(previousId, mappingId) {
         previousId := String(previousId)
         mappingId := String(mappingId)
@@ -526,12 +560,17 @@ class KeyMouseRemapperAssistantApp {
         if !candidate.Has(mappingId)
             candidate[mappingId] := candidate[previousId]
         candidate.Delete(previousId)
-        try {
-            this.RuleColors := this.RuleAppearanceService.Save(candidate)
-            return true
-        } catch {
-            return false
+        if this.HasOwnProp("RuleAppearanceService")
+                && IsObject(this.RuleAppearanceService) {
+            try {
+                this.RuleColors := this.RuleAppearanceService.Save(candidate)
+                return true
+            } catch {
+                return false
+            }
         }
+        this.RuleColors := candidate
+        return true
     }
 
     ForgetRuleColors(mappingIds) {
@@ -546,12 +585,17 @@ class KeyMouseRemapperAssistantApp {
         }
         if !changed
             return true
-        try {
-            this.RuleColors := this.RuleAppearanceService.Save(candidate)
-            return true
-        } catch {
-            return false
+        if this.HasOwnProp("RuleAppearanceService")
+                && IsObject(this.RuleAppearanceService) {
+            try {
+                this.RuleColors := this.RuleAppearanceService.Save(candidate)
+                return true
+            } catch {
+                return false
+            }
         }
+        this.RuleColors := candidate
+        return true
     }
 
     ToggleMappingEnabled(mappingId) {
@@ -598,21 +642,23 @@ class KeyMouseRemapperAssistantApp {
     UpdateMappingEditorText(mappingId, editorText, mode := "managed") {
         try {
             deferredScriptApply := StrLower(Trim(String(mode))) == "script"
+            mapping := ""
+            updateAction := () => (
+                mapping := this.Repository.ReplaceEditorText(
+                    mappingId, editorText, mode),
+                this.MigrateRuleColor(mappingId, mapping.Id),
+                mapping
+            )
             if deferredScriptApply {
-                mutation := this.RunDeferredMappingMutation(
-                    ObjBindMethod(this.Repository, "ReplaceEditorText",
-                        mappingId, editorText, mode),
+                mutation := this.RunDeferredMappingMutation(updateAction,
                     {Kind: "edit", Id: mappingId})
                 mapping := mutation.Result
             } else {
-                mapping := this.RunMappingMutation(
-                    ObjBindMethod(this.Repository, "ReplaceEditorText",
-                        mappingId, editorText, mode),
+                mapping := this.RunMappingMutation(updateAction,
                     {Kind: "edit", Id: mappingId})
             }
             ; @名称也是规则标识。编辑后名称可能变化，此时列表里仍保存旧标识，
             ; 必须用旧标识定位原行，再将整行替换为写回后的最新数据。
-            this.MigrateRuleColor(mappingId, mapping.Id)
             if !this.Window.UpdateMappingRow(mapping, mappingId)
                 this.RefreshMappingRows(mapping.Id)
             if deferredScriptApply {
@@ -665,6 +711,7 @@ class KeyMouseRemapperAssistantApp {
         mutationLease := CrossProcessWriteLock.Acquire(
             this.Repository.ScriptPath)
         try {
+            beforeColors := this.SnapshotRuleColors()
             before := this.Repository.ReadRegionBody()
             writtenBody := ""
             writtenBodyKnown := false
@@ -684,13 +731,16 @@ class KeyMouseRemapperAssistantApp {
                             || historyAction.Id == "")
                         && IsObject(result) && result.HasOwnProp("Id")
                     historyAction.Id := result.Id
-                this.MappingHistory.Commit(before, writtenBody, historyAction)
+                afterColors := this.SnapshotRuleColors()
+                this.MappingHistory.Commit(before, writtenBody, historyAction,
+                    beforeColors, afterColors)
                 this.TraceEvent("repository", "rules_changed",
                     {Outcome: "ok"})
                 return result
             } catch as mutationError {
                 rollbackError := ""
                 try {
+                    this.RestoreRuleColors(beforeColors)
                     ; 空正文是“删除最后一条规则”后的合法状态，不能用它表示尚未
                     ; 读取写后快照。回调本身抛错时也重新读取，覆盖“已替换文件但
                     ; 返回前失败”的事务边界。
@@ -719,6 +769,7 @@ class KeyMouseRemapperAssistantApp {
         mutationLease := CrossProcessWriteLock.Acquire(
             this.Repository.ScriptPath)
         try {
+            beforeColors := this.SnapshotRuleColors()
             before := this.Repository.ReadRegionBody()
             this.Repository.ResetLastWriteResult()
             result := callback.Call()
@@ -734,8 +785,9 @@ class KeyMouseRemapperAssistantApp {
                             || historyAction.Id == "")
                         && IsObject(result) && result.HasOwnProp("Id")
                     historyAction.Id := result.Id
+                afterColors := this.SnapshotRuleColors()
                 this.MappingHistory.Commit(before, writtenBody,
-                    historyAction)
+                    historyAction, beforeColors, afterColors)
                 this.TraceEvent("repository", "rules_changed",
                     {Outcome: "pending"})
             }
@@ -823,6 +875,9 @@ class KeyMouseRemapperAssistantApp {
             if !this.MappingHistory.Undo(
                     ObjBindMethod(this, "ApplyMappingHistoryState"), &entry)
                 return false
+            if IsObject(entry) && entry.HasOwnProp("BeforeColors")
+                    && Type(entry.BeforeColors) == "Map"
+                this.RestoreRuleColors(entry.BeforeColors)
             this.RefreshMappingRows(this.GetHistoryMappingId(entry))
             this.Window.SetStatus(Tr("已撤销上一步映射变更。"))
             this.TraceEvent("repository", "history_undo", {Outcome: "ok"})
@@ -845,6 +900,9 @@ class KeyMouseRemapperAssistantApp {
             if !this.MappingHistory.Redo(
                     ObjBindMethod(this, "ApplyMappingHistoryState"), &entry)
                 return false
+            if IsObject(entry) && entry.HasOwnProp("AfterColors")
+                    && Type(entry.AfterColors) == "Map"
+                this.RestoreRuleColors(entry.AfterColors)
             this.RefreshMappingRows(this.GetHistoryMappingId(entry))
             this.Window.SetStatus(Tr("已重做映射变更。"))
             this.TraceEvent("repository", "history_redo", {Outcome: "ok"})

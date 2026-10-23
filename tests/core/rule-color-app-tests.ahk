@@ -39,6 +39,25 @@ try {
     RuleColorAppAssert(app.ForgetRuleColors(["new-name"])
             && !app.RuleColors.Has("new-name"),
         "A deleted rule retained its sequence-dot color.")
+
+    snapshotBefore := app.SnapshotRuleColors()
+    RuleColorAppAssert(Type(snapshotBefore) == "Map" && snapshotBefore.Count == 0,
+        "Snapshot of empty rule colors did not return an empty Map.")
+    app.RuleColors["rule-x"] := "amber"
+    snapshotWithColor := app.SnapshotRuleColors()
+    RuleColorAppAssert(snapshotWithColor["rule-x"] == "amber",
+        "Snapshot did not copy existing rule colors.")
+    app.RuleColors["rule-x"] := "cyan"
+    RuleColorAppAssert(snapshotWithColor["rule-x"] == "amber",
+        "Mutating app rule colors affected an existing snapshot.")
+    RuleColorAppAssert(app.RestoreRuleColors(snapshotWithColor)
+            && app.RuleColors["rule-x"] == "amber",
+        "RestoreRuleColors did not restore rule colors.")
+
+    RuleColorAppAssert(app.ForgetRemovedRuleColors([{Id: "rule-x"}])
+            && !app.RuleColors.Has("rule-x"),
+        "ForgetRemovedRuleColors did not remove rule color for removed mapping.")
+
     FileAppend("PASS rule color app`n", "*")
 } catch as testError {
     FileAppend(testError.Message "`n" testError.Stack "`n", "**")

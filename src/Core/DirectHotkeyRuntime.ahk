@@ -1113,6 +1113,8 @@ class DirectHotkeyRuntime {
             this.ScheduleOutputCleanupRetry()
         }
         finally {
+            if state.HasOwnProp("ReleasedTriggerModifiers")
+                state.ReleasedTriggerModifiers := []
             if this.IsCurrentActiveState(ruleId, state)
                 this.Active.Delete(ruleId)
         }
@@ -1174,6 +1176,7 @@ class DirectHotkeyRuntime {
         owners[state] := true
         state.PressedKeys[keyName] := true
         if shouldPress {
+            this.PrepareTriggerModifiersForOutput(state, keyName)
             try this.SendKeyEvent(keyName, "down")
             catch as pressError {
                 compensated := false
@@ -1184,6 +1187,7 @@ class DirectHotkeyRuntime {
                 if compensated {
                     owners.Delete(state)
                     state.PressedKeys.Delete(keyName)
+                    this.RestoreTriggerModifiers(state, keyName)
                     if !owners.Count {
                         this.OutputOwners.Delete(keyName)
                         if !this.OutputOwners.Count
@@ -1232,6 +1236,8 @@ class DirectHotkeyRuntime {
         owners.Delete(state)
         state.PressedKeys.Delete(keyName)
         this.OutputOwners.Delete(keyName)
+        if !state.PressedKeys.Count
+            this.RestoreTriggerModifiers(state, keyName)
         if !this.OutputOwners.Count
             this.ResetOutputCleanupRetryState()
         return true
@@ -1453,12 +1459,131 @@ class DirectHotkeyRuntime {
         return {Descriptor: descriptor, HeldFired: false, HeldTimer: "",
             AloneCancelled: false,
             CleanupPending: false,
-            PressedKeys: Map(), ReplayModifiers: this.CaptureReplayModifiers(
+            PressedKeys: Map(),
+            ReleasedTriggerModifiers: [],
+            ReplayModifiers: this.CaptureReplayModifiers(
                 descriptor),
             PressedAt: this.GetMonotonicTick()}
     }
 
     GetMonotonicTick() => DllCall("kernel32\GetTickCount64", "UInt64")
+
+    GetRuleTriggerModifiers(descriptor) {
+        modifiers := []
+        from := descriptor.Spec["from"]
+        if from.Has("modifiers") {
+            for modifierName in from["modifiers"]
+                modifiers.Push(String(modifierName))
+        }
+        if from.Has("simultaneous") {
+            for keySpec in from["simultaneous"] {
+                if Type(keySpec) == "Map" && keySpec.Has("name") {
+                    name := String(keySpec["name"])
+                    if this.IsModifierName(name)
+                        modifiers.Push(name)
+                }
+            }
+        }
+        return modifiers
+    }
+
+    GetPhysicalModifierKeysForFamily(family) {
+        switch family {
+            case "ctrl": return ["LCtrl", "RCtrl"]
+            case "shift": return ["LShift", "RShift"]
+            case "alt": return ["LAlt", "RAlt"]
+            case "win": return ["LWin", "RWin"]
+        }
+        return []
+    }
+
+    GetDefaultModifierKeyForName(name) {
+        switch StrLower(String(name)) {
+            case "ctrl", "control": return "LCtrl"
+            case "shift": return "LShift"
+            case "alt": return "LAlt"
+            case "win": return "LWin"
+            case "lctrl", "rctrl", "lshift", "rshift", "lalt", "ralt", "lwin", "rwin":
+                return String(name)
+        }
+        return ""
+    }
+
+    IsPhysicalModifierHeld(physicalKey) {
+        modifierBits := Map("LCtrl", 0x01, "RCtrl", 0x02,
+            "LShift", 0x04, "RShift", 0x08, "LAlt", 0x10,
+            "RAlt", 0x20, "LWin", 0x40, "RWin", 0x80)
+        if modifierBits.Has(physicalKey) {
+            bit := modifierBits[physicalKey]
+            physState := this.GetPhysicalModifierState()
+            if physState
+                return !!(physState & bit)
+        }
+        return !!GetKeyState(physicalKey, "P")
+    }
+
+    PrepareTriggerModifiersForOutput(state, keyName) {
+        if !IsObject(state) || !state.HasOwnProp("Descriptor")
+            return []
+        outputFamily := this.GetPrimaryModifierFamily(keyName)
+        triggerModifiers := this.GetRuleTriggerModifiers(state.Descriptor)
+        if !triggerModifiers.Length
+            return []
+        released := []
+        if !state.HasOwnProp("ReleasedTriggerModifiers")
+            state.ReleasedTriggerModifiers := []
+        for triggerMod in triggerModifiers {
+            triggerFamily := this.GetPrimaryModifierFamily(triggerMod)
+            if triggerFamily == "" || triggerFamily == outputFamily
+                continue
+            physicalKeys := this.GetPhysicalModifierKeysForFamily(triggerFamily)
+            anyHeld := false
+            for physicalKey in physicalKeys {
+                if this.IsPhysicalModifierHeld(physicalKey) {
+                    anyHeld := true
+                    this.ReleaseTriggerModifier(state, physicalKey, released)
+                }
+            }
+            if !anyHeld {
+                fallbackKey := this.GetDefaultModifierKeyForName(triggerMod)
+                if fallbackKey != ""
+                    this.ReleaseTriggerModifier(state, fallbackKey, released)
+            }
+        }
+        return released
+    }
+
+    ReleaseTriggerModifier(state, physicalKey, released) {
+        alreadyTracked := false
+        for existing in state.ReleasedTriggerModifiers {
+            if existing == physicalKey {
+                alreadyTracked := true
+                break
+            }
+        }
+        if !alreadyTracked {
+            this.SendKeyEvent(physicalKey, "up")
+            state.ReleasedTriggerModifiers.Push(physicalKey)
+            released.Push(physicalKey)
+        }
+        return true
+    }
+
+    RestoreTriggerModifiers(state, keyName) {
+        if !IsObject(state) || !state.HasOwnProp("ReleasedTriggerModifiers")
+            return false
+        if !state.ReleasedTriggerModifiers.Length
+            return false
+        outputFamily := this.GetPrimaryModifierFamily(keyName)
+        if outputFamily != "win" {
+            for releasedMod in state.ReleasedTriggerModifiers {
+                if this.IsPhysicalModifierHeld(releasedMod)
+                    this.SendKeyEvent(releasedMod, "down")
+            }
+        }
+        state.ReleasedTriggerModifiers := []
+        return true
+    }
 
     CaptureReplayModifiers(descriptor) {
         from := descriptor.Spec["from"]

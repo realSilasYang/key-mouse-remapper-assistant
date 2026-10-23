@@ -122,6 +122,9 @@ class MappingWindow {
         this.ListWheelSubclassMethod := ""
         this.ListWheelSubclassCallback := 0
         this.ListWheelSubclassAttached := false
+        this.ListThumbScrollActive := false
+        this.ListCustomDrawRefreshPending := false
+        this.ListCustomDrawRefreshTimer := ""
         this.SmoothListScrollTimer := ""
         this.PendingListScrollLines := 0
         this.ListWheelDeltaRemainder := 0
@@ -208,6 +211,8 @@ class MappingWindow {
             "HandleListMouseWheel")
         this.SmoothListScrollTimer := ObjBindMethod(this,
             "AdvanceSmoothListScroll")
+        this.ListCustomDrawRefreshTimer := ObjBindMethod(this,
+            "RunPendingListCustomDrawRefresh")
         this.InstallListWheelSubclass()
         OnMessage(Win32.WM_MOUSEWHEEL, this.ListWheelCallback)
         this.ListWheelRegistered := true
@@ -762,7 +767,16 @@ class MappingWindow {
                 this.ProcessListWheelDelta(this.SignedWord(wParam >> 16))
             return 0
         }
+        if message == Win32.WM_VSCROLL && !this.Disposed {
+            scrollCode := wParam & 0xFFFF
+            result := DllCall("comctl32\DefSubclassProc", "Ptr", hwnd,
+                "UInt", message, "UPtr", wParam, "Ptr", lParam, "Ptr")
+            try this.RefreshCustomDrawAfterVerticalScroll(scrollCode)
+            return result
+        }
         try {
+            if message == Win32.WM_CANCELMODE
+                this.ListThumbScrollActive := false
             if message == 0x0020 && !this.Disposed
                     && (lParam & 0xFFFF) == 1 { ; WM_SETCURSOR / HTCLIENT
                 point := Buffer(8, 0)
@@ -864,6 +878,50 @@ class MappingWindow {
         }
         return DllCall("comctl32\DefSubclassProc", "Ptr", hwnd,
             "UInt", message, "UPtr", wParam, "Ptr", lParam, "Ptr")
+    }
+
+    RefreshCustomDrawAfterVerticalScroll(scrollCode) {
+        ; Let the native thumb handler finish before repainting custom-drawn
+        ; cells, or its remaining scroll pass can erase the synchronous paint.
+        if scrollCode != Win32.SB_THUMBTRACK
+                && scrollCode != Win32.SB_THUMBPOSITION
+                && scrollCode != Win32.SB_ENDSCROLL
+            return false
+        if scrollCode == Win32.SB_THUMBTRACK
+            this.ListThumbScrollActive := true
+        else if scrollCode == Win32.SB_ENDSCROLL
+                && !this.ListThumbScrollActive
+            return false
+        if scrollCode == Win32.SB_THUMBPOSITION
+                || scrollCode == Win32.SB_ENDSCROLL
+            this.ListThumbScrollActive := false
+        if this.Disposed || !IsObject(this.List) || !this.List.Hwnd
+                || !DllCall("user32\IsWindow", "Ptr", this.List.Hwnd,
+                    "Int")
+            return false
+        if !this.ListCustomDrawRefreshPending {
+            this.ListCustomDrawRefreshPending := true
+            try SetTimer(this.ListCustomDrawRefreshTimer, -1)
+            catch {
+                this.ListCustomDrawRefreshPending := false
+                return false
+            }
+        }
+        return true
+    }
+
+    RunPendingListCustomDrawRefresh(*) {
+        if !this.ListCustomDrawRefreshPending
+            return false
+        this.ListCustomDrawRefreshPending := false
+        if this.Disposed || !IsObject(this.List) || !this.List.Hwnd
+                || !DllCall("user32\IsWindow", "Ptr", this.List.Hwnd,
+                    "Int")
+            return false
+        return !!DllCall("user32\RedrawWindow", "Ptr", this.List.Hwnd,
+            "Ptr", 0, "Ptr", 0,
+            "UInt", Win32.RDW_INVALIDATE | Win32.RDW_NOERASE
+                | Win32.RDW_UPDATENOW, "Int")
     }
 
     RemoveListWheelSubclass() {
@@ -1072,6 +1130,9 @@ class MappingWindow {
         this.Disposed := true
         cleanupFailures := []
         this.StopSmoothListScroll(true)
+        try SetTimer(this.ListCustomDrawRefreshTimer, 0)
+        this.ListCustomDrawRefreshPending := false
+        this.ListThumbScrollActive := false
         if this.ListWheelRegistered {
             try {
                 OnMessage(Win32.WM_MOUSEWHEEL,

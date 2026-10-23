@@ -7,6 +7,32 @@
 
 ## 🚧 [未发布]
 
+## 🎉 版本 [1.2.1] - 2026-10-24
+
+### 📦 发布物说明
+
+- **`fonts.zip`（可选字体包）**：提供 Noto 回退界面字体，需先安装到 Windows；它不是程序运行必需。
+- **`key-mouse-remapper-assistant-1.2.1-source.zip`（完整源码版）**：包含可运行 AHK 源码、应用模块、除字体外的资源、13 语 README、双语更新日志、测试和构建工具，适合审阅、开发或从源码运行；本机需要 AutoHotkey v2 x64。
+- **`key-mouse-remapper-assistant-1.2.1-windows-x64.zip`（完整便携版，推荐）**：包含编译 EXE、可编辑映射源码、13 语 README、双语更新日志、许可证、应用模块、除字体外的界面资源、固定 AutoHotkey v2.0.26 x64 运行时及对应源码归档；无需另行安装 AutoHotkey，适合完整解压后长期使用。
+
+---
+
+### 🐛 修复
+
+- **组合键映射为 Windows 键修复**：彻底修复在简易规则中将组合键（如 `Ctrl + A`、`Alt + Space`）映射为 Windows 键时实际无法呼出开始菜单或触发 Win 键的缺陷。
+- **组合键映射为单键修饰键污染修复**：修复组合键映射为普通单键（如 `Ctrl + 1 -> F1`、`Ctrl + A -> B`）时物理触发修饰键未释放而污染输出的问题。
+- **列表滚动自绘刷新修复**：修复主窗口规则列表在按住垂直滚动条滑块拖动或释放时自定义绘制背景及单元格可能残留或闪烁的问题。
+
+---
+
+### 🚀 优化
+
+- **智能修饰键生命周期管理**：在单键输出派发前自动检测并临时释放冲突的物理触发修饰键；对 Windows 键族保持纯净释放不反弹（确保 Explorer 正常响应开始菜单），对普通单键在释放后平滑恢复仍物理按住的修饰键。
+- **简易规则规格生成规范化**：重构 `RuleSpec.CreateFromCaptures` 与来源按键判定，确保组合键触发源不再被错误附加通配符修饰键（`optional_modifiers: ["any"]`），仅保留单键 1:1 映射所需的透传能力。
+- **规则历史撤销与重做颜色恢复**：支持在撤销或重做规则的增删改历史变更时，同步快照与还原规则的自定义标签颜色，避免回退操作导致视觉分类丢失。
+
+---
+
 ## 🎉 版本 [1.2.0] - 2026-09-30
 
 ### 📦 发布物说明
@@ -227,7 +253,8 @@
 - **产品与数据目录**：统一中英文产品标识和 `%APPDATA%\KeyMouseRemapperAssistant` 数据位置。
 - **发行与兼容性**：锁定 AutoHotkey 和构建工具，统一 UTF-8 输出与 Windows PowerShell 5.1／PowerShell 7 行为。
 
-[未发布]: https://github.com/realSilasYang/key-mouse-remapper-assistant/compare/v1.2.0...HEAD
+[未发布]: https://github.com/realSilasYang/key-mouse-remapper-assistant/compare/v1.2.1...HEAD
+[1.2.1]: https://github.com/realSilasYang/key-mouse-remapper-assistant/releases/tag/v1.2.1
 [1.2.0]: https://github.com/realSilasYang/key-mouse-remapper-assistant/releases/tag/v1.2.0
 [1.1.0]: https://github.com/realSilasYang/key-mouse-remapper-assistant/releases/tag/v1.1.0
 [1.0.2]: https://github.com/realSilasYang/key-mouse-remapper-assistant/releases/tag/v1.0.2

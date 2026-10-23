@@ -400,7 +400,8 @@ class SystemIntegrationService {
             . " - " . Tr("开机自动启动")
         taskDef.RegistrationInfo.Source := SystemIntegrationService.TaskSource
 
-        taskDef.Triggers.Create(9) ; TASK_TRIGGER_LOGON
+        trigger := taskDef.Triggers.Create(9) ; TASK_TRIGGER_LOGON
+        trigger.Delay := "PT5S" ; 延迟 5 秒启动，等待资源管理器与托盘服务完全就绪
         settings := taskDef.Settings
         settings.Enabled := true
         settings.Hidden := false

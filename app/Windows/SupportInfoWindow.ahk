@@ -24,12 +24,12 @@ class SupportInfoWindow {
     Build() {
         colors := UiThemeService.GetPalette()
         compactLayout := LocalizationService.UsesCompactLayout()
-        this.WindowWidth := compactLayout ? 260 : 300
-        this.ButtonWidth := compactLayout ? 220 : 220
+        this.WindowWidth := compactLayout ? 220 : 300
+        this.ButtonWidth := compactLayout ? 150 : 220
         buttonX := (this.WindowWidth - this.ButtonWidth) // 2
 
         this.Gui := Gui("+Owner" this.OwnerWindow.Gui.Hwnd
-            " +OwnDialogs +MinimizeBox -MaximizeBox", Tr("帮助"))
+            " +OwnDialogs -MinimizeBox -MaximizeBox", Tr("帮助"))
         this.IconHandles := ApplyApplicationWindowIcon(this.Gui.Hwnd)
         this.OwnerLease := WindowHierarchy.Acquire(this.OwnerWindow.Gui,
             this.Gui.Hwnd)

@@ -16,6 +16,7 @@
 #Include ..\..\src\Core\MappingHistoryService.ahk
 #Include ..\..\src\Platform\Win32.ahk
 #Include ..\..\src\UI\CleanupCollector.ahk
+#Include ..\..\src\UI\UiThemeService.ahk
 #Include ..\..\app\KeyMouseRemapperAssistantApp.ahk
 
 ExitApp(RunMappingHistoryIntegrationTests() ? 0 : 1)
@@ -335,6 +336,65 @@ RunMappingHistoryIntegrationTests() {
         MappingHistoryIntegrationAssert(app.UndoMappingChange()
                 && app.Repository.ReadRegionBody() == afterBody,
             "Undo did not restore the atomic batch delete.")
+
+        ; 验证删除规则条目后撤销，原条目序号圆点能够完整恢复。
+        app.RuleColors[batchIds[1]] := "rose"
+        app.RuleColors[batchIds[2]] := "teal"
+        colorDeletedMapping := app.DeleteMapping(batchIds[1])
+        MappingHistoryIntegrationAssert(colorDeletedMapping
+                && !app.RuleColors.Has(batchIds[1])
+                && app.RuleColors.Has(batchIds[2])
+                && app.GetRuleColor(batchIds[1]) == "",
+            "Deleting a rule did not remove its sequence-dot color.")
+        MappingHistoryIntegrationAssert(app.UndoMappingChange()
+                && app.RuleColors.Has(batchIds[1])
+                && app.RuleColors[batchIds[1]] == "rose"
+                && app.GetRuleColor(batchIds[1]) == "rose"
+                && app.RuleColors[batchIds[2]] == "teal",
+            "Undoing a rule deletion did not restore its sequence-dot color.")
+        MappingHistoryIntegrationAssert(app.RedoMappingChange()
+                && !app.RuleColors.Has(batchIds[1])
+                && app.RuleColors[batchIds[2]] == "teal"
+                && app.GetRuleColor(batchIds[1]) == "",
+            "Redoing a rule deletion did not remove its sequence-dot color.")
+        MappingHistoryIntegrationAssert(app.UndoMappingChange()
+                && app.RuleColors[batchIds[1]] == "rose",
+            "Second undo after deletion redo did not restore sequence-dot color.")
+
+        ; 验证批量删除多条规则后撤销，所有被删规则的序号圆点均恢复。
+        app.DeleteMappings(batchIds)
+        MappingHistoryIntegrationAssert(!app.RuleColors.Has(batchIds[1])
+                && !app.RuleColors.Has(batchIds[2]),
+            "Batch deleting rules did not remove their sequence-dot colors.")
+        MappingHistoryIntegrationAssert(app.UndoMappingChange()
+                && app.RuleColors[batchIds[1]] == "rose"
+                && app.RuleColors[batchIds[2]] == "teal",
+            "Undoing batch deletion did not restore sequence-dot colors.")
+
+        ; 验证规则重命名后撤销，旧标识圆点恢复，新标识圆点清理。
+        renameColorId := "颜色重命名历史回归"
+        colorRenameSource := app.Repository.GetById(batchIds[1])
+        colorRenamedBlock := RegExReplace(colorRenameSource.EditorText,
+            "m)^; @名称=.*$", "; @名称=" renameColorId, , 1)
+        renameResult := app.UpdateMappingEditorText(batchIds[1],
+            colorRenamedBlock, colorRenameSource.Mode)
+        MappingHistoryIntegrationAssert(renameResult.Ok
+                && !app.RuleColors.Has(batchIds[1])
+                && app.RuleColors[renameColorId] == "rose",
+            "Renaming a rule did not migrate its sequence-dot color.")
+        MappingHistoryIntegrationAssert(app.UndoMappingChange()
+                && app.RuleColors[batchIds[1]] == "rose"
+                && !app.RuleColors.Has(renameColorId),
+            "Undoing a rule rename did not restore the original sequence-dot color.")
+        MappingHistoryIntegrationAssert(app.RedoMappingChange()
+                && !app.RuleColors.Has(batchIds[1])
+                && app.RuleColors[renameColorId] == "rose",
+            "Redoing a rule rename did not re-migrate the sequence-dot color.")
+        MappingHistoryIntegrationAssert(app.UndoMappingChange()
+                && app.RuleColors[batchIds[1]] == "rose"
+                && app.Repository.ReadRegionBody() == afterBody,
+            "Final undo did not restore the test fixture state.")
+        app.RuleColors.Clear()
 
         ; Simulate an external editor replacing the exact region before undo.
         app.Repository.WriteRegionBody(beforeBody, afterBody)

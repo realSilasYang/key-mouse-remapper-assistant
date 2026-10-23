@@ -7,6 +7,7 @@
 - [简体中文项目总览](../README.md)
 - [中文更新日志](../CHANGELOG.md)
 - [English changelog](CHANGELOG.en.md)
+- [v1.2.1 发行说明](release-notes/v1.2.1.md)
 - [v1.2.0 发行说明](release-notes/v1.2.0.md)
 - [v1.1.0 发行说明](release-notes/v1.1.0.md)
 - [v1.0.2 发行说明](release-notes/v1.0.2.md)

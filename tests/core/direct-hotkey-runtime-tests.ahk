@@ -378,6 +378,113 @@ try {
             && winReplacementRuntime.Events[2] == "LWin up",
         "Releasing AppsKey did not release its replacement Win key.")
 
+    ctrlASource := {Display: "Ctrl + A", RawDisplay: "Ctrl + A",
+        KeyName: "A", SourceSpec: "^sc01E", VKHex: "41", SCHex: "01E",
+        Modifiers: [leftCtrlInfo], IsSimultaneous: false}
+    genericWinTarget := {Display: "Win", RawDisplay: "Win",
+        KeyName: "LWin", KeySpec: "LWin", Kind: "keyboard",
+        Modifiers: [], Keys: [{KeyName: "LWin", KeySpec: "LWin", Kind: "keyboard"}],
+        IsSimultaneous: false, TargetSend: "{LWin}"}
+    comboWinSpec := RuleSpec.CreateFromCaptures("ctrl-a-to-win",
+        ctrlASource, genericWinTarget, false)
+    AssertTrue(!comboWinSpec["from"].Has("optional_modifiers"),
+        "A combo-to-single rule must not gain wildcard optional modifiers.")
+    AssertEqual("LWin", comboWinSpec["to"][1]["value"],
+        "Combo-to-Win must press LWin on trigger.")
+    AssertEqual("key_down", comboWinSpec["to"][1]["type"],
+        "Combo-to-Win action type must be key_down.")
+    AssertEqual("LWin", comboWinSpec["to_after_key_up"][1]["value"],
+        "Combo-to-Win must release LWin on trigger up.")
+    AssertEqual("key_up", comboWinSpec["to_after_key_up"][1]["type"],
+        "Combo-to-Win release action type must be key_up.")
+    AssertEqual("^sc01E", RuleCompiler.Compile(comboWinSpec).Hotkey,
+        "Combo-to-Win must compile without wildcard prefix.")
+    comboWinRuntime := ControlledOwnershipRuntime(app)
+    comboWinDescriptor := RuleCompiler.Compile(comboWinSpec)
+    comboWinRuntime.Rules[comboWinDescriptor.Id] := comboWinDescriptor
+    comboWinRuntime.ModifierState := 0x01 ; LCtrl physically held
+    AssertTrue(comboWinRuntime.OnDown(comboWinDescriptor.Id),
+        "Combo-to-Win failed to handle down event.")
+    AssertEqual(2, comboWinRuntime.Events.Length,
+        "Combo-to-Win must release Ctrl before pressing Win.")
+    AssertEqual("LCtrl up", comboWinRuntime.Events[1],
+        "Combo-to-Win did not release LCtrl first.")
+    AssertEqual("LWin down", comboWinRuntime.Events[2],
+        "Combo-to-Win did not press LWin cleanly.")
+    AssertTrue(comboWinRuntime.OnUp(comboWinDescriptor.Id),
+        "Combo-to-Win failed to handle up event.")
+    AssertEqual(3, comboWinRuntime.Events.Length,
+        "Combo-to-Win must release Win cleanly without restoring Ctrl.")
+    AssertEqual("LWin up", comboWinRuntime.Events[3],
+        "Combo-to-Win did not release LWin.")
+
+    ctrl1Source := {Display: "Ctrl + 1", RawDisplay: "Ctrl + 1",
+        KeyName: "1", SourceSpec: "^sc002", VKHex: "31", SCHex: "002",
+        Modifiers: [leftCtrlInfo], IsSimultaneous: false}
+    f1Target := {Display: "F1", RawDisplay: "F1",
+        KeyName: "F1", KeySpec: "F1", Kind: "keyboard",
+        Modifiers: [], Keys: [{KeyName: "F1", KeySpec: "F1", Kind: "keyboard"}],
+        IsSimultaneous: false, TargetSend: "{F1}"}
+    comboF1Spec := RuleSpec.CreateFromCaptures("ctrl-1-to-f1",
+        ctrl1Source, f1Target, false)
+    AssertTrue(!comboF1Spec["from"].Has("optional_modifiers"),
+        "A combo-to-F1 rule must not gain wildcard optional modifiers.")
+    AssertEqual("F1", comboF1Spec["to"][1]["value"],
+        "Combo-to-F1 must press F1.")
+    comboF1Runtime := ControlledOwnershipRuntime(app)
+    comboF1Descriptor := RuleCompiler.Compile(comboF1Spec)
+    comboF1Runtime.Rules[comboF1Descriptor.Id] := comboF1Descriptor
+    comboF1Runtime.ModifierState := 0x01 ; LCtrl physically held
+    AssertTrue(comboF1Runtime.OnDown(comboF1Descriptor.Id),
+        "Combo-to-F1 failed on down.")
+    AssertEqual(2, comboF1Runtime.Events.Length,
+        "Combo-to-F1 down must release Ctrl and press F1.")
+    AssertEqual("LCtrl up", comboF1Runtime.Events[1],
+        "Combo-to-F1 did not release LCtrl first.")
+    AssertEqual("F1 down", comboF1Runtime.Events[2],
+        "Combo-to-F1 did not press F1.")
+    AssertTrue(comboF1Runtime.OnUp(comboF1Descriptor.Id),
+        "Combo-to-F1 failed on up.")
+    AssertEqual(4, comboF1Runtime.Events.Length,
+        "Combo-to-F1 must restore held physical Ctrl after F1 up.")
+    AssertEqual("F1 up", comboF1Runtime.Events[3],
+        "Combo-to-F1 did not release F1.")
+    AssertEqual("LCtrl down", comboF1Runtime.Events[4],
+        "Combo-to-F1 did not restore physical Ctrl.")
+
+    leftAltInfo := {KeyName: "LAlt"}
+    altSpaceSource := {Display: "Alt + Space", RawDisplay: "Alt + Space",
+        KeyName: "Space", SourceSpec: "!sc039", VKHex: "20", SCHex: "039",
+        Modifiers: [leftAltInfo], IsSimultaneous: false}
+    altSpaceSpec := RuleSpec.CreateFromCaptures("alt-space-to-win",
+        altSpaceSource, genericWinTarget, false)
+    altSpaceRuntime := ControlledOwnershipRuntime(app)
+    altSpaceDescriptor := RuleCompiler.Compile(altSpaceSpec)
+    altSpaceRuntime.Rules[altSpaceDescriptor.Id] := altSpaceDescriptor
+    altSpaceRuntime.ModifierState := 0x10 ; LAlt physically held
+    AssertTrue(altSpaceRuntime.OnDown(altSpaceDescriptor.Id),
+        "Alt-Space-to-Win failed on down.")
+    AssertEqual(2, altSpaceRuntime.Events.Length,
+        "Alt-Space-to-Win must release Alt and press Win.")
+    AssertEqual("LAlt up", altSpaceRuntime.Events[1],
+        "Alt-Space-to-Win did not release LAlt first.")
+    AssertEqual("LWin down", altSpaceRuntime.Events[2],
+        "Alt-Space-to-Win did not press Win.")
+    AssertTrue(altSpaceRuntime.OnUp(altSpaceDescriptor.Id),
+        "Alt-Space-to-Win failed on up.")
+    AssertEqual(3, altSpaceRuntime.Events.Length,
+        "Alt-Space-to-Win must release Win cleanly without restoring Alt.")
+    AssertEqual("LWin up", altSpaceRuntime.Events[3],
+        "Alt-Space-to-Win did not release Win.")
+
+    wheelSource := {Display: "Ctrl + WheelUp", RawDisplay: "Ctrl + WheelUp",
+        KeyName: "WheelUp", Kind: "wheel", SourceSpec: "^WheelUp",
+        Modifiers: [leftCtrlInfo], IsSimultaneous: false, TargetSend: "{WheelUp}"}
+    wheelSpec := RuleSpec.CreateFromCaptures("ctrl-wheel-to-win",
+        wheelSource, genericWinTarget, false)
+    AssertTrue(!InStr(wheelSpec["to"][1]["value"], "{Blind}"),
+        "Non-releasable combo target send must not contain {Blind}.")
+
     bothCtrlSourceCapture := {Display: "LCtrl + RCtrl + A",
         RawDisplay: "LCtrl + RCtrl + A", KeyName: "A",
         SourceSpec: "<^>^sc01E", VKHex: "41", SCHex: "01E",
@@ -1794,4 +1901,13 @@ class HeldSourceDirectHotkeyRuntime extends RecordingDirectHotkeyRuntime {
     }
 
     IsPhysicalSourceDown(*) => this.SourceDown
+}
+
+class ControlledOwnershipRuntime extends OwnershipDirectHotkeyRuntime {
+    __New(app) {
+        super.__New(app)
+        this.ModifierState := 0
+    }
+
+    GetPhysicalModifierState() => this.ModifierState
 }

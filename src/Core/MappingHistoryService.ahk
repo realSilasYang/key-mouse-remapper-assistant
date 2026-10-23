@@ -15,7 +15,8 @@ class MappingHistoryService {
         this.Busy := false
     }
 
-    Commit(beforeState, afterState, action := "") {
+    Commit(beforeState, afterState, action := "", beforeColors := "",
+            afterColors := "") {
         if this.Busy
             return false
         beforeState := String(beforeState)
@@ -26,6 +27,10 @@ class MappingHistoryService {
         entry := {Before: beforeState, After: afterState,
             Action: IsObject(action) ? action : {Kind: "mapping"},
             Characters: StrLen(beforeState) + StrLen(afterState)}
+        if IsObject(beforeColors) && Type(beforeColors) == "Map"
+            entry.BeforeColors := beforeColors.Clone()
+        if IsObject(afterColors) && Type(afterColors) == "Map"
+            entry.AfterColors := afterColors.Clone()
         this.UndoEntries.Push(entry)
         this.TotalCharacters += entry.Characters
         while this.UndoEntries.Length > this.MaxEntries

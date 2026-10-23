@@ -69,6 +69,21 @@ try {
     MappingHistoryAssert(boundedHistory.GetStoredCharacterCount() == 0,
         "Clearing mapping history retained its snapshot budget.")
 
+    colorHistory := MappingHistoryService(5)
+    initialColors := Map("rule-1", "rose", "rule-2", "teal")
+    mutatedColors := Map("rule-2", "teal")
+    colorHistory.Commit("before-delete", "after-delete",
+        {Kind: "delete", Id: "rule-1"}, initialColors, mutatedColors)
+    initialColors["rule-1"] := "modified-after-commit"
+    MappingHistoryAssert(colorHistory.Undo((*) => true, &colorEntry)
+            && colorEntry.BeforeColors["rule-1"] == "rose"
+            && colorEntry.AfterColors.Count == 1,
+        "Mapping history did not clone or preserve color snapshots during undo.")
+    MappingHistoryAssert(colorHistory.Redo((*) => true, &redoColorEntry)
+            && redoColorEntry.BeforeColors["rule-1"] == "rose"
+            && !redoColorEntry.AfterColors.Has("rule-1"),
+        "Mapping history did not preserve color snapshots during redo.")
+
     FileAppend("PASS mapping history service`n", "*")
 } catch as testError {
     FileAppend(testError.Message "`n" testError.Stack "`n", "**")

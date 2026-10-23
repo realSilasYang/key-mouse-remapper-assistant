@@ -7,6 +7,32 @@ categories based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## 🚧 [Unreleased]
 
+## 🎉 Version [1.2.1] - 2026-10-24
+
+### 📦 Release Assets
+
+- **`fonts.zip` (optional font package):** Provides Noto fallback UI fonts for installation into Windows; it is not required to run the application.
+- **`key-mouse-remapper-assistant-1.2.1-source.zip` (complete source package):** Includes runnable AHK source, application modules, assets other than fonts, all thirteen README languages, bilingual changelogs, tests, and build tools; requires AutoHotkey v2 x64.
+- **`key-mouse-remapper-assistant-1.2.1-windows-x64.zip` (complete portable package, recommended):** Includes the compiled EXE, editable mapping source, all thirteen README languages, bilingual changelogs, licenses, application modules, UI assets other than fonts, fixed AutoHotkey v2.0.26 x64 runtime, and matching source archive; requires no separate AutoHotkey installation after full extraction.
+
+---
+
+### 🐛 Fixed
+
+- **Combination keys remapped to Windows key:** Fixed an issue where mapping a combination key (e.g., `Ctrl + A`, `Alt + Space`) to the Windows key failed to open the Start menu or trigger Win key actions due to held trigger modifiers.
+- **Trigger modifier contamination in combo-to-single mappings:** Fixed an issue where combo-to-single mappings (e.g., `Ctrl + 1 -> F1`, `Ctrl + A -> B`) leaked held physical modifiers into the output.
+- **List view custom-draw refresh during thumb scrolling:** Fixed custom cell background and text redraw flickering or stale rendering while dragging or releasing the vertical scrollbar thumb.
+
+---
+
+### 🚀 Improvements
+
+- **Smart trigger modifier lifecycle management:** Automatically releases conflicting physical trigger modifiers before dispatching single target key events; prevents Start-menu suppression for Windows keys by avoiding immediate modifier bounce-back, while cleanly restoring held modifiers for standard keys.
+- **Normalized simple rule generation:** Refined `RuleSpec.CreateFromCaptures` so combination sources are no longer assigned wildcard modifiers (`optional_modifiers: ["any"]`), preserving wildcard pass-through strictly for 1:1 single-key replacements.
+- **Rule color state restoration on undo/redo:** Snapshot and restore custom rule tag colors during rule history undo and redo operations to prevent color metadata loss.
+
+---
+
 ## 🎉 Version [1.2.0] - 2026-09-30
 
 ### 📦 Release Assets
@@ -227,7 +253,8 @@ categories based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Product and data location:** Standardized product identifiers and `%APPDATA%\KeyMouseRemapperAssistant`.
 - **Release compatibility:** Locked AutoHotkey and build tools and aligned UTF-8 behavior across Windows PowerShell 5.1 and PowerShell 7.
 
-[Unreleased]: https://github.com/realSilasYang/key-mouse-remapper-assistant/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/realSilasYang/key-mouse-remapper-assistant/compare/v1.2.1...HEAD
+[1.2.1]: https://github.com/realSilasYang/key-mouse-remapper-assistant/releases/tag/v1.2.1
 [1.2.0]: https://github.com/realSilasYang/key-mouse-remapper-assistant/releases/tag/v1.2.0
 [1.1.0]: https://github.com/realSilasYang/key-mouse-remapper-assistant/releases/tag/v1.1.0
 [1.0.2]: https://github.com/realSilasYang/key-mouse-remapper-assistant/releases/tag/v1.0.2

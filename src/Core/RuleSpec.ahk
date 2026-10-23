@@ -185,9 +185,11 @@ class RuleSpec {
             targetCapture, distinguishModifierSides)
         actions := []
         releaseActions := []
+        isSingleSource := this.IsSingleSourceCapture(sourceCapture)
         if !targetIsEmpty && from.Get("event", "down") == "down"
                 && this.IsSingleTargetCapture(targetCapture) {
-            from["optional_modifiers"] := ["any"]
+            if isSingleSource || isSimultaneous
+                from["optional_modifiers"] := ["any"]
             if this.IsReleasableCapturedSource(sourceCapture) {
                 targetKey := this.GetCapturedTargetOutputKey(targetCapture,
                     distinguishModifierSides)
@@ -196,7 +198,7 @@ class RuleSpec {
                 releaseActions.Push(Map("type", "key_up", "value",
                     targetKey))
             } else {
-                if !RegExMatch(targetSend, "i)^\{blind\}")
+                if isSingleSource && !RegExMatch(targetSend, "i)^\{blind\}")
                     targetSend := "{Blind}" targetSend
                 actions.Push(Map("type", "send", "value", targetSend))
             }
@@ -229,6 +231,23 @@ class RuleSpec {
                 && sourceCapture.InterceptionHardwareId != ""
             device["hardware_id"] := sourceCapture.InterceptionHardwareId
         return this.NormalizeSourceDevice(device)
+    }
+
+    static IsSingleSourceCapture(sourceCapture) {
+        if !IsObject(sourceCapture)
+            return false
+        if sourceCapture.HasOwnProp("IsSimultaneous")
+                && sourceCapture.IsSimultaneous
+            return false
+        if sourceCapture.HasOwnProp("Modifiers")
+                && IsObject(sourceCapture.Modifiers)
+                && sourceCapture.Modifiers.Length > 0
+            return false
+        if sourceCapture.HasOwnProp("Keys")
+                && IsObject(sourceCapture.Keys)
+                && sourceCapture.Keys.Length > 1
+            return false
+        return true
     }
 
     static IsSingleTargetCapture(targetCapture) {
