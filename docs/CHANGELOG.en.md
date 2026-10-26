@@ -7,6 +7,30 @@ categories based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## 🚧 [Unreleased]
 
+## 🎉 Version [1.2.2] - 2026-10-26
+
+### 📦 Release Assets
+
+- **`fonts.zip` (optional font package):** Provides Noto fallback UI fonts for installation into Windows; it is not required to run the application.
+- **`key-mouse-remapper-assistant-1.2.2-source.zip` (complete source package):** Includes runnable AHK source, application modules, assets other than fonts, all thirteen README languages, bilingual changelogs, tests, and build tools; requires AutoHotkey v2 x64.
+- **`key-mouse-remapper-assistant-1.2.2-windows-x64.zip` (complete portable package, recommended):** Includes the compiled EXE, editable mapping source, all thirteen README languages, bilingual changelogs, licenses, application modules, UI assets other than fonts, fixed AutoHotkey v2.0.26 x64 runtime, and matching source archive; requires no separate AutoHotkey installation after full extraction.
+
+---
+
+### 🐛 Fixed
+
+- **Win chord sources mapped to Win:** Stage Interception modifier prefixes and rebuild a clean Win output when a chord such as `Win + Shift + F23 -> Win` matches, so it can participate in shortcuts such as `Win + L`; unmatched prefixes replay in their original order.
+- **Chord mappings to Win preserving subsequent combinations:** In DirectHotkeyRuntime, specially handle Windows target keys when the source combination includes the Win key family by refreshing and pressing a clean Win key, ensuring subsequent key presses (such as the L key) successfully trigger Windows shortcut combinations.
+
+---
+
+### 🚀 Improvements
+
+- **Interception prefix modifier staging and accurate replay:** Enhanced device-level multi-key chord modifier prefix handling by staging prefix keys before matching a combination, and replaying them strictly in their original order and state if unmatched, preventing normal keystrokes from being swallowed or reordered.
+- **Device input serialization and runtime expansion:** Added `SendRuntimeKey` interface support to standardize key simulation and state tracking between runtime logic and the driver layer.
+
+---
+
 ## 🎉 Version [1.2.1] - 2026-10-24
 
 ### 📦 Release Assets
@@ -253,7 +277,8 @@ categories based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Product and data location:** Standardized product identifiers and `%APPDATA%\KeyMouseRemapperAssistant`.
 - **Release compatibility:** Locked AutoHotkey and build tools and aligned UTF-8 behavior across Windows PowerShell 5.1 and PowerShell 7.
 
-[Unreleased]: https://github.com/realSilasYang/key-mouse-remapper-assistant/compare/v1.2.1...HEAD
+[Unreleased]: https://github.com/realSilasYang/key-mouse-remapper-assistant/compare/v1.2.2...HEAD
+[1.2.2]: https://github.com/realSilasYang/key-mouse-remapper-assistant/releases/tag/v1.2.2
 [1.2.1]: https://github.com/realSilasYang/key-mouse-remapper-assistant/releases/tag/v1.2.1
 [1.2.0]: https://github.com/realSilasYang/key-mouse-remapper-assistant/releases/tag/v1.2.0
 [1.1.0]: https://github.com/realSilasYang/key-mouse-remapper-assistant/releases/tag/v1.1.0

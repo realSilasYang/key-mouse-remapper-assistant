@@ -7,6 +7,30 @@
 
 ## 🚧 [未发布]
 
+## 🎉 版本 [1.2.2] - 2026-10-26
+
+### 📦 发布物说明
+
+- **`fonts.zip`（可选字体包）**：提供 Noto 回退界面字体，需先安装到 Windows；它不是程序运行必需。
+- **`key-mouse-remapper-assistant-1.2.2-source.zip`（完整源码版）**：包含可运行 AHK 源码、应用模块、除字体外的资源、13 语 README、双语更新日志、测试和构建工具，适合审阅、开发或从源码运行；本机需要 AutoHotkey v2 x64。
+- **`key-mouse-remapper-assistant-1.2.2-windows-x64.zip`（完整便携版，推荐）**：包含编译 EXE、可编辑映射源码、13 语 README、双语更新日志、许可证、应用模块、除字体外的界面资源、固定 AutoHotkey v2.0.26 x64 运行时及对应源码归档；无需另行安装 AutoHotkey，适合完整解压后长期使用。
+
+---
+
+### 🐛 修复
+
+- **Win 组合来源映射为 Win**：暂存 Interception 组合规则的来源修饰键，命中时重建干净的 Win 输出，修复 `Win + Shift + F23 -> Win` 后无法继续参与 `Win + L` 等 Windows 组合键的问题；未命中时会按原顺序回放来源输入。
+- **组合键映射为 Win 保持后续组合能力**：在 DirectHotkeyRuntime 中针对 Win 目标键特别处理：当来源修饰键本身包含 Win 键族时，自动刷新并重新按下干净的 Win 键，保证后续按下的按键（如 L 键）能够与 Win 组合生效。
+
+---
+
+### 🚀 优化
+
+- **Interception 前缀修饰键暂存与精准回放**：完善设备级多键修饰组合键的前缀处理机制，在判定组合命中前暂存前缀按键并在未命中时严格按原顺序、原状态回放，防止正常按键被意外吞噬或乱序。
+- **设备输入序列化与运行时扩展**：新增 `SendRuntimeKey` 接口支持，统一运行时与驱动层的按键模拟和状态跟踪。
+
+---
+
 ## 🎉 版本 [1.2.1] - 2026-10-24
 
 ### 📦 发布物说明
@@ -253,7 +277,8 @@
 - **产品与数据目录**：统一中英文产品标识和 `%APPDATA%\KeyMouseRemapperAssistant` 数据位置。
 - **发行与兼容性**：锁定 AutoHotkey 和构建工具，统一 UTF-8 输出与 Windows PowerShell 5.1／PowerShell 7 行为。
 
-[未发布]: https://github.com/realSilasYang/key-mouse-remapper-assistant/compare/v1.2.1...HEAD
+[未发布]: https://github.com/realSilasYang/key-mouse-remapper-assistant/compare/v1.2.2...HEAD
+[1.2.2]: https://github.com/realSilasYang/key-mouse-remapper-assistant/releases/tag/v1.2.2
 [1.2.1]: https://github.com/realSilasYang/key-mouse-remapper-assistant/releases/tag/v1.2.1
 [1.2.0]: https://github.com/realSilasYang/key-mouse-remapper-assistant/releases/tag/v1.2.0
 [1.1.0]: https://github.com/realSilasYang/key-mouse-remapper-assistant/releases/tag/v1.1.0

@@ -1534,7 +1534,10 @@ class DirectHotkeyRuntime {
             state.ReleasedTriggerModifiers := []
         for triggerMod in triggerModifiers {
             triggerFamily := this.GetPrimaryModifierFamily(triggerMod)
-            if triggerFamily == "" || triggerFamily == outputFamily
+            ; A Win target must replace a held source Win to create a fresh
+            ; modifier press that later keys can combine with.
+            if triggerFamily == "" || (triggerFamily == outputFamily
+                    && outputFamily != "win")
                 continue
             physicalKeys := this.GetPhysicalModifierKeysForFamily(triggerFamily)
             anyHeld := false

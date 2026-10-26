@@ -418,6 +418,35 @@ try {
     AssertEqual("LWin up", comboWinRuntime.Events[3],
         "Combo-to-Win did not release LWin.")
 
+    winShiftF23Source := {Display: "Win + Shift + F23",
+        RawDisplay: "Win + Shift + F23", KeyName: "F23",
+        SourceSpec: "#+sc06E", VKHex: "86", SCHex: "06E",
+        Modifiers: [{KeyName: "LWin"}, {KeyName: "LShift"}],
+        IsSimultaneous: false}
+    winModifierSpec := RuleSpec.CreateFromCaptures("win-chord-to-win",
+        winShiftF23Source, genericWinTarget, false)
+    winModifierRuntime := ControlledOwnershipRuntime(app)
+    winModifierDescriptor := RuleCompiler.Compile(winModifierSpec)
+    winModifierRuntime.Rules[winModifierDescriptor.Id] :=
+        winModifierDescriptor
+    winModifierRuntime.ModifierState := 0x44 ; LWin and LShift physically held
+    AssertTrue(winModifierRuntime.OnDown(winModifierDescriptor.Id),
+        "Win+Shift+F23-to-Win failed on down.")
+    AssertEqual(3, winModifierRuntime.Events.Length,
+        "Win output must replace held source modifiers before pressing LWin.")
+    AssertEqual("LWin up", winModifierRuntime.Events[1],
+        "The source Win modifier was not released before the mapped Win key.")
+    AssertEqual("LShift up", winModifierRuntime.Events[2],
+        "The source Shift modifier was not released before the mapped Win key.")
+    AssertEqual("LWin down", winModifierRuntime.Events[3],
+        "The mapped Win key was not pressed after releasing source modifiers.")
+    AssertTrue(winModifierRuntime.OnUp(winModifierDescriptor.Id),
+        "Win+Shift+F23-to-Win failed on up.")
+    AssertEqual(4, winModifierRuntime.Events.Length,
+        "Releasing mapped Win must not re-press source modifiers.")
+    AssertEqual("LWin up", winModifierRuntime.Events[4],
+        "Win+Shift+F23-to-Win did not release its mapped Win key.")
+
     ctrl1Source := {Display: "Ctrl + 1", RawDisplay: "Ctrl + 1",
         KeyName: "1", SourceSpec: "^sc002", VKHex: "31", SCHex: "002",
         Modifiers: [leftCtrlInfo], IsSimultaneous: false}

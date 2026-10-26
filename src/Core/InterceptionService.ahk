@@ -280,6 +280,35 @@ class InterceptionService {
         return this.SendConsumerStroke(stroke)
     }
 
+    SendRuntimeKey(deviceNumber, keyName, phase) {
+        if this.ConsumerMode != "runtime"
+                || Type(deviceNumber) != "Integer"
+                || deviceNumber < 1
+                || deviceNumber > InterceptionService.MaximumKeyboard
+            return false
+        phase := StrLower(String(phase))
+        if phase != "down" && phase != "up"
+            throw ValueError("Interception 输出按键阶段无效。")
+        scanCode := GetKeySC(String(keyName))
+        if !scanCode
+            throw Error("无法取得 Interception 输出按键的扫描码：" keyName)
+        state := phase == "up" ? 0x01 : 0x00
+        if scanCode & 0x100 {
+            state |= 0x02
+            scanCode &= 0xFF
+        } else if scanCode & 0x200 {
+            state |= 0x04
+            scanCode &= 0xFF
+        }
+        strokeBuffer := Buffer(InterceptionService.IdentifyStrokeBufferSize, 0)
+        NumPut("UShort", scanCode, strokeBuffer, 0)
+        NumPut("UShort", state, strokeBuffer, 2)
+        NumPut("UInt", 0, strokeBuffer, 4)
+        return this.SendRuntimeStroke(Map("device", deviceNumber,
+            "type", "keyboard", "code", scanCode, "state", state,
+            "information", 0, "buffer", strokeBuffer, "received", 1))
+    }
+
     StopRuntime() => this.StopConsumer("runtime")
 
     StartConsumer(mode, deviceNumbers) {

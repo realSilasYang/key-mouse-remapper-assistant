@@ -8,9 +8,12 @@ class InterceptionMappingRuntime extends DirectHotkeyRuntime {
         this.DeviceRules := Map()
         this.DeviceNumbers := []
         this.HeldByDevice := Map()
+        this.PendingStrokesByDevice := Map()
+        this.OutputDeviceByKey := Map()
         this.ActiveSources := Map()
         this.SuppressedSources := Map()
         this.CurrentDevice := 0
+        this.LastSelectedRuleIds := []
         this.PollTimer := ObjBindMethod(this, "Poll")
         this.UnavailableCallbackTimer := ObjBindMethod(this,
             "NotifyRuntimeUnavailable")
@@ -131,6 +134,7 @@ class InterceptionMappingRuntime extends DirectHotkeyRuntime {
 
     StopContext() {
         SetTimer(this.PollTimer, 0)
+        this.FlushAllPendingStrokes()
         wasActive := this.ContextActive
         this.ContextActive := false
         if wasActive
@@ -155,7 +159,11 @@ class InterceptionMappingRuntime extends DirectHotkeyRuntime {
             catch as strokeError {
                 this.Trace("interception_stroke_failed", {Outcome: "error",
                     Detail: strokeError.Message})
-                try this.Service.SendRuntimeStroke(stroke)
+                currentWasQueued := this.HasPendingStroke(
+                    stroke["device"], stroke)
+                try this.FlushPendingStrokes(stroke["device"])
+                if !currentWasQueued
+                    try this.Service.SendRuntimeStroke(stroke)
             }
         }
         return true
@@ -163,12 +171,38 @@ class InterceptionMappingRuntime extends DirectHotkeyRuntime {
 
     ProcessStroke(stroke) {
         events := this.DecodeStroke(stroke)
-        if !events.Length
+        if !events.Length {
+            this.FlushPendingStrokes(stroke["device"])
             return this.Service.SendRuntimeStroke(stroke)
+        }
         suppress := false
+        currentStrokeQueued := false
         for event in events
-            suppress := this.ProcessEvent(stroke["device"], event) || suppress
-        if !suppress
+        {
+            deviceNumber := stroke["device"]
+            identity := event["identity"]
+            signature := KeyIdentity.Signature(identity)
+            wasStagedDown := event["phase"] == "up"
+                && this.HasPendingDown(deviceNumber, signature)
+            eventSuppress := this.ProcessEvent(deviceNumber, event)
+            suppress := eventSuppress || suppress
+            matchedRule := this.LastSelectedRuleIds.Length > 0
+            if !matchedRule && (wasStagedDown
+                    || (event["phase"] == "down"
+                        && this.ShouldStageModifier(deviceNumber, identity))) {
+                this.QueuePendingStroke(deviceNumber, stroke, identity,
+                    event["phase"])
+                currentStrokeQueued := true
+                if (event["phase"] == "up" && wasStagedDown)
+                        || !this.HasPotentialModifierPrefix(deviceNumber)
+                    this.FlushPendingStrokes(deviceNumber)
+            } else if this.PendingStrokesByDevice.Has(deviceNumber) {
+                ; A non-prefix event ends the opportunity to form a chord.
+                ; Forward queued physical strokes before this one.
+                this.FlushPendingStrokes(deviceNumber)
+            }
+        }
+        if !suppress && !currentStrokeQueued
             this.Service.SendRuntimeStroke(stroke)
         return suppress
     }
@@ -224,6 +258,7 @@ class InterceptionMappingRuntime extends DirectHotkeyRuntime {
         if phase == "down"
             held[KeyIdentity.Signature(identity)] := identity
         this.CurrentDevice := deviceNumber
+        this.LastSelectedRuleIds := []
         try {
             if phase == "up"
                 return this.ProcessUp(deviceNumber, identity, token, held)
@@ -241,6 +276,9 @@ class InterceptionMappingRuntime extends DirectHotkeyRuntime {
 
     ProcessDown(deviceNumber, identity, token, isRepeat) {
         selection := this.SelectRules(deviceNumber, identity, "down", isRepeat)
+        this.LastSelectedRuleIds := selection
+        if selection.Length && this.PendingStrokesByDevice.Has(deviceNumber)
+            this.ResolvePendingStrokesForSelection(deviceNumber, selection)
         suppress := this.SuppressedSources.Has(token)
         for ruleId in selection {
             descriptor := this.Rules[ruleId]
@@ -257,6 +295,10 @@ class InterceptionMappingRuntime extends DirectHotkeyRuntime {
 
     ProcessUp(deviceNumber, identity, token, held) {
         suppress := this.SuppressedSources.Has(token)
+        selection := this.SelectRules(deviceNumber, identity, "up", false)
+        this.LastSelectedRuleIds := selection
+        if selection.Length && this.PendingStrokesByDevice.Has(deviceNumber)
+            this.ResolvePendingStrokesForSelection(deviceNumber, selection)
         releaseIds := []
         for ruleId, activeToken in this.ActiveSources {
             if activeToken == token {
@@ -277,7 +319,6 @@ class InterceptionMappingRuntime extends DirectHotkeyRuntime {
             this.OnUp(ruleId)
             this.ActiveSources.Delete(ruleId)
         }
-        selection := this.SelectRules(deviceNumber, identity, "up", false)
         for ruleId in selection {
             descriptor := this.Rules[ruleId]
             if !descriptor.Spec.Get("passthrough", JsonBoolean(false)).Value
@@ -444,6 +485,169 @@ class InterceptionMappingRuntime extends DirectHotkeyRuntime {
         return this.HeldByDevice[deviceNumber]
     }
 
+    ShouldStageModifier(deviceNumber, identity) {
+        if !this.DeviceRules.Has(deviceNumber)
+                || this.GetModifierFamily(identity["name"]) == ""
+            return false
+        for ruleId in this.DeviceRules[deviceNumber] {
+            from := this.Rules[ruleId].Spec["from"]
+            if from.Get("event", "down") != "down"
+                    || this.SourcePrimaryMatchesIdentity(from, identity)
+                continue
+            for modifier in this.GetRequiredModifierNames(from)
+                if this.ModifierNameMatches(modifier, identity["name"])
+                    return true
+        }
+        return false
+    }
+
+    SourcePrimaryMatchesIdentity(from, identity) {
+        key := from.Has("key") ? from["key"]
+            : from["simultaneous"][RuleCompiler.GetSimultaneousPrimaryIndex(
+                from["simultaneous"])]
+        return this.KeyMatchesIdentity(key, identity)
+    }
+
+    GetRequiredModifierNames(from) {
+        names := []
+        for modifier in from.Get("modifiers", [])
+            names.Push(String(modifier))
+        for key in from.Get("simultaneous", []) {
+            if Type(key) != "Map" || !key.Has("name")
+                continue
+            name := String(key["name"])
+            if this.GetModifierFamily(name) != ""
+                names.Push(name)
+        }
+        return names
+    }
+
+    QueuePendingStroke(deviceNumber, stroke, identity, phase) {
+        if !this.PendingStrokesByDevice.Has(deviceNumber)
+            this.PendingStrokesByDevice[deviceNumber] := []
+        this.PendingStrokesByDevice[deviceNumber].Push({Stroke: stroke,
+            Signature: KeyIdentity.Signature(identity), Identity: identity,
+            Phase: phase})
+        return true
+    }
+
+    HasPendingDown(deviceNumber, signature) {
+        if !this.PendingStrokesByDevice.Has(deviceNumber)
+            return false
+        heldPending := false
+        for pending in this.PendingStrokesByDevice[deviceNumber]
+            if pending.Signature == signature
+                heldPending := pending.Phase == "down"
+        return heldPending
+    }
+
+    HasPotentialModifierPrefix(deviceNumber) {
+        if !this.DeviceRules.Has(deviceNumber)
+                || !this.PendingStrokesByDevice.Has(deviceNumber)
+            return false
+        held := this.GetHeldMap(deviceNumber)
+        optionalAny := false
+        for ruleId in this.DeviceRules[deviceNumber] {
+            from := this.Rules[ruleId].Spec["from"]
+            if from.Get("event", "down") != "down"
+                continue
+            required := this.GetRequiredModifierNames(from)
+            if !required.Length
+                continue
+            optional := from.Get("optional_modifiers", [])
+            optionalAny := this.ArrayContains(optional, "any")
+            hasStagedRequiredModifier := false
+            viable := true
+            for signature, identity in held {
+                if this.GetModifierFamily(identity["name"]) == ""
+                    continue
+                requiredMatch := this.ModifierListContains(required,
+                    identity["name"])
+                if requiredMatch && this.HasPendingDown(deviceNumber,
+                        signature)
+                    hasStagedRequiredModifier := true
+                if !requiredMatch && !optionalAny
+                        && !this.ModifierListContains(optional,
+                            identity["name"]) {
+                    viable := false
+                    break
+                }
+            }
+            if viable && hasStagedRequiredModifier
+                return true
+        }
+        return false
+    }
+
+    ResolvePendingStrokesForSelection(deviceNumber, ruleIds) {
+        if !this.PendingStrokesByDevice.Has(deviceNumber)
+            return false
+        consumed := Map()
+        held := this.GetHeldMap(deviceNumber)
+        for ruleId in ruleIds {
+            descriptor := this.Rules[ruleId]
+            if descriptor.Spec.Get("passthrough", JsonBoolean(false)).Value
+                continue
+            required := this.GetRequiredModifierNames(
+                descriptor.Spec["from"])
+            for signature, identity in held {
+                if this.GetModifierFamily(identity["name"]) == ""
+                        || !this.ModifierListContains(required,
+                            identity["name"])
+                        || !this.HasPendingDown(deviceNumber, signature)
+                    continue
+                consumed[signature] := true
+            }
+        }
+        pending := this.PendingStrokesByDevice[deviceNumber]
+        for stroke in pending {
+            if consumed.Has(stroke.Signature)
+                continue
+            if stroke.HasOwnProp("Forwarded") && stroke.Forwarded
+                continue
+            if !this.Service.SendRuntimeStroke(stroke.Stroke)
+                throw Error("Interception 无法回送暂存的输入 stroke。")
+            stroke.Forwarded := true
+        }
+        this.PendingStrokesByDevice.Delete(deviceNumber)
+        for signature in consumed
+            this.SuppressedSources[deviceNumber "|" signature] := true
+        return true
+    }
+
+    FlushPendingStrokes(deviceNumber) {
+        if !this.PendingStrokesByDevice.Has(deviceNumber)
+            return false
+        pending := this.PendingStrokesByDevice[deviceNumber]
+        for stroke in pending {
+            if stroke.HasOwnProp("Forwarded") && stroke.Forwarded
+                continue
+            if !this.Service.SendRuntimeStroke(stroke.Stroke)
+                throw Error("Interception 无法回送暂存的输入 stroke。")
+            stroke.Forwarded := true
+        }
+        this.PendingStrokesByDevice.Delete(deviceNumber)
+        return true
+    }
+
+    HasPendingStroke(deviceNumber, stroke) {
+        if !this.PendingStrokesByDevice.Has(deviceNumber)
+            return false
+        for pending in this.PendingStrokesByDevice[deviceNumber]
+            if pending.Stroke == stroke
+                return true
+        return false
+    }
+
+    FlushAllPendingStrokes() {
+        deviceNumbers := []
+        for deviceNumber in this.PendingStrokesByDevice
+            deviceNumbers.Push(deviceNumber)
+        for deviceNumber in deviceNumbers
+            this.FlushPendingStrokes(deviceNumber)
+        return deviceNumbers.Length
+    }
+
     CancelAloneForOtherInput(event) {
         if !this.Active.Count
             return 0
@@ -483,6 +687,7 @@ class InterceptionMappingRuntime extends DirectHotkeyRuntime {
     EnsureRunning(reason := "lifecycle") {
         if this.Suspended
             return true
+        this.FlushAllPendingStrokes()
         cleaned := this.CancelAllActive()
         this.HeldByDevice.Clear()
         this.ActiveSources.Clear()
@@ -525,6 +730,38 @@ class InterceptionMappingRuntime extends DirectHotkeyRuntime {
         this.Rules.Clear()
         this.DeviceRules.Clear()
         this.DeviceNumbers := []
+        this.PendingStrokesByDevice.Clear()
+        this.OutputDeviceByKey.Clear()
         return cleaned
+    }
+
+    SendKeyEvent(keyName, phase) {
+        keyName := String(keyName)
+        phase := StrLower(String(phase))
+        isWinKey := keyName == "LWin" || keyName == "RWin"
+        if isWinKey && this.Service.HasMethod("SendRuntimeKey") {
+            deviceNumber := 0
+            if phase == "up" && this.OutputDeviceByKey.Has(keyName)
+                deviceNumber := this.OutputDeviceByKey[keyName]
+            if !deviceNumber && this.CurrentDevice
+                deviceNumber := this.CurrentDevice
+            runtimeActive := !this.Service.HasOwnProp("ConsumerMode")
+                || this.Service.ConsumerMode == "runtime"
+            if deviceNumber && runtimeActive {
+                if phase == "down" && !this.OutputDeviceByKey.Has(keyName)
+                    this.OutputDeviceByKey[keyName] := deviceNumber
+                result := this.Service.SendRuntimeKey(deviceNumber, keyName,
+                    phase)
+                if !result
+                    throw Error("Interception 无法发送输出按键 " keyName " " phase "。")
+                if phase == "up" && this.OutputDeviceByKey.Has(keyName)
+                    this.OutputDeviceByKey.Delete(keyName)
+                return true
+            }
+        }
+        result := super.SendKeyEvent(keyName, phase)
+        if phase == "up" && this.OutputDeviceByKey.Has(keyName)
+            this.OutputDeviceByKey.Delete(keyName)
+        return result
     }
 }
