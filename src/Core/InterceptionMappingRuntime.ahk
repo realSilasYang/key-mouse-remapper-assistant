@@ -494,9 +494,33 @@ class InterceptionMappingRuntime extends DirectHotkeyRuntime {
             if from.Get("event", "down") != "down"
                     || this.SourcePrimaryMatchesIdentity(from, identity)
                 continue
-            for modifier in this.GetRequiredModifierNames(from)
-                if this.ModifierNameMatches(modifier, identity["name"])
+            for modifier in this.GetRequiredModifierNames(from) {
+                if this.ModifierNameMatches(modifier, identity["name"]) {
+                    ; 取消单独 Shift / Ctrl / Alt 的主动暂存：
+                    ; 这些修饰键在日常使用中高频独立使用（Shift 切换输入法/选区/奔跑、Ctrl 组合鼠标/下蹲、Alt 激活菜单等），
+                    ; 绝不能在没有任何其他前置修饰键按下的情况下单独暂存。
+                    ; 仅当多修饰键规则所需的其他前置修饰键（如 Copilot 序列中的 Win）已处于按下/暂存状态时，
+                    ; 才允许将它们作为后续组合前缀暂存并屏蔽泄露。
+                    family := this.GetModifierFamily(identity["name"])
+                    if family == "shift" || family == "ctrl" || family == "alt" {
+                        if !this.HasOtherRequiredModifierHeld(from, deviceNumber, identity)
+                            continue
+                    }
                     return true
+                }
+            }
+        }
+        return false
+    }
+
+    HasOtherRequiredModifierHeld(from, deviceNumber, identity) {
+        held := this.GetHeldMap(deviceNumber)
+        required := this.GetRequiredModifierNames(from)
+        for modifier in required {
+            if this.ModifierNameMatches(modifier, identity["name"])
+                continue
+            if this.HeldContainsModifier(held, modifier)
+                return true
         }
         return false
     }

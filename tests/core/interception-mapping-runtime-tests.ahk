@@ -122,6 +122,79 @@ try {
     fallbackRuntime.ProcessStroke(InterceptionKeyboardStroke(2, 0x5B, 0x03))
     fallbackRuntime.Shutdown()
 
+    shiftService := InterceptionRuntimeServiceProbe()
+    shiftRuntime := InterceptionRuntimeProbe(app, shiftService)
+    shiftRuntime.ApplyMappings([chordMapping])
+    shiftRuntime.ProcessStroke(InterceptionKeyboardStroke(2, 0x2A, 0x00))
+    InterceptionRuntimeAssert(shiftService.SendCount == 1
+            && shiftService.SentStrokes[1]["code"] == 0x2A
+            && shiftService.SentStrokes[1]["state"] == 0x00,
+        "Shift down was actively staged instead of forwarded immediately.")
+    shiftRuntime.ProcessStroke(InterceptionKeyboardStroke(2, 0x2A, 0x00))
+    InterceptionRuntimeAssert(shiftService.SendCount == 2
+            && shiftService.SentStrokes[2]["code"] == 0x2A
+            && shiftService.SentStrokes[2]["state"] == 0x00,
+        "Shift hold repeat was swallowed instead of forwarded immediately.")
+    shiftRuntime.ProcessStroke(InterceptionKeyboardStroke(2, 0x2A, 0x01))
+    InterceptionRuntimeAssert(shiftService.SendCount == 3
+            && shiftService.SentStrokes[3]["code"] == 0x2A
+            && shiftService.SentStrokes[3]["state"] == 0x01,
+        "Shift up was not forwarded immediately.")
+    shiftRuntime.Shutdown()
+
+    ctrlAltMapping := InterceptionRuntimeCtrlAltChordMapping()
+
+    ctrlService := InterceptionRuntimeServiceProbe()
+    ctrlRuntime := InterceptionRuntimeProbe(app, ctrlService)
+    ctrlRuntime.ApplyMappings([ctrlAltMapping])
+    ctrlRuntime.ProcessStroke(InterceptionKeyboardStroke(2, 0x1D, 0x00))
+    InterceptionRuntimeAssert(ctrlService.SendCount == 1
+            && ctrlService.SentStrokes[1]["code"] == 0x1D
+            && ctrlService.SentStrokes[1]["state"] == 0x00,
+        "Ctrl down was actively staged instead of forwarded immediately.")
+    ctrlRuntime.ProcessStroke(InterceptionKeyboardStroke(2, 0x1D, 0x00))
+    InterceptionRuntimeAssert(ctrlService.SendCount == 2
+            && ctrlService.SentStrokes[2]["code"] == 0x1D
+            && ctrlService.SentStrokes[2]["state"] == 0x00,
+        "Ctrl hold repeat was swallowed instead of forwarded immediately.")
+    ctrlRuntime.ProcessStroke(InterceptionKeyboardStroke(2, 0x1D, 0x01))
+    InterceptionRuntimeAssert(ctrlService.SendCount == 3
+            && ctrlService.SentStrokes[3]["code"] == 0x1D
+            && ctrlService.SentStrokes[3]["state"] == 0x01,
+        "Ctrl up was not forwarded immediately.")
+    ctrlRuntime.Shutdown()
+
+    altService := InterceptionRuntimeServiceProbe()
+    altRuntime := InterceptionRuntimeProbe(app, altService)
+    altRuntime.ApplyMappings([ctrlAltMapping])
+    altRuntime.ProcessStroke(InterceptionKeyboardStroke(2, 0x38, 0x00))
+    InterceptionRuntimeAssert(altService.SendCount == 1
+            && altService.SentStrokes[1]["code"] == 0x38
+            && altService.SentStrokes[1]["state"] == 0x00,
+        "Alt down was actively staged instead of forwarded immediately.")
+    altRuntime.ProcessStroke(InterceptionKeyboardStroke(2, 0x38, 0x00))
+    InterceptionRuntimeAssert(altService.SendCount == 2
+            && altService.SentStrokes[2]["code"] == 0x38
+            && altService.SentStrokes[2]["state"] == 0x00,
+        "Alt hold repeat was swallowed instead of forwarded immediately.")
+    altRuntime.ProcessStroke(InterceptionKeyboardStroke(2, 0x38, 0x01))
+    InterceptionRuntimeAssert(altService.SendCount == 3
+            && altService.SentStrokes[3]["code"] == 0x38
+            && altService.SentStrokes[3]["state"] == 0x01,
+        "Alt up was not forwarded immediately.")
+    altRuntime.Shutdown()
+
+    comboService := InterceptionRuntimeServiceProbe()
+    comboRuntime := InterceptionRuntimeProbe(app, comboService)
+    comboRuntime.ApplyMappings([ctrlAltMapping])
+    comboRuntime.ProcessStroke(InterceptionKeyboardStroke(2, 0x1D, 0x00))
+    InterceptionRuntimeAssert(comboService.SendCount == 1,
+        "First modifier (Ctrl) was not forwarded immediately.")
+    comboRuntime.ProcessStroke(InterceptionKeyboardStroke(2, 0x38, 0x00))
+    InterceptionRuntimeAssert(comboService.SendCount == 1,
+        "Second modifier (Alt) was forwarded instead of staged when Ctrl was already held.")
+    comboRuntime.Shutdown()
+
     cancelService := InterceptionRuntimeServiceProbe()
     cancelRuntime := InterceptionRuntimeProbe(app, cancelService)
     cancelRuntime.ApplyMappings([chordMapping])
@@ -258,6 +331,20 @@ InterceptionRuntimeBlockWinMapping() {
             "device", Map("backend", "interception", "number", 2,
                 "type", "keyboard")),
         "block", JsonBoolean(true))
+    return {Mode: "managed", Spec: RuleSpec.Normalize(spec)}
+}
+
+InterceptionRuntimeCtrlAltChordMapping() {
+    spec := Map("id", "device-ctrl-alt-chord-to-f13",
+        "display", Map("source", "Ctrl + Alt + F24 (keyboard 2)",
+            "target", "F13", "scope", "全局"),
+        "from", Map("key", Map("name", "F24", "vk", "87", "sc", "076"),
+            "modifiers", ["Ctrl", "Alt"],
+            "device", Map("backend", "interception", "number", 2,
+                "type", "keyboard"),
+            "repeat", "ignore"),
+        "to", [Map("type", "key_down", "value", "F13")],
+        "to_after_key_up", [Map("type", "key_up", "value", "F13")])
     return {Mode: "managed", Spec: RuleSpec.Normalize(spec)}
 }
 

@@ -27,6 +27,9 @@ class KeystrokeOsdService {
         this.App := app
         this.Active := false
         this.Hook := ""
+        this.MouseHook := 0
+        this.MouseCallback := 0
+        this.MouseMethod := ""
         this.Gui := ""
         this.Cards := []
         this.LastText := ""
@@ -70,7 +73,17 @@ class KeystrokeOsdService {
             "Media_Play_Pause", "Play/Pause",
             "Media_Next", "Next",
             "Media_Prev", "Prev",
-            "Media_Stop", "Stop"
+            "Media_Stop", "Stop",
+            "LButton", "LButton",
+            "RButton", "RButton",
+            "MButton", "MButton",
+            "XButton1", "XButton1",
+            "XButton2", "XButton2",
+            "lbutton", "LButton",
+            "rbutton", "RButton",
+            "mbutton", "MButton",
+            "xbutton1", "XButton1",
+            "xbutton2", "XButton2"
         )
         Loop 10 {
             this.KeyMap["Numpad" (A_Index - 1)] := "Num " (A_Index - 1)
@@ -219,6 +232,8 @@ class KeystrokeOsdService {
             return false
         }
 
+        this.StartMouseHook()
+
         this.Active := true
         return true
     }
@@ -231,6 +246,8 @@ class KeystrokeOsdService {
             try this.Hook.Stop()
             this.Hook := ""
         }
+
+        this.StopMouseHook()
 
         SetTimer(this.StartFadeOutTimer, 0)
         SetTimer(this.AnimateFadeTimer, 0)
@@ -249,6 +266,108 @@ class KeystrokeOsdService {
 
     Toggle() {
         return this.Active ? this.Stop() : this.Start()
+    }
+
+    StartMouseHook() {
+        if this.MouseHook
+            return true
+        try {
+            this.MouseMethod := ObjBindMethod(this, "OnMouseHook")
+            this.MouseCallback := CallbackCreate(this.MouseMethod, "Fast", 3)
+            moduleHandle := DllCall("kernel32\GetModuleHandleW", "Ptr", 0, "Ptr")
+            this.MouseHook := DllCall("user32\SetWindowsHookExW", "Int", 14, ; WH_MOUSE_LL
+                "Ptr", this.MouseCallback, "Ptr", moduleHandle, "UInt", 0, "Ptr")
+            if !this.MouseHook {
+                this.StopMouseHook()
+                return false
+            }
+            return true
+        } catch {
+            this.StopMouseHook()
+            return false
+        }
+    }
+
+    StopMouseHook() {
+        if this.MouseHook {
+            try DllCall("user32\UnhookWindowsHookEx", "Ptr", this.MouseHook, "Int")
+            this.MouseHook := 0
+        }
+        if this.MouseCallback {
+            try CallbackFree(this.MouseCallback)
+            this.MouseCallback := 0
+        }
+        this.MouseMethod := ""
+    }
+
+    OnMouseHook(code, message, eventData) {
+        if code < 0 || !eventData || message == 0x0200 { ; WM_MOUSEMOVE
+            return DllCall("user32\CallNextHookEx", "Ptr", this.MouseHook,
+                "Int", code, "Ptr", message, "Ptr", eventData, "Ptr")
+        }
+
+        if !this.Active {
+            return DllCall("user32\CallNextHookEx", "Ptr", this.MouseHook,
+                "Int", code, "Ptr", message, "Ptr", eventData, "Ptr")
+        }
+
+        if IsObject(this.App) && this.App.HasOwnProp("Capture")
+                && IsObject(this.App.Capture) && this.App.Capture.Active {
+            return DllCall("user32\CallNextHookEx", "Ptr", this.MouseHook,
+                "Int", code, "Ptr", message, "Ptr", eventData, "Ptr")
+        }
+
+        btnName := ""
+        isDown := false
+        try {
+            switch message {
+                case 0x0201: ; WM_LBUTTONDOWN
+                    btnName := "LButton", isDown := true
+                case 0x0202: ; WM_LBUTTONUP
+                    btnName := "LButton", isDown := false
+                case 0x0204: ; WM_RBUTTONDOWN
+                    btnName := "RButton", isDown := true
+                case 0x0205: ; WM_RBUTTONUP
+                    btnName := "RButton", isDown := false
+                case 0x0207: ; WM_MBUTTONDOWN
+                    btnName := "MButton", isDown := true
+                case 0x0208: ; WM_MBUTTONUP
+                    btnName := "MButton", isDown := false
+                case 0x020B: ; WM_XBUTTONDOWN
+                    hiword := (NumGet(eventData, 8, "UInt") >> 16) & 0xFFFF
+                    btnName := (hiword == 2 ? "XButton2" : "XButton1")
+                    isDown := true
+                case 0x020C: ; WM_XBUTTONUP
+                    hiword := (NumGet(eventData, 8, "UInt") >> 16) & 0xFFFF
+                    btnName := (hiword == 2 ? "XButton2" : "XButton1")
+                    isDown := false
+            }
+
+            if btnName != "" {
+                if isDown
+                    this.OnMouseDown(btnName)
+                else
+                    this.OnMouseUp(btnName)
+            }
+        }
+
+        return DllCall("user32\CallNextHookEx", "Ptr", this.MouseHook,
+            "Int", code, "Ptr", message, "Ptr", eventData, "Ptr")
+    }
+
+    OnMouseDown(btnName) {
+        if !this.Active
+            return
+
+        if IsObject(this.App) && this.App.HasOwnProp("Capture")
+                && IsObject(this.App.Capture) && this.App.Capture.Active
+            return
+
+        this.RegisterInputDown(btnName)
+    }
+
+    OnMouseUp(btnName) {
+        this.RegisterInputUp(btnName)
     }
 
     OnKeyDown(ih, VK, SC) {
@@ -271,11 +390,15 @@ class KeystrokeOsdService {
         if !isMediaKey && !GetKeyState(rawKeyName, "P")
             return
 
+        this.RegisterInputDown(rawKeyName)
+    }
+
+    RegisterInputDown(keyName) {
         ; Clean up keys in OrderedKeys that are no longer physically held down
         i := 1
         while i <= this.OrderedKeys.Length {
             k := this.OrderedKeys[i]
-            if k != rawKeyName && !GetKeyState(k, "P")
+            if k != keyName && !GetKeyState(k, "P")
                 this.OrderedKeys.RemoveAt(i)
             else
                 i++
@@ -283,13 +406,13 @@ class KeystrokeOsdService {
 
         alreadyInList := false
         Loop this.OrderedKeys.Length {
-            if this.OrderedKeys[A_Index] == rawKeyName {
+            if this.OrderedKeys[A_Index] == keyName {
                 alreadyInList := true
                 break
             }
         }
         if !alreadyInList
-            this.OrderedKeys.Push(rawKeyName)
+            this.OrderedKeys.Push(keyName)
 
         if !KeystrokeOsdService.ShouldShowKeys(this.OrderedKeys)
             return
@@ -333,12 +456,15 @@ class KeystrokeOsdService {
         rawKeyName := GetKeyName(Format("vk{:x}sc{:x}", VK, SC))
         if rawKeyName == ""
             rawKeyName := GetKeyName(Format("vk{:x}", VK))
-        if rawKeyName != "" {
-            Loop this.OrderedKeys.Length {
-                if this.OrderedKeys[A_Index] == rawKeyName {
-                    this.OrderedKeys.RemoveAt(A_Index)
-                    break
-                }
+        if rawKeyName != ""
+            this.RegisterInputUp(rawKeyName)
+    }
+
+    RegisterInputUp(keyName) {
+        Loop this.OrderedKeys.Length {
+            if this.OrderedKeys[A_Index] == keyName {
+                this.OrderedKeys.RemoveAt(A_Index)
+                break
             }
         }
         SetTimer(this.CheckReleaseTimer, -50)

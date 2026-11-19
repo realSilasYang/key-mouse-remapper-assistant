@@ -28,6 +28,11 @@ Assert(service.KeyMap["LControl"] == "Ctrl", "LControl key mapping incorrect")
 Assert(service.KeyMap["AppsKey"] == "Menu", "AppsKey key mapping incorrect")
 Assert(service.KeyMap["Escape"] == "Esc", "Escape key mapping incorrect")
 Assert(service.KeyMap["NumpadEnter"] == "Enter", "NumpadEnter key mapping incorrect")
+Assert(service.KeyMap["LButton"] == "LButton", "LButton key mapping incorrect")
+Assert(service.KeyMap["RButton"] == "RButton", "RButton key mapping incorrect")
+Assert(service.KeyMap["MButton"] == "MButton", "MButton key mapping incorrect")
+Assert(service.KeyMap["XButton1"] == "XButton1", "XButton1 key mapping incorrect")
+Assert(service.KeyMap["XButton2"] == "XButton2", "XButton2 key mapping incorrect")
 
 ; Test IsSingleDigitOrLetter
 Assert(KeystrokeOsdService.IsSingleDigitOrLetter("a"), "'a' should be digit/letter")
@@ -109,6 +114,16 @@ Assert(KeystrokeOsdService.ShouldShowKeys(["LWin", "LShift", "s"]), "3-key combi
 Assert(KeystrokeOsdService.ShouldShowKeys(["LControl", "LShift", "LAlt", "s"]), "4-key combination should show")
 Assert(KeystrokeOsdService.ShouldShowKeys(["LControl", "LShift", "LAlt", "LWin", "k"]), "5-key combination should show")
 Assert(KeystrokeOsdService.ShouldShowKeys(["LControl", "a", "b"]), "3-key combination starting with modifier should show")
+Assert(KeystrokeOsdService.ShouldShowKeys(["LButton"]), "Single LButton should show")
+Assert(KeystrokeOsdService.ShouldShowKeys(["RButton"]), "Single RButton should show")
+Assert(KeystrokeOsdService.ShouldShowKeys(["MButton"]), "Single MButton should show")
+Assert(KeystrokeOsdService.ShouldShowKeys(["XButton1"]), "Single XButton1 should show")
+Assert(KeystrokeOsdService.ShouldShowKeys(["XButton2"]), "Single XButton2 should show")
+Assert(KeystrokeOsdService.ShouldShowKeys(["LControl", "LButton"]), "Ctrl+LButton combination should show")
+Assert(KeystrokeOsdService.ShouldShowKeys(["LShift", "RButton"]), "Shift+RButton combination should show")
+Assert(KeystrokeOsdService.ShouldShowKeys(["LAlt", "MButton"]), "Alt+MButton combination should show")
+Assert(KeystrokeOsdService.ShouldShowKeys(["LWin", "XButton1"]), "Win+XButton1 combination should show")
+Assert(KeystrokeOsdService.ShouldShowKeys(["LControl", "LShift", "XButton2"]), "Ctrl+Shift+XButton2 combination should show")
 
 ; Test ShouldShowKeys - simultaneous letters/digits/punctuation and chords not starting with modifier must NOT show
 Assert(!KeystrokeOsdService.ShouldShowKeys(["a", "b"]), "Simultaneous letters (A+B) should NOT show as combination")
@@ -120,6 +135,7 @@ Assert(!KeystrokeOsdService.ShouldShowKeys(["a", "b", "c"]), "Multi-letter chord
 Assert(!KeystrokeOsdService.ShouldShowKeys(["Space", "j", "k"]), "Chord not starting with modifier (Space+J+K) should NOT show")
 Assert(!KeystrokeOsdService.ShouldShowKeys(["a", "b", "c", "d"]), "Multi-letter chord (A+B+C+D) should NOT show")
 Assert(!KeystrokeOsdService.ShouldShowKeys(["a", "LControl"]), "Chord not starting with modifier (A+Ctrl) should NOT show")
+Assert(!KeystrokeOsdService.ShouldShowKeys(["LButton", "RButton"]), "Mouse chord not starting with modifier (LButton+RButton) should NOT show")
 
 ; Test key sorting and formatting
 Assert(service.FormatKeys(service.SortKeys(["LControl", "c"])) == "Ctrl + C", "Ctrl+C format incorrect")
@@ -129,12 +145,27 @@ Assert(service.FormatKeys(service.SortKeys(["a", "b", "c"])) == "A + B + C", "A+
 Assert(service.FormatKeys(service.SortKeys(["Space", "j", "k"])) == "Space + J + K", "Space+J+K format incorrect")
 Assert(service.FormatKeys(service.SortKeys(["LControl", "RControl"])) == "Ctrl", "Duplicate Ctrl should be deduplicated")
 Assert(service.FormatKeys(service.SortKeys(["LControl", "LShift", "LAlt", "LWin", "k"])) == "Ctrl + Alt + Shift + Win + K", "5-key combination format incorrect")
+Assert(service.FormatKeys(service.SortKeys(["LButton"])) == "LButton", "LButton format incorrect")
+Assert(service.FormatKeys(service.SortKeys(["RButton"])) == "RButton", "RButton format incorrect")
+Assert(service.FormatKeys(service.SortKeys(["MButton"])) == "MButton", "MButton format incorrect")
+Assert(service.FormatKeys(service.SortKeys(["XButton1"])) == "XButton1", "XButton1 format incorrect")
+Assert(service.FormatKeys(service.SortKeys(["XButton2"])) == "XButton2", "XButton2 format incorrect")
+Assert(service.FormatKeys(service.SortKeys(["LButton", "LControl"])) == "Ctrl + LButton", "Ctrl+LButton sort format incorrect")
+Assert(service.FormatKeys(service.SortKeys(["RButton", "LShift"])) == "Shift + RButton", "Shift+RButton sort format incorrect")
+Assert(service.FormatKeys(service.SortKeys(["MButton", "LAlt"])) == "Alt + MButton", "Alt+MButton sort format incorrect")
+Assert(service.FormatKeys(service.SortKeys(["XButton1", "LWin"])) == "Win + XButton1", "Win+XButton1 sort format incorrect")
+Assert(service.FormatKeys(service.SortKeys(["XButton2", "LControl", "LShift"])) == "Ctrl + Shift + XButton2", "Ctrl+Shift+XButton2 sort format incorrect")
 
 ; Test allowed single keys backward compatibility
 Assert(service.AllowedSingleKeys.Has("Escape"), "Escape should be allowed")
 Assert(service.AllowedSingleKeys.Has("Space"), "Space should be allowed")
 Assert(service.AllowedSingleKeys.Has("Enter"), "Enter should be allowed")
 Assert(service.AllowedSingleKeys.Has("F1"), "F1 should be allowed")
+Assert(service.AllowedSingleKeys.Has("LButton"), "LButton should be allowed single key")
+Assert(service.AllowedSingleKeys.Has("RButton"), "RButton should be allowed single key")
+Assert(service.AllowedSingleKeys.Has("MButton"), "MButton should be allowed single key")
+Assert(service.AllowedSingleKeys.Has("XButton1"), "XButton1 should be allowed single key")
+Assert(service.AllowedSingleKeys.Has("XButton2"), "XButton2 should be allowed single key")
 Assert(!service.AllowedSingleKeys.Has("A"), "Normal key 'A' should not be allowed single key")
 Assert(!service.AllowedSingleKeys.Has("1"), "Normal digit '1' should not be allowed single key")
 Assert(!service.AllowedSingleKeys.Has(","), "Comma should not be allowed single key")
@@ -199,6 +230,30 @@ service.ShowOSD("Enter")
 Assert(service.Cards.Length == 3, "Should have 3 stacked cards")
 Assert(service.Cards[1].TargetY < service.Cards[2].TargetY, "Card 1 should be highest")
 Assert(service.Cards[2].TargetY < service.Cards[3].TargetY, "Card 2 should be above Card 3")
+
+; Test mouse button hook and down/up handling
+fakeMouseStruct := Buffer(32, 0)
+service.OnMouseHook(0, 0x0201, fakeMouseStruct.Ptr) ; WM_LBUTTONDOWN
+Assert(service.PendingText == "LButton", "Mouse hook LButton down should set PendingText to LButton")
+service.OnMouseHook(0, 0x0202, fakeMouseStruct.Ptr) ; WM_LBUTTONUP
+
+service.OnMouseHook(0, 0x0204, fakeMouseStruct.Ptr) ; WM_RBUTTONDOWN
+Assert(service.PendingText == "RButton", "Mouse hook RButton down should set PendingText to RButton")
+service.OnMouseHook(0, 0x0205, fakeMouseStruct.Ptr) ; WM_RBUTTONUP
+
+service.OnMouseHook(0, 0x0207, fakeMouseStruct.Ptr) ; WM_MBUTTONDOWN
+Assert(service.PendingText == "MButton", "Mouse hook MButton down should set PendingText to MButton")
+service.OnMouseHook(0, 0x0208, fakeMouseStruct.Ptr) ; WM_MBUTTONUP
+
+NumPut("UInt", 1 << 16, fakeMouseStruct, 8) ; XBUTTON1
+service.OnMouseHook(0, 0x020B, fakeMouseStruct.Ptr) ; WM_XBUTTONDOWN
+Assert(service.PendingText == "XButton1", "Mouse hook XButton1 down should set PendingText to XButton1")
+service.OnMouseHook(0, 0x020C, fakeMouseStruct.Ptr) ; WM_XBUTTONUP
+
+NumPut("UInt", 2 << 16, fakeMouseStruct, 8) ; XBUTTON2
+service.OnMouseHook(0, 0x020B, fakeMouseStruct.Ptr) ; WM_XBUTTONDOWN
+Assert(service.PendingText == "XButton2", "Mouse hook XButton2 down should set PendingText to XButton2")
+service.OnMouseHook(0, 0x020C, fakeMouseStruct.Ptr) ; WM_XBUTTONUP
 
 ; Test DestroyGui / DestroyAllCards cleanup
 service.DestroyGui()

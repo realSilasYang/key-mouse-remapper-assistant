@@ -7,6 +7,29 @@ categories based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## 🚧 [Unreleased]
 
+## 🎉 Version [1.2.3] - 2026-11-20
+
+### 📦 Release Assets
+
+- **`fonts.zip` (optional font package):** Provides Noto fallback UI fonts for installation into Windows; it is not required to run the application.
+- **`key-mouse-remapper-assistant-1.2.3-source.zip` (complete source package):** Includes runnable AHK source, application modules, assets other than fonts, all thirteen README languages, bilingual changelogs, tests, and build tools; requires AutoHotkey v2 x64.
+- **`key-mouse-remapper-assistant-1.2.3-windows-x64.zip` (complete portable package, recommended):** Includes the compiled EXE, editable mapping source, all thirteen README languages, bilingual changelogs, licenses, application modules, UI assets other than fonts, fixed AutoHotkey v2.0.26 x64 runtime, and matching source archive; requires no separate AutoHotkey installation after full extraction.
+
+---
+
+### ✨ New
+
+- **Keystroke OSD mouse button support:** Added non-blocking low-level hook listening and floating card display for mouse buttons, including Left, Right, Middle, and Side buttons (`LButton`, `RButton`, `MButton`, `XButton1`, `XButton2`). Fully supports single clicks, drags/holds, and combinations with keyboard modifiers (such as `Ctrl + LButton`, `Shift + RButton`, `Alt + MButton`, `Ctrl + Shift + XButton1`).
+
+---
+
+### 🐛 Fixed
+
+- **Interception modifier prefix isolation protection:** Enhanced modifier prefix staging logic for multi-modifier rules by introducing contextual checks for `Shift`, `Ctrl`, and `Alt`. Isolated modifier presses are forwarded directly to the OS unless another required modifier is already held, resolving swallowed inputs, broken hold-to-drag/sprint/crouch, and mouse combination failures.
+- **Copilot chord mapping to clean Win:** Improved staging during fast hardware Copilot chord sequences (`Win + Shift + F23 -> Win`) to prevent `Shift` leakage as `Shift + Win`, ensuring the resulting Win output participates cleanly in Windows shortcuts.
+
+---
+
 ## 🎉 Version [1.2.2] - 2026-10-26
 
 ### 📦 Release Assets
@@ -277,7 +300,8 @@ categories based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Product and data location:** Standardized product identifiers and `%APPDATA%\KeyMouseRemapperAssistant`.
 - **Release compatibility:** Locked AutoHotkey and build tools and aligned UTF-8 behavior across Windows PowerShell 5.1 and PowerShell 7.
 
-[Unreleased]: https://github.com/realSilasYang/key-mouse-remapper-assistant/compare/v1.2.2...HEAD
+[Unreleased]: https://github.com/realSilasYang/key-mouse-remapper-assistant/compare/v1.2.3...HEAD
+[1.2.3]: https://github.com/realSilasYang/key-mouse-remapper-assistant/releases/tag/v1.2.3
 [1.2.2]: https://github.com/realSilasYang/key-mouse-remapper-assistant/releases/tag/v1.2.2
 [1.2.1]: https://github.com/realSilasYang/key-mouse-remapper-assistant/releases/tag/v1.2.1
 [1.2.0]: https://github.com/realSilasYang/key-mouse-remapper-assistant/releases/tag/v1.2.0

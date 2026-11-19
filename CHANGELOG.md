@@ -7,6 +7,29 @@
 
 ## 🚧 [未发布]
 
+## 🎉 版本 [1.2.3] - 2026-11-20
+
+### 📦 发布物说明
+
+- **`fonts.zip`（可选字体包）**：提供 Noto 回退界面字体，需先安装到 Windows；它不是程序运行必需。
+- **`key-mouse-remapper-assistant-1.2.3-source.zip`（完整源码版）**：包含可运行 AHK 源码、应用模块、除字体外的资源、13 语 README、双语更新日志、测试和构建工具，适合审阅、开发或从源码运行；本机需要 AutoHotkey v2 x64。
+- **`key-mouse-remapper-assistant-1.2.3-windows-x64.zip`（完整便携版，推荐）**：包含编译 EXE、可编辑映射源码、13 语 README、双语更新日志、许可证、应用模块、除字体外的界面资源、固定 AutoHotkey v2.0.26 x64 运行时及对应源码归档；无需另行安装 AutoHotkey，适合完整解压后长期使用。
+
+---
+
+### ✨ 新增
+
+- **按键实时可视化支持鼠标按键**：按键悬浮卡片服务（Keystroke OSD）新增对鼠标左键、右键、中键以及前后侧键（`LButton` / `RButton` / `MButton` / `XButton1` / `XButton2`）的低级非阻塞钩子监听与实时显示；完整支持单击、长按拖拽以及与键盘修饰键的协同组合（如 `Ctrl + LButton`、`Shift + RButton`、`Alt + MButton`、`Ctrl + Shift + XButton1` 等）。
+
+---
+
+### 🐛 修复
+
+- **Interception 修饰键前缀防误吞噬**：优化设备级多修饰键组合的前缀暂存判断逻辑，为 `Shift`、`Ctrl`、`Alt` 全修饰键族增加单按上下文判定。当没有该规则的其他前置修饰键处于按下状态时，单个修饰键直接放行操作系统，彻底解决笔记本键盘 Shift / Ctrl / Alt 独立按下无事件、长按无法选区/奔跑/蹲伏以及组合鼠标失效的问题。
+- **Copilot 组合键映射为纯净 Win 键**：完善硬件 Copilot 组合键（`Win + Shift + F23 -> Win`）在快速触发时对来源 `Shift` 键的精准拦截，避免组合触发时泄漏为 `Shift + Win`，确保映射后的 Win 键能够纯净参与 Windows 全局快捷键。
+
+---
+
 ## 🎉 版本 [1.2.2] - 2026-10-26
 
 ### 📦 发布物说明
@@ -277,7 +300,8 @@
 - **产品与数据目录**：统一中英文产品标识和 `%APPDATA%\KeyMouseRemapperAssistant` 数据位置。
 - **发行与兼容性**：锁定 AutoHotkey 和构建工具，统一 UTF-8 输出与 Windows PowerShell 5.1／PowerShell 7 行为。
 
-[未发布]: https://github.com/realSilasYang/key-mouse-remapper-assistant/compare/v1.2.2...HEAD
+[未发布]: https://github.com/realSilasYang/key-mouse-remapper-assistant/compare/v1.2.3...HEAD
+[1.2.3]: https://github.com/realSilasYang/key-mouse-remapper-assistant/releases/tag/v1.2.3
 [1.2.2]: https://github.com/realSilasYang/key-mouse-remapper-assistant/releases/tag/v1.2.2
 [1.2.1]: https://github.com/realSilasYang/key-mouse-remapper-assistant/releases/tag/v1.2.1
 [1.2.0]: https://github.com/realSilasYang/key-mouse-remapper-assistant/releases/tag/v1.2.0
